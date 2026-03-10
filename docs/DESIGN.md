@@ -3,6 +3,8 @@
 > "给你的 AI Agent 披上铠甲。"
 > OpenClaw AI Agent 运行时安全监控器。
 
+[English Version](./DESIGN.en.md) · [README (EN)](../README.md) · [README (中文)](../README.zh-CN.md)
+
 ---
 
 ## 1. 产品愿景

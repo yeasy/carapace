@@ -31,6 +31,7 @@ export interface EngineResult {
 
 export class RuleEngine {
   private rules: SecurityRule[] = [];
+  private trustedSkills: Set<string> = new Set();
 
   addRule(rule: SecurityRule): void {
     this.rules.push(rule);
@@ -45,9 +46,26 @@ export class RuleEngine {
   }
 
   /**
+   * 设置受信 skill 列表。来自这些 skill 的工具调用将跳过规则评估。
+   */
+  setTrustedSkills(skills: string[]): void {
+    this.trustedSkills = new Set(skills);
+  }
+
+  getTrustedSkills(): ReadonlySet<string> {
+    return this.trustedSkills;
+  }
+
+  /**
    * 评估所有规则，返回合并结果。
+   * 如果 ctx.skillName 在 trustedSkills 中，跳过评估。
    */
   evaluate(ctx: RuleContext): EngineResult {
+    // 受信 skill 跳过规则评估
+    if (ctx.skillName && this.trustedSkills.has(ctx.skillName)) {
+      return { triggered: false, shouldBlock: false, events: [] };
+    }
+
     const events: SecurityEvent[] = [];
     let shouldBlock = false;
     let highestSeverity: Severity = "info";

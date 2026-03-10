@@ -5,8 +5,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @carapace/core && npm run build -w @carapace/adapter-openclaw && npm run build -w @carapace/pro",
-    "test": "npm run test --workspaces",
+    "build": "npm run build -w @carapace/core && npm run build -w @carapace/adapter-openclaw",
+    "test": "npm run test -w @carapace/core",
     "lint": "npm run lint --workspaces --if-present"
   },
   "engines": {

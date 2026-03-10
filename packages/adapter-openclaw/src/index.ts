@@ -60,9 +60,17 @@ const plugin = {
     engine.addRule(createPathGuardRule(config.sensitivePathPatterns));
     engine.addRule(createNetworkGuardRule(config.blockedDomains));
 
+    // 设置受信 skill 白名单
+    if (config.trustedSkills?.length) {
+      engine.setTrustedSkills(config.trustedSkills);
+    }
+
     if (debug) {
       api.logger.info(
-        `[carapace] 已加载 ${engine.getRules().length} 条规则`
+        `[carapace] 已加载 ${engine.getRules().length} 条规则` +
+          (config.trustedSkills?.length
+            ? `, ${config.trustedSkills.length} 个受信 skill`
+            : "")
       );
     }
 
@@ -81,7 +89,7 @@ const plugin = {
     api.on(
       "before_tool_call",
       async (
-        event: { toolName: string; params: Record<string, unknown>; toolCallId?: string; runId?: string },
+        event: { toolName: string; params: Record<string, unknown>; toolCallId?: string; runId?: string; skillName?: string },
         ctx: { agentId?: string; sessionId?: string; sessionKey?: string; runId?: string }
       ) => {
         const ruleCtx: RuleContext = {
@@ -90,6 +98,7 @@ const plugin = {
           toolCallId: event.toolCallId,
           sessionId: ctx.sessionId ?? ctx.sessionKey,
           agentId: ctx.agentId,
+          skillName: event.skillName,
           timestamp: Date.now(),
         };
 
