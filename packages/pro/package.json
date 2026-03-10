@@ -1,0 +1,20 @@
+{
+  "name": "@carapace/pro",
+  "version": "0.1.0",
+  "description": "Carapace Pro features — Dashboard, SIEM integration, ML anomaly detection.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"no tests yet\""
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "dependencies": {
+    "@carapace/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

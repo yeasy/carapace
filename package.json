@@ -1,0 +1,15 @@
+{
+  "name": "carapace",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @carapace/core && npm run build -w @carapace/adapter-openclaw && npm run build -w @carapace/pro",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

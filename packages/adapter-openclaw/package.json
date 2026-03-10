@@ -1,0 +1,27 @@
+{
+  "name": "@carapace/adapter-openclaw",
+  "version": "0.1.0",
+  "description": "OpenClaw plugin adapter for Carapace runtime security monitor.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --experimental-vm-modules node_modules/.bin/vitest run"
+  },
+  "openclaw": {
+    "extensions": ["./dist/index.js"]
+  },
+  "keywords": ["carapace", "openclaw", "security", "plugin"],
+  "author": "Albert Yang",
+  "license": "MIT",
+  "dependencies": {
+    "@carapace/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "@types/node": "^20.0.0"
+  }
+}
