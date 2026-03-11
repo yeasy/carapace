@@ -67,8 +67,9 @@ export class WebhookSink implements AlertSink {
         }),
         signal: AbortSignal.timeout(5000),
       });
-    } catch {
-      // Webhook 失败不应阻塞主流程
+    } catch (err) {
+      // Webhook 失败不应阻塞主流程，但记录到 stderr 便于排查
+      process.stderr.write(`[CARAPACE] webhook send failed: ${err}\n`);
     }
   }
 }
@@ -88,8 +89,9 @@ export class LogFileSink implements AlertSink {
         this.initialized = true;
       }
       await appendFile(this.filePath, JSON.stringify(payload.event) + "\n");
-    } catch {
-      // 写入失败不阻塞
+    } catch (err) {
+      // 写入失败不阻塞，但记录到 stderr 便于排查
+      process.stderr.write(`[CARAPACE] logfile write failed: ${err}\n`);
     }
   }
 }

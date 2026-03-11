@@ -75,12 +75,19 @@ function extractPaths(params: Record<string, unknown>): string[] {
 // ── 规则实现 ──
 
 export function createPathGuardRule(additionalPatterns?: string[]): SecurityRule {
-  const userPatterns: SensitivePath[] = (additionalPatterns ?? []).map((p) => ({
-    pattern: new RegExp(p, "i"),
-    severity: "high" as Severity,
-    title: `自定义敏感路径匹配: ${p}`,
-    category: "custom",
-  }));
+  const userPatterns: SensitivePath[] = [];
+  for (const p of additionalPatterns ?? []) {
+    try {
+      userPatterns.push({
+        pattern: new RegExp(p, "i"),
+        severity: "high" as Severity,
+        title: `自定义敏感路径匹配: ${p}`,
+        category: "custom",
+      });
+    } catch {
+      // 跳过无效正则，避免运行时崩溃
+    }
+  }
 
   const allPatterns = [...SENSITIVE_PATHS, ...userPatterns];
 

@@ -140,7 +140,7 @@ const plugin = {
           error?: string;
           durationMs?: number;
         },
-        ctx: { agentId?: string; sessionId?: string }
+        _ctx: { agentId?: string; sessionId?: string }
       ) => {
         if (debug) {
           api.logger.debug(
