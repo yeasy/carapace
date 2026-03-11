@@ -1,11 +1,12 @@
 <p align="center">
+  <img src="./icon.png" width="128" alt="Carapace logo"/>
   <h1 align="center">Carapace</h1>
   <p align="center">
     <strong>Runtime armor for your AI agents.</strong><br/>
     Detect and block dangerous tool calls before they cause damage.
   </p>
   <p align="center">
-    <a href="https://www.npmjs.com/package/@carapace/core"><img src="https://img.shields.io/npm/v/@carapace/core?color=blue&label=npm" alt="npm version"/></a>
+    <a href="https://github.com/yeasy/carapace"><img src="https://img.shields.io/github/stars/yeasy/carapace?style=social" alt="GitHub stars"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
     <a href="#"><img src="https://img.shields.io/badge/tests-161%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4-blue?logo=typescript" alt="TypeScript"/></a>
@@ -43,7 +44,8 @@ AI agents can execute shell commands, read any file, and make network requests â
 ### As an OpenClaw Plugin (recommended)
 
 ```bash
-openclaw plugins install @carapace/adapter-openclaw
+# Install from GitHub
+openclaw plugins install github:yeasy/carapace
 ```
 
 That's it. Carapace loads automatically and starts monitoring with sane defaults (alert-only mode, console output).
@@ -69,7 +71,8 @@ To enable auto-blocking of critical threats, add to `~/.openclaw/config.json`:
 ### As a Standalone Library
 
 ```bash
-npm install @carapace/core
+# Install from GitHub
+npm install github:yeasy/carapace
 ```
 
 ```typescript
@@ -201,16 +204,18 @@ npm run build            # build core â†’ adapter (sequential)
 npm run test -w @carapace/core   # run 161 tests
 ```
 
-## Publishing
+## Installation
 
 ```bash
-# Publish to npm
-cd packages/core && npm publish --access public
-cd packages/adapter-openclaw && npm publish --access public
+# As OpenClaw plugin (recommended)
+openclaw plugins install github:yeasy/carapace
 
-# Users install via:
-openclaw plugins install @carapace/adapter-openclaw   # as OpenClaw plugin
-npm install @carapace/core                             # as standalone lib
+# As standalone library
+npm install github:yeasy/carapace
+
+# Or clone and build from source
+git clone https://github.com/yeasy/carapace.git
+cd carapace && npm install && npm run build
 ```
 
 ## Roadmap
