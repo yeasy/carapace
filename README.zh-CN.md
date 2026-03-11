@@ -8,7 +8,7 @@
   <p align="center">
     <a href="https://github.com/yeasy/carapace"><img src="https://img.shields.io/github/stars/yeasy/carapace?style=social" alt="GitHub stars"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-229%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-257%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -197,7 +197,7 @@ carapace/
 │   │   │   ├── engine.ts     # 规则引擎
 │   │   │   ├── alerter.ts    # 告警路由 + Sink
 │   │   │   └── types.ts      # 类型定义
-│   │   └── test/             # 229 个单元测试（vitest）
+│   │   └── test/             # 205 个单元测试（vitest）
 │   ├── adapter-openclaw/     # @carapace/adapter-openclaw — 原生插件
 │   │   └── src/
 │   │       ├── index.ts      # 插件入口，注册 hook
@@ -205,9 +205,15 @@ carapace/
 │   ├── adapter-mcp/          # @carapace/adapter-mcp — MCP 代理
 │   │   └── src/
 │   │       └── index.ts      # stdio 代理，JSON-RPC 拦截
-│   └── adapter-langchain/    # @carapace/adapter-langchain — Python 桥接
+│   ├── adapter-langchain/    # @carapace/adapter-langchain — Python 桥接
+│   │   └── src/
+│   │       └── index.ts      # HTTP 服务端（LangChain/CrewAI/AutoGen）
+│   └── dashboard/            # @carapace/dashboard — Web UI + SIEM + 策略管理
 │       └── src/
-│           └── index.ts      # HTTP 服务端（LangChain/CrewAI/AutoGen）
+│           ├── server.ts     # HTTP 服务器：REST API + SSE + 内嵌 UI
+│           ├── event-store.ts # 内存事件数据库：查询/统计/时序
+│           ├── siem.ts       # Splunk / Elastic / Datadog / Syslog 连接器
+│           └── policy.ts     # 团队策略管理（继承链）
 ├── docs/
 │   ├── DESIGN.md             # 产品与架构设计文档（中文）
 │   └── DESIGN.en.md          # 产品与架构设计文档（英文）
@@ -219,7 +225,7 @@ carapace/
 ```bash
 npm install              # 安装所有依赖
 npm run build            # 按顺序编译 core → adapter
-npm run test -w @carapace/core   # 运行 229 个测试
+npm run test                     # 运行全部 257 个测试
 ```
 
 ## 安装
@@ -241,8 +247,8 @@ cd carapace && npm install && npm run build
 - **v0.1** — 核心规则（ExecGuard、PathGuard、NetworkGuard）、OpenClaw 适配器、告警渠道、受信 Skill
 - **v0.2** — 频率限制规则、ESLint + CI 流水线、正则校验加固、错误日志改进
 - **v0.3** — PromptInjection、DataExfil、BaselineDrift 规则，会话统计，响应数据外泄扫描
-- **v0.4**（当前）— MCP 代理适配器、LangChain/CrewAI Python 桥接、YAML 自定义规则
-- **v0.5** — Dashboard Web UI、SIEM 连接器、团队策略管理
+- **v0.4** — MCP 代理适配器、LangChain/CrewAI Python 桥接、YAML 自定义规则
+- **v0.5**（当前）— Dashboard Web UI、SIEM 连接器、团队策略管理
 
 ## 贡献
 

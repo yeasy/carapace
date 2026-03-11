@@ -265,7 +265,7 @@ const plugin = {
     api.on("gateway_start", async () => {
       const ruleCount = engine.getRules().length;
       api.logger.info(
-        `[carapace] 🛡️ Carapace Security Monitor v0.4.0 已启动 (${ruleCount} 条规则, ` +
+        `[carapace] 🛡️ Carapace Security Monitor v0.5.0 已启动 (${ruleCount} 条规则, ` +
           `阻断=${config.blockOnCritical ? "开启" : "关闭"}` +
           (baselineTracker ? ", 基线=开启" : "") + ")"
       );

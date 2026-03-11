@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-03-11
+
+### Added
+- **Dashboard Web UI** (`@carapace/dashboard`): Real-time security monitoring dashboard with embedded dark-theme HTML interface, SSE live event push, and comprehensive REST API (`/api/events`, `/api/stats`, `/api/timeseries`, `/api/policies`, `/api/health`).
+- **EventStore**: In-memory event database with query filters (category, severity, rule, session, time range), pagination, statistics aggregation, and time series bucketing. Configurable max capacity with automatic eviction.
+- **SIEM connectors**: 4 enterprise connectors — Splunk HEC (`SplunkSink`), Elasticsearch bulk API (`ElasticSink`), Datadog Logs API (`DatadogSink`), and Syslog RFC 5424 (`SyslogSink`) with UDP/TCP support.
+- **Team policy management** (`PolicyManager`): Multi-policy CRUD with inheritance chains, circular dependency detection, override merging (forceBlock, disabledRules, additionalTrustedSkills), JSON import/export, and 3 preset templates (permissive, standard, strict).
+- New test suite: 28 dashboard tests (257 total across all packages).
+
+### Changed
+- Monorepo expanded to 5 packages: core + 3 adapters + dashboard.
+- All package versions bumped to 0.5.0.
+- Root build/test scripts updated for dashboard package.
+
 ## [0.4.0] - 2026-03-11
 
 ### Added
