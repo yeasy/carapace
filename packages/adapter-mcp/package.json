@@ -1,7 +1,7 @@
 {
-  "name": "@carapace/core",
+  "name": "@carapace/adapter-mcp",
   "version": "0.4.0",
-  "description": "Core rule engine, event processing, and alerting for Carapace — AI agent runtime security.",
+  "description": "MCP (Model Context Protocol) proxy adapter for Carapace runtime security monitor.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,10 +9,6 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    },
-    "./rules": {
-      "import": "./dist/rules/index.js",
-      "types": "./dist/rules/index.d.ts"
     }
   },
   "scripts": {
@@ -21,9 +17,12 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": ["carapace", "security", "ai-agent", "runtime-monitor"],
+  "keywords": ["carapace", "mcp", "security", "proxy", "model-context-protocol"],
   "author": "Albert Yang",
   "license": "MIT",
+  "dependencies": {
+    "@carapace/core": "*"
+  },
   "devDependencies": {
     "typescript": "^5.4.0",
     "vitest": "^1.6.0",

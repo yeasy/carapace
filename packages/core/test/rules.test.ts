@@ -13,6 +13,8 @@ import { createRateLimiterRule } from "../src/rules/rate-limiter.js";
 import { createPromptInjectionRule } from "../src/rules/prompt-injection.js";
 import { createDataExfilRule } from "../src/rules/data-exfil.js";
 import { createBaselineDriftRule, BaselineTracker } from "../src/rules/baseline.js";
+import { createYamlRule, loadYamlRules, parseSimpleYaml } from "../src/rules/yaml-rule.js";
+import type { YamlRuleDefinition } from "../src/rules/yaml-rule.js";
 import { RuleEngine } from "../src/engine.js";
 import { AlertRouter, ConsoleSink, LogFileSink } from "../src/alerter.js";
 import { generateEventId } from "../src/utils/id.js";
@@ -1737,5 +1739,201 @@ describe("BaselineDrift", () => {
     expect(tracker.isLearning("reset-skill")).toBe(false);
     tracker.resetProfile("reset-skill");
     expect(tracker.isLearning("reset-skill")).toBe(true);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// YAML 自定义规则测试
+// ══════════════════════════════════════════════════════════════════
+
+describe("YamlRule", () => {
+  it("从定义创建规则并匹配指定参数", () => {
+    const def: YamlRuleDefinition = {
+      name: "block-drop-table",
+      description: "检测 SQL drop table",
+      severity: "critical",
+      category: "exec_danger",
+      shouldBlock: true,
+      match: {
+        toolName: "bash",
+        params: {
+          command: ["drop\\s+table", "drop\\s+database"],
+        },
+      },
+    };
+    const rule = createYamlRule(def);
+    const r = rule.check(makeCtx("bash", { command: "mysql -e 'DROP TABLE users'" }));
+    expect(r.triggered).toBe(true);
+    expect(r.shouldBlock).toBe(true);
+    expect(r.event?.severity).toBe("critical");
+  });
+
+  it("工具名不匹配时不触发", () => {
+    const def: YamlRuleDefinition = {
+      name: "bash-only",
+      description: "仅检测 bash",
+      severity: "high",
+      category: "exec_danger",
+      match: {
+        toolName: "bash",
+        params: { command: ["rm -rf"] },
+      },
+    };
+    const rule = createYamlRule(def);
+    const r = rule.check(makeCtx("read_file", { command: "rm -rf /" }));
+    expect(r.triggered).toBe(false);
+  });
+
+  it("any_param 匹配任意参数值", () => {
+    const def: YamlRuleDefinition = {
+      name: "detect-password",
+      description: "检测密码泄漏",
+      severity: "high",
+      category: "data_exfil",
+      match: {
+        any_param: ["password\\s*=", "passwd\\s*:"],
+      },
+    };
+    const rule = createYamlRule(def);
+    const r = rule.check(makeCtx("http_request", {
+      url: "https://example.com",
+      body: "user=admin&password=secret123",
+    }));
+    expect(r.triggered).toBe(true);
+  });
+
+  it("any_param 遍历嵌套对象", () => {
+    const def: YamlRuleDefinition = {
+      name: "detect-secret",
+      description: "检测嵌套 secret",
+      severity: "medium",
+      category: "data_exfil",
+      match: {
+        any_param: ["super_secret"],
+      },
+    };
+    const rule = createYamlRule(def);
+    const r = rule.check(makeCtx("tool", {
+      nested: { deep: { value: "the super_secret is here" } },
+    }));
+    expect(r.triggered).toBe(true);
+  });
+
+  it("正常内容不触发", () => {
+    const def: YamlRuleDefinition = {
+      name: "test-rule",
+      description: "test",
+      severity: "low",
+      category: "exec_danger",
+      match: {
+        params: { command: ["dangerous_pattern"] },
+      },
+    };
+    const rule = createYamlRule(def);
+    const r = rule.check(makeCtx("bash", { command: "echo hello" }));
+    expect(r.triggered).toBe(false);
+  });
+
+  it("parseSimpleYaml 解析基本 YAML", () => {
+    const yaml = `
+name: test-rule
+description: A test rule
+severity: high
+category: exec_danger
+shouldBlock: true
+match:
+  toolName: bash
+  params:
+    command:
+      - "rm -rf"
+      - "format c:"
+`;
+    const parsed = parseSimpleYaml(yaml);
+    expect(parsed["name"]).toBe("test-rule");
+    expect(parsed["shouldBlock"]).toBe(true);
+    expect(parsed["severity"]).toBe("high");
+    const match = parsed["match"] as Record<string, unknown>;
+    expect(match["toolName"]).toBe("bash");
+    const params = match["params"] as Record<string, unknown>;
+    expect(params["command"]).toEqual(["rm -rf", "format c:"]);
+  });
+
+  it("loadYamlRules 加载多文档 YAML", () => {
+    const yaml = `
+name: rule-1
+description: First rule
+severity: high
+category: exec_danger
+match:
+  params:
+    command:
+      - "danger1"
+---
+name: rule-2
+description: Second rule
+severity: medium
+category: path_violation
+match:
+  any_param:
+    - "danger2"
+`;
+    const rules = loadYamlRules(yaml);
+    expect(rules).toHaveLength(2);
+    expect(rules[0].name).toBe("rule-1");
+    expect(rules[1].name).toBe("rule-2");
+  });
+
+  it("loadYamlRules 跳过无效文档", () => {
+    const yaml = `
+name: valid-rule
+description: Valid
+severity: high
+category: exec_danger
+match:
+  params:
+    command:
+      - "test"
+---
+invalid: yaml without required fields
+`;
+    const rules = loadYamlRules(yaml);
+    expect(rules).toHaveLength(1);
+    expect(rules[0].name).toBe("valid-rule");
+  });
+
+  it("无效正则模式跳过", () => {
+    const def: YamlRuleDefinition = {
+      name: "bad-regex",
+      description: "test",
+      severity: "low",
+      category: "exec_danger",
+      match: {
+        params: { command: ["[invalid(regex", "valid_pattern"] },
+      },
+    };
+    const rule = createYamlRule(def);
+    const r = rule.check(makeCtx("bash", { command: "this has valid_pattern in it" }));
+    expect(r.triggered).toBe(true);
+  });
+
+  it("YAML 规则集成到 RuleEngine", () => {
+    const engine = new RuleEngine();
+    const rules = loadYamlRules(`
+name: custom-detect
+description: Detect custom danger
+severity: high
+category: exec_danger
+shouldBlock: true
+match:
+  params:
+    command:
+      - "custom_danger_command"
+`);
+    for (const rule of rules) {
+      engine.addRule(rule);
+    }
+    const result = engine.evaluate(makeCtx("bash", { command: "run custom_danger_command now" }));
+    expect(result.triggered).toBe(true);
+    expect(result.shouldBlock).toBe(true);
   });
 });

@@ -6,3 +6,5 @@ export { createPromptInjectionRule } from "./prompt-injection.js";
 export { createDataExfilRule } from "./data-exfil.js";
 export { createBaselineDriftRule, BaselineTracker } from "./baseline.js";
 export type { BaselineConfig } from "./baseline.js";
+export { createYamlRule, loadYamlRules, parseSimpleYaml } from "./yaml-rule.js";
+export type { YamlRuleDefinition } from "./yaml-rule.js";

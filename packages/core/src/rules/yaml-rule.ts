@@ -1,0 +1,345 @@
+/**
+ * YAML 自定义规则加载器
+ *
+ * 允许用户通过 YAML 文件定义安全规则，无需编写 TypeScript 代码。
+ *
+ * YAML 格式：
+ * ```yaml
+ * name: my-custom-rule
+ * description: 检测自定义危险模式
+ * severity: high
+ * category: exec_danger
+ * shouldBlock: true
+ *
+ * match:
+ *   toolName: bash          # 可选：匹配工具名（精确或正则）
+ *   params:                 # 匹配参数中的模式
+ *     command:
+ *       - "rm\\s+-rf\\s+/"
+ *       - "drop\\s+database"
+ *     url:
+ *       - "evil\\.com"
+ *   any_param:              # 匹配任意参数值中的模式
+ *     - "password"
+ *     - "secret"
+ * ```
+ */
+
+import type {
+  SecurityRule,
+  RuleContext,
+  RuleResult,
+  Severity,
+  EventCategory,
+} from "../types.js";
+
+// ── YAML 规则定义结构 ──
+
+export interface YamlRuleDefinition {
+  name: string;
+  description: string;
+  severity: Severity;
+  category: EventCategory;
+  shouldBlock?: boolean;
+
+  match: {
+    /** 匹配工具名（字符串精确匹配或正则） */
+    toolName?: string;
+    /** 匹配指定参数中的模式（key → 正则数组） */
+    params?: Record<string, string[]>;
+    /** 匹配任意参数值中的模式 */
+    any_param?: string[];
+  };
+}
+
+// ── YAML 解析器（轻量级，无外部依赖） ──
+
+export function parseSimpleYaml(text: string): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const lines = text.split("\n");
+
+  // Stack tracks parent objects with their indentation level and last key set
+  const stack: { indent: number; obj: Record<string, unknown>; lastKey?: string }[] = [
+    { indent: -1, obj: result },
+  ];
+
+  function currentParent() {
+    return stack[stack.length - 1];
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // 跳过空行和注释
+    if (!line.trim() || line.trim().startsWith("#")) continue;
+
+    // 数组项: "  - value"
+    const arrMatch = line.match(/^(\s*)-\s+(.*)/);
+    if (arrMatch) {
+      const indent = arrMatch[1].length;
+      const value = arrMatch[2].trim().replace(/^["']|["']$/g, "");
+
+      // Pop to find the object that owns this array
+      while (stack.length > 1 && currentParent().indent >= indent) {
+        stack.pop();
+      }
+
+      const parent = currentParent();
+      const key = parent.lastKey;
+      if (key) {
+        if (!Array.isArray(parent.obj[key])) {
+          parent.obj[key] = [];
+        }
+        (parent.obj[key] as unknown[]).push(value);
+      }
+      continue;
+    }
+
+    const match = line.match(/^(\s*)([\w-]+):\s*(.*)/);
+    if (!match) continue;
+
+    const indent = match[1].length;
+    const key = match[2];
+    let value: string | undefined = match[3].trim();
+
+    // 弹出缩进层级
+    while (stack.length > 1 && currentParent().indent >= indent) {
+      stack.pop();
+    }
+
+    const parent = currentParent();
+
+    if (!value || value === "") {
+      // Check if next non-empty line is an array item at deeper indent
+      const nextContentLine = peekNextContent(lines, i + 1);
+      if (nextContentLine && /^\s*-\s+/.test(nextContentLine)) {
+        // This key will hold an array, initialize it
+        parent.obj[key] = [];
+        parent.lastKey = key;
+        // Don't push a new stack level — array items will use parent.lastKey
+      } else {
+        // Sub-object
+        const child: Record<string, unknown> = {};
+        parent.obj[key] = child;
+        parent.lastKey = key;
+        stack.push({ indent, obj: child });
+      }
+    } else {
+      // 移除引号
+      value = value.replace(/^["']|["']$/g, "");
+      // 类型转换
+      if (value === "true") parent.obj[key] = true;
+      else if (value === "false") parent.obj[key] = false;
+      else if (/^\d+$/.test(value)) parent.obj[key] = parseInt(value, 10);
+      else parent.obj[key] = value;
+      parent.lastKey = key;
+    }
+  }
+
+  return result;
+}
+
+function peekNextContent(lines: string[], from: number): string | null {
+  for (let i = from; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed && !trimmed.startsWith("#")) return lines[i];
+  }
+  return null;
+}
+
+// ── 从 YAML 定义构建 SecurityRule ──
+
+export function createYamlRule(def: YamlRuleDefinition): SecurityRule {
+  // 预编译所有正则
+  const toolNameRegex = def.match.toolName
+    ? safeRegex(def.match.toolName)
+    : null;
+
+  const paramPatterns = new Map<string, RegExp[]>();
+  if (def.match.params) {
+    for (const [paramKey, patterns] of Object.entries(def.match.params)) {
+      const regexes = patterns.map((p) => safeRegex(p)).filter(Boolean) as RegExp[];
+      if (regexes.length > 0) paramPatterns.set(paramKey, regexes);
+    }
+  }
+
+  const anyParamPatterns = (def.match.any_param ?? [])
+    .map((p) => safeRegex(p))
+    .filter(Boolean) as RegExp[];
+
+  return {
+    name: def.name,
+    description: def.description,
+    check(ctx: RuleContext): RuleResult {
+      // 工具名匹配
+      if (toolNameRegex && !toolNameRegex.test(ctx.toolName)) {
+        return { triggered: false };
+      }
+
+      // 指定参数匹配
+      for (const [paramKey, regexes] of paramPatterns) {
+        const paramValue = ctx.toolParams[paramKey];
+        if (paramValue === undefined) continue;
+        const strVal = String(paramValue);
+        for (const rx of regexes) {
+          if (rx.test(strVal)) {
+            return buildResult(def, ctx, paramKey, rx.source);
+          }
+        }
+      }
+
+      // 任意参数匹配
+      if (anyParamPatterns.length > 0) {
+        const matched = matchAnyParam(ctx.toolParams, anyParamPatterns);
+        if (matched) {
+          return buildResult(def, ctx, matched.paramKey, matched.pattern);
+        }
+      }
+
+      return { triggered: false };
+    },
+  };
+}
+
+// ── 从 YAML 文本直接构建规则 ──
+
+export function loadYamlRules(yamlText: string): SecurityRule[] {
+  const rules: SecurityRule[] = [];
+
+  // 支持多文档（--- 分隔）
+  const documents = yamlText.split(/^---\s*$/m);
+
+  for (const doc of documents) {
+    if (!doc.trim()) continue;
+    try {
+      const parsed = parseSimpleYaml(doc);
+      const def = validateYamlRuleDef(parsed);
+      if (def) rules.push(createYamlRule(def));
+    } catch {
+      // 无效文档跳过
+    }
+  }
+
+  return rules;
+}
+
+// ── 内部工具函数 ──
+
+function safeRegex(pattern: string): RegExp | null {
+  try {
+    return new RegExp(pattern, "i");
+  } catch {
+    return null;
+  }
+}
+
+function buildResult(
+  def: YamlRuleDefinition,
+  ctx: RuleContext,
+  paramKey: string,
+  pattern: string
+): RuleResult {
+  return {
+    triggered: true,
+    shouldBlock: def.shouldBlock ?? false,
+    event: {
+      category: def.category,
+      severity: def.severity,
+      title: `[${def.name}] ${def.description}`,
+      description: `自定义规则匹配: ${paramKey} 匹配模式 /${pattern}/`,
+      details: {
+        rule: def.name,
+        paramKey,
+        pattern,
+        toolName: ctx.toolName,
+      },
+      toolName: ctx.toolName,
+      toolParams: ctx.toolParams,
+      skillName: ctx.skillName,
+      sessionId: ctx.sessionId,
+      agentId: ctx.agentId,
+      matchedPattern: pattern,
+      ruleName: def.name,
+    },
+  };
+}
+
+function matchAnyParam(
+  params: Record<string, unknown>,
+  patterns: RegExp[],
+  prefix = ""
+): { paramKey: string; pattern: string } | null {
+  for (const [key, value] of Object.entries(params)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (typeof value === "string") {
+      for (const rx of patterns) {
+        if (rx.test(value)) {
+          return { paramKey: fullKey, pattern: rx.source };
+        }
+      }
+    } else if (value && typeof value === "object" && !Array.isArray(value)) {
+      const result = matchAnyParam(
+        value as Record<string, unknown>,
+        patterns,
+        fullKey
+      );
+      if (result) return result;
+    } else if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        if (typeof item === "string") {
+          for (const rx of patterns) {
+            if (rx.test(item)) {
+              return { paramKey: `${fullKey}[${i}]`, pattern: rx.source };
+            }
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+const VALID_SEVERITIES = new Set(["critical", "high", "medium", "low", "info"]);
+const VALID_CATEGORIES = new Set([
+  "exec_danger",
+  "path_violation",
+  "network_suspect",
+  "rate_anomaly",
+  "baseline_drift",
+  "prompt_injection",
+  "data_exfil",
+]);
+
+function validateYamlRuleDef(
+  parsed: Record<string, unknown>
+): YamlRuleDefinition | null {
+  const name = parsed["name"];
+  const description = parsed["description"];
+  const severity = parsed["severity"];
+  const category = parsed["category"];
+  const match = parsed["match"];
+
+  if (
+    typeof name !== "string" ||
+    typeof description !== "string" ||
+    typeof severity !== "string" ||
+    typeof category !== "string" ||
+    !match ||
+    typeof match !== "object"
+  ) {
+    return null;
+  }
+
+  if (!VALID_SEVERITIES.has(severity) || !VALID_CATEGORIES.has(category)) {
+    return null;
+  }
+
+  return {
+    name,
+    description,
+    severity: severity as Severity,
+    category: category as EventCategory,
+    shouldBlock: parsed["shouldBlock"] === true,
+    match: match as YamlRuleDefinition["match"],
+  };
+}

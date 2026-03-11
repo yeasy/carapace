@@ -8,7 +8,7 @@
   <p align="center">
     <a href="https://github.com/yeasy/carapace"><img src="https://img.shields.io/github/stars/yeasy/carapace?style=social" alt="GitHub stars"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-195%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-229%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -197,11 +197,17 @@ carapace/
 │   │   │   ├── engine.ts     # Rule evaluation engine
 │   │   │   ├── alerter.ts    # Alert router + sinks
 │   │   │   └── types.ts      # Type definitions
-│   │   └── test/             # 195 unit tests (vitest)
-│   └── adapter-openclaw/     # @carapace/adapter-openclaw — native plugin
+│   │   └── test/             # 229 unit tests (vitest)
+│   ├── adapter-openclaw/     # @carapace/adapter-openclaw — native plugin
+│   │   └── src/
+│   │       ├── index.ts      # Plugin entry, registers hooks
+│   │       └── tailer.ts     # JSONL session log tailer
+│   ├── adapter-mcp/          # @carapace/adapter-mcp — MCP proxy
+│   │   └── src/
+│   │       └── index.ts      # stdio proxy, JSON-RPC interception
+│   └── adapter-langchain/    # @carapace/adapter-langchain — Python bridge
 │       └── src/
-│           ├── index.ts      # Plugin entry, registers hooks
-│           └── tailer.ts     # JSONL session log tailer
+│           └── index.ts      # HTTP server for LangChain/CrewAI/AutoGen
 ├── docs/
 │   ├── DESIGN.md             # Product & architecture design (Chinese)
 │   └── DESIGN.en.md          # Product & architecture design (English)
@@ -213,7 +219,7 @@ carapace/
 ```bash
 npm install              # install all dependencies
 npm run build            # build core → adapter (sequential)
-npm run test -w @carapace/core   # run 195 tests
+npm run test -w @carapace/core   # run 229 tests
 ```
 
 ## Installation
@@ -234,8 +240,8 @@ cd carapace && npm install && npm run build
 
 - **v0.1** — Core rules (ExecGuard, PathGuard, NetworkGuard), OpenClaw adapter, alert sinks, trusted skills
 - **v0.2** — Rate limiter rule, ESLint + CI pipeline, regex validation hardening, error logging improvements
-- **v0.3** (current) — PromptInjection, DataExfil, BaselineDrift rules, session statistics, response data-exfil scanning
-- **v0.4** — MCP protocol proxy adapter, LangChain / CrewAI adapter (Python bridge), YAML custom rules
+- **v0.3** — PromptInjection, DataExfil, BaselineDrift rules, session statistics, response data-exfil scanning
+- **v0.4** (current) — MCP proxy adapter, LangChain/CrewAI Python bridge, YAML custom rules
 - **v0.5** — Dashboard Web UI, SIEM connectors, team policy management
 
 ## Contributing

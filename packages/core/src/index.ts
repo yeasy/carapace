@@ -21,5 +21,6 @@ export {
   createBaselineDriftRule,
   BaselineTracker,
 } from "./rules/index.js";
-export type { BaselineConfig } from "./rules/index.js";
+export type { BaselineConfig, YamlRuleDefinition } from "./rules/index.js";
+export { createYamlRule, loadYamlRules, parseSimpleYaml } from "./rules/index.js";
 export { generateEventId } from "./utils/id.js";

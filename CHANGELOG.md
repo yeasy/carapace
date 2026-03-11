@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-03-11
+
+### Added
+- **YAML custom rules**: Define security rules via YAML files without writing TypeScript. Supports tool name matching, parameter pattern matching, and any-parameter scanning. Multi-document YAML supported.
+- **MCP proxy adapter** (`@carapace/adapter-mcp`): Transparent stdio proxy for MCP (Model Context Protocol) servers. Intercepts `tools/call` requests, applies all security rules, and returns JSON-RPC errors for blocked calls. Includes response data-exfil scanning.
+- **LangChain/CrewAI Python bridge** (`@carapace/adapter-langchain`): HTTP bridge server for Python agent frameworks. Exposes `/check`, `/check/batch`, `/status`, and `/health` endpoints. Includes Python client library example.
+- New test suites: 12 YAML rule tests, 12 MCP proxy tests, 12 bridge tests (229 total).
+
+### Changed
+- Monorepo expanded: 4 packages (core + 3 adapters).
+- Root build/test scripts updated for all packages.
+- Both adapters support YAML custom rule loading via `yamlRules` config option.
+
 ## [0.3.0] - 2026-03-11
 
 ### Added
