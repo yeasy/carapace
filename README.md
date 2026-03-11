@@ -8,7 +8,7 @@
   <p align="center">
     <a href="https://github.com/yeasy/carapace"><img src="https://img.shields.io/github/stars/yeasy/carapace?style=social" alt="GitHub stars"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-161%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-195%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -28,15 +28,25 @@ AI agents can execute shell commands, read any file, and make network requests �
 ## What It Catches
 
 ```
-  ExecGuard                PathGuard               NetworkGuard             RateLimiter
-  ─────────                ─────────               ────────────             ───────────
-  curl | bash              ~/.ssh/id_rsa           pastebin.com
-  reverse shells           ~/.aws/credentials      transfer.sh
-  base64 decode pipes      .env / .env.local       webhook.site
-  rm -rf /                 browser password DBs    .onion domains
-  encoded PowerShell       crypto wallets           raw IP connections
-  eval / subprocess        /etc/shadow              mining pools
-  ...18 patterns           ...20+ patterns          ...6 categories          per-session sliding window
+  ExecGuard           PathGuard            NetworkGuard         RateLimiter
+  ─────────           ─────────            ────────────         ───────────
+  curl | bash         ~/.ssh/id_rsa        pastebin.com         per-session
+  reverse shells      ~/.aws/credentials   transfer.sh          sliding window
+  base64 decode       .env / .env.local    webhook.site
+  rm -rf /            browser passwords    .onion domains
+  encoded PowerShell  crypto wallets       raw IP connections
+  eval / subprocess   /etc/shadow          mining pools
+  ...18 patterns      ...20+ patterns      ...6 categories
+
+  PromptInjection     DataExfil            BaselineDrift
+  ───────────────     ─────────            ─────────────
+  role overrides      AWS/GitHub keys      per-skill profiling
+  system prompt leak  OpenAI/Stripe keys   learning phase
+  jailbreak (DAN)     private key leak     novel tool detection
+  fake system tags    curl file upload     novelty ratio alert
+  encoding bypass     pipe exfil chains
+  hidden injections   env var leak
+  ...19 patterns      ...14+ patterns      configurable threshold
 ```
 
 ## Quick Start
@@ -117,6 +127,8 @@ const events = engine.evaluate({
 | `sensitivePathPatterns` | `string[]` | — | Additional regex patterns for sensitive paths |
 | `blockedDomains` | `string[]` | — | Additional domains to block |
 | `trustedSkills` | `string[]` | — | Skill names that bypass all rule checks |
+| `maxToolCallsPerMinute` | `number` | — | Enable rate limiter with this threshold |
+| `enableBaseline` | `boolean` | `false` | Enable per-skill behavior baseline tracking |
 | `debug` | `boolean` | `false` | Verbose debug logging |
 
 ## Extending Rules
@@ -168,7 +180,7 @@ Carapace uses an adapter pattern — the core engine is **framework-agnostic**. 
           ┌────────▼────────┐
           │  Carapace Core   │
           │  ┌────────────┐ │
-          │  │ RuleEngine  │ │  ← 3 built-in rules, extensible
+          │  │ RuleEngine  │ │  ← 7 built-in rules, extensible
           │  │ AlertRouter │ │  ← console + webhook + logfile
           │  └────────────┘ │
           └─────────────────┘
@@ -181,11 +193,11 @@ carapace/
 ├── packages/
 │   ├── core/                 # @carapace/core — rule engine & alerting
 │   │   ├── src/
-│   │   │   ├── rules/        # ExecGuard / PathGuard / NetworkGuard / RateLimiter
+│   │   │   ├── rules/        # ExecGuard / PathGuard / NetworkGuard / RateLimiter / PromptInjection / DataExfil / BaselineDrift
 │   │   │   ├── engine.ts     # Rule evaluation engine
 │   │   │   ├── alerter.ts    # Alert router + sinks
 │   │   │   └── types.ts      # Type definitions
-│   │   └── test/             # 161 unit tests (vitest)
+│   │   └── test/             # 195 unit tests (vitest)
 │   └── adapter-openclaw/     # @carapace/adapter-openclaw — native plugin
 │       └── src/
 │           ├── index.ts      # Plugin entry, registers hooks
@@ -201,7 +213,7 @@ carapace/
 ```bash
 npm install              # install all dependencies
 npm run build            # build core → adapter (sequential)
-npm run test -w @carapace/core   # run 161 tests
+npm run test -w @carapace/core   # run 195 tests
 ```
 
 ## Installation
@@ -221,9 +233,9 @@ cd carapace && npm install && npm run build
 ## Roadmap
 
 - **v0.1** — Core rules (ExecGuard, PathGuard, NetworkGuard), OpenClaw adapter, alert sinks, trusted skills
-- **v0.2** (current) — Rate limiter rule, ESLint + CI pipeline, regex validation hardening, error logging improvements
-- **v0.3** — MCP protocol proxy adapter, per-skill behavior baselines, data exfiltration detection
-- **v0.4** — LangChain / CrewAI adapter (Python bridge), YAML custom rules
+- **v0.2** — Rate limiter rule, ESLint + CI pipeline, regex validation hardening, error logging improvements
+- **v0.3** (current) — PromptInjection, DataExfil, BaselineDrift rules, session statistics, response data-exfil scanning
+- **v0.4** — MCP protocol proxy adapter, LangChain / CrewAI adapter (Python bridge), YAML custom rules
 - **v0.5** — Dashboard Web UI, SIEM connectors, team policy management
 
 ## Contributing

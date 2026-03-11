@@ -258,7 +258,7 @@ describe("Carapace OpenClaw Plugin", () => {
       await results[0];
 
       expect(api.logger.info).toHaveBeenCalledWith(
-        expect.stringContaining("3 条规则")
+        expect.stringContaining("5 条规则")
       );
       expect(api.logger.info).toHaveBeenCalledWith(
         expect.stringContaining("阻断=开启")

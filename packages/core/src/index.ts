@@ -16,5 +16,10 @@ export {
   createPathGuardRule,
   createNetworkGuardRule,
   createRateLimiterRule,
+  createPromptInjectionRule,
+  createDataExfilRule,
+  createBaselineDriftRule,
+  BaselineTracker,
 } from "./rules/index.js";
+export type { BaselineConfig } from "./rules/index.js";
 export { generateEventId } from "./utils/id.js";

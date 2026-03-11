@@ -2,3 +2,7 @@ export { execGuardRule } from "./exec-guard.js";
 export { createPathGuardRule } from "./path-guard.js";
 export { createNetworkGuardRule } from "./network-guard.js";
 export { createRateLimiterRule } from "./rate-limiter.js";
+export { createPromptInjectionRule } from "./prompt-injection.js";
+export { createDataExfilRule } from "./data-exfil.js";
+export { createBaselineDriftRule, BaselineTracker } from "./baseline.js";
+export type { BaselineConfig } from "./baseline.js";

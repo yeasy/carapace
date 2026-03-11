@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-03-11
+
+### Added
+- **PromptInjection rule**: 19 patterns detecting prompt injection attempts in tool parameters — role overrides, system prompt leaks, jailbreak attempts (DAN, developer mode), encoding bypasses, fake system tags, and indirect injection markers.
+- **DataExfil rule**: 14+ patterns detecting data exfiltration — credential leaks (AWS keys, GitHub tokens, OpenAI/Stripe keys, private keys), file uploads via curl, environment variable leaks, pipe exfil patterns. 12 known exfil destination services (transfer.sh, file.io, ngrok, webhook.site, etc.).
+- **BaselineDrift rule**: Per-skill behavior baseline modeling with configurable learning threshold (default 20 calls). Detects novel tool usage after learning phase completes.
+- **Session statistics**: Per-session counters tracking tool calls, blocked calls, and alerts fired, with summary logged on session end.
+- **Response data-exfil scanning**: `after_tool_call` hook now scans tool results for credential leak patterns.
+
+### Changed
+- Adapter now registers 5 always-on rules (ExecGuard, PathGuard, NetworkGuard, PromptInjection, DataExfil) plus optional RateLimiter and BaselineDrift.
+- Adapter version string updated to v0.3.0.
+- Configuration expanded: `enableBaseline` (boolean), `maxToolCallsPerMinute` (number).
+- Test suite expanded from 161 to 195 tests.
+
 ## [0.2.0] - 2026-03-11
 
 ### Added
