@@ -28,15 +28,15 @@ AI agents can execute shell commands, read any file, and make network requests �
 ## What It Catches
 
 ```
-  ExecGuard                PathGuard               NetworkGuard
-  ─────────                ─────────               ────────────
+  ExecGuard                PathGuard               NetworkGuard             RateLimiter
+  ─────────                ─────────               ────────────             ───────────
   curl | bash              ~/.ssh/id_rsa           pastebin.com
   reverse shells           ~/.aws/credentials      transfer.sh
   base64 decode pipes      .env / .env.local       webhook.site
   rm -rf /                 browser password DBs    .onion domains
   encoded PowerShell       crypto wallets           raw IP connections
   eval / subprocess        /etc/shadow              mining pools
-  ...18 patterns           ...20+ patterns          ...6 categories
+  ...18 patterns           ...20+ patterns          ...6 categories          per-session sliding window
 ```
 
 ## Quick Start
@@ -181,7 +181,7 @@ carapace/
 ├── packages/
 │   ├── core/                 # @carapace/core — rule engine & alerting
 │   │   ├── src/
-│   │   │   ├── rules/        # ExecGuard / PathGuard / NetworkGuard
+│   │   │   ├── rules/        # ExecGuard / PathGuard / NetworkGuard / RateLimiter
 │   │   │   ├── engine.ts     # Rule evaluation engine
 │   │   │   ├── alerter.ts    # Alert router + sinks
 │   │   │   └── types.ts      # Type definitions
@@ -220,10 +220,11 @@ cd carapace && npm install && npm run build
 
 ## Roadmap
 
-- **v0.1** (current) — Core rules, OpenClaw adapter, alert sinks, trusted skills
-- **v0.2** — MCP protocol proxy adapter, per-skill behavior baselines
-- **v0.3** — LangChain / CrewAI adapter (Python bridge), YAML custom rules
-- **v0.4** — Dashboard Web UI, SIEM connectors, team policy management
+- **v0.1** — Core rules (ExecGuard, PathGuard, NetworkGuard), OpenClaw adapter, alert sinks, trusted skills
+- **v0.2** (current) — Rate limiter rule, ESLint + CI pipeline, regex validation hardening, error logging improvements
+- **v0.3** — MCP protocol proxy adapter, per-skill behavior baselines, data exfiltration detection
+- **v0.4** — LangChain / CrewAI adapter (Python bridge), YAML custom rules
+- **v0.5** — Dashboard Web UI, SIEM connectors, team policy management
 
 ## Contributing
 

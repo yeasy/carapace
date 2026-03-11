@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest";
 import { execGuardRule } from "../src/rules/exec-guard.js";
 import { createPathGuardRule } from "../src/rules/path-guard.js";
 import { createNetworkGuardRule } from "../src/rules/network-guard.js";
+import { createRateLimiterRule } from "../src/rules/rate-limiter.js";
 import { RuleEngine } from "../src/engine.js";
 import { AlertRouter, ConsoleSink, LogFileSink } from "../src/alerter.js";
 import { generateEventId } from "../src/utils/id.js";
@@ -1391,5 +1392,138 @@ describe("generateEventId", () => {
   it("每次生成不同的 id", () => {
     const ids = new Set(Array.from({ length: 100 }, () => generateEventId()));
     expect(ids.size).toBe(100);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// RateLimiter 测试
+// ══════════════════════════════════════════════════════════════════
+
+describe("RateLimiter", () => {
+  it("正常频率不触发", () => {
+    const rule = createRateLimiterRule(10);
+    const now = Date.now();
+    for (let i = 0; i < 10; i++) {
+      const ctx = makeCtx("bash", { command: "ls" }, {
+        sessionId: "rate-normal",
+        timestamp: now + i * 7000, // 每 7 秒一次，10 次 = 70 秒
+      });
+      const r = rule.check(ctx);
+      expect(r.triggered).toBe(false);
+    }
+  });
+
+  it("超过阈值触发 medium 告警", () => {
+    const rule = createRateLimiterRule(5);
+    const now = Date.now();
+    let lastResult;
+    for (let i = 0; i < 7; i++) {
+      const ctx = makeCtx("bash", { command: "ls" }, {
+        sessionId: "rate-medium",
+        timestamp: now + i * 1000, // 每秒一次
+      });
+      lastResult = rule.check(ctx);
+    }
+    expect(lastResult!.triggered).toBe(true);
+    expect(lastResult!.event?.severity).toBe("medium");
+    expect(lastResult!.shouldBlock).toBe(false);
+  });
+
+  it("超过 1.5x 阈值触发 high 告警", () => {
+    const rule = createRateLimiterRule(10);
+    const now = Date.now();
+    let lastResult;
+    for (let i = 0; i < 16; i++) {
+      const ctx = makeCtx("bash", { command: "ls" }, {
+        sessionId: "rate-high",
+        timestamp: now + i * 500,
+      });
+      lastResult = rule.check(ctx);
+    }
+    expect(lastResult!.triggered).toBe(true);
+    expect(lastResult!.event?.severity).toBe("high");
+    expect(lastResult!.shouldBlock).toBe(false);
+  });
+
+  it("超过 2x 阈值触发 critical 并建议阻断", () => {
+    const rule = createRateLimiterRule(10);
+    const now = Date.now();
+    let lastResult;
+    for (let i = 0; i < 22; i++) {
+      const ctx = makeCtx("bash", { command: "ls" }, {
+        sessionId: "rate-critical",
+        timestamp: now + i * 200,
+      });
+      lastResult = rule.check(ctx);
+    }
+    expect(lastResult!.triggered).toBe(true);
+    expect(lastResult!.event?.severity).toBe("critical");
+    expect(lastResult!.shouldBlock).toBe(true);
+  });
+
+  it("不同 session 独立计数", () => {
+    const rule = createRateLimiterRule(5);
+    const now = Date.now();
+    // session A: 4 次
+    for (let i = 0; i < 4; i++) {
+      rule.check(makeCtx("bash", { command: "ls" }, {
+        sessionId: "session-A",
+        timestamp: now + i * 100,
+      }));
+    }
+    // session B: 4 次
+    for (let i = 0; i < 4; i++) {
+      rule.check(makeCtx("bash", { command: "ls" }, {
+        sessionId: "session-B",
+        timestamp: now + i * 100,
+      }));
+    }
+    // 两者都不应触发（各 4 次 < 5）
+    const rA = rule.check(makeCtx("bash", { command: "ls" }, {
+      sessionId: "session-A",
+      timestamp: now + 500,
+    }));
+    const rB = rule.check(makeCtx("bash", { command: "ls" }, {
+      sessionId: "session-B",
+      timestamp: now + 500,
+    }));
+    expect(rA.triggered).toBe(false); // 第 5 次 = 阈值
+    expect(rB.triggered).toBe(false);
+  });
+
+  it("过期记录被清理（滑动窗口）", () => {
+    const rule = createRateLimiterRule(5);
+    const now = Date.now();
+    // 先打入 5 次（在 60 秒前）
+    for (let i = 0; i < 5; i++) {
+      rule.check(makeCtx("bash", { command: "ls" }, {
+        sessionId: "rate-window",
+        timestamp: now - 70_000 + i * 1000,
+      }));
+    }
+    // 现在再打 3 次 -> 窗口内只有 3 次，不应触发
+    for (let i = 0; i < 3; i++) {
+      const r = rule.check(makeCtx("bash", { command: "ls" }, {
+        sessionId: "rate-window",
+        timestamp: now + i * 1000,
+      }));
+      expect(r.triggered).toBe(false);
+    }
+  });
+
+  it("event 包含正确的 category 和 details", () => {
+    const rule = createRateLimiterRule(3);
+    const now = Date.now();
+    let lastResult;
+    for (let i = 0; i < 5; i++) {
+      lastResult = rule.check(makeCtx("http_request", { url: "http://x.com" }, {
+        sessionId: "rate-detail",
+        timestamp: now + i * 100,
+      }));
+    }
+    expect(lastResult!.event?.category).toBe("rate_anomaly");
+    expect(lastResult!.event?.details.recentCalls).toBe(5);
+    expect(lastResult!.event?.details.maxCallsPerMinute).toBe(3);
+    expect(lastResult!.event?.details.ratio).toBeGreaterThan(1);
   });
 });

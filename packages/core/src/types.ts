@@ -86,7 +86,6 @@ export interface CarapaceConfig {
   maxToolCallsPerMinute?: number;
   enableBaseline?: boolean;
   trustedSkills?: string[];
-  licenseKey?: string;
   debug?: boolean;
 }
 

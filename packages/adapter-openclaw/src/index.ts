@@ -17,6 +17,7 @@ import {
   execGuardRule,
   createPathGuardRule,
   createNetworkGuardRule,
+  createRateLimiterRule,
   type CarapaceConfig,
   type RuleContext,
 } from "@carapace/core";
@@ -59,6 +60,9 @@ const plugin = {
     engine.addRule(execGuardRule);
     engine.addRule(createPathGuardRule(config.sensitivePathPatterns));
     engine.addRule(createNetworkGuardRule(config.blockedDomains));
+    if (config.maxToolCallsPerMinute) {
+      engine.addRule(createRateLimiterRule(config.maxToolCallsPerMinute));
+    }
 
     // 设置受信 skill 白名单
     if (config.trustedSkills?.length) {
@@ -147,8 +151,8 @@ const plugin = {
             `[carapace] 工具完成: ${event.toolName} (${event.durationMs ?? "?"}ms)${event.error ? " ERROR" : ""}`
           );
         }
-        // TODO v0.2: 将结果供给基线建模器
-        // TODO v0.2: 检测响应中的数据外泄模式
+        // TODO v0.3: 将结果供给基线建模器
+        // TODO v0.3: 检测响应中的数据外泄模式
       },
       { priority: 50 }
     );
@@ -158,14 +162,14 @@ const plugin = {
       if (debug) {
         api.logger.info(`[carapace] 会话开始: ${ctx.sessionId ?? "unknown"}`);
       }
-      // TODO v0.2: 初始化会话级计数器
+      // TODO v0.3: 初始化会话级计数器
     });
 
     api.on("session_end", async (_event: unknown, ctx: { sessionId?: string }) => {
       if (debug) {
         api.logger.info(`[carapace] 会话结束: ${ctx.sessionId ?? "unknown"}`);
       }
-      // TODO v0.2: 生成会话摘要报告，更新 skill 基线
+      // TODO v0.3: 生成会话摘要报告，更新 skill 基线
     });
 
     // ── 6. 注册 gateway_start（启动审计） ──

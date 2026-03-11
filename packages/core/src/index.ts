@@ -15,5 +15,6 @@ export {
   execGuardRule,
   createPathGuardRule,
   createNetworkGuardRule,
+  createRateLimiterRule,
 } from "./rules/index.js";
 export { generateEventId } from "./utils/id.js";
