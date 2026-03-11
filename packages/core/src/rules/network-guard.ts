@@ -82,12 +82,19 @@ function extractUrls(params: Record<string, unknown>): string[] {
 // ── 规则实现 ──
 
 export function createNetworkGuardRule(blockedDomains?: string[]): SecurityRule {
-  const userRules: DomainRule[] = (blockedDomains ?? []).map((d) => ({
-    pattern: new RegExp(d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"),
-    severity: "high" as Severity,
-    title: `访问被阻断域名: ${d}`,
-    description: `访问用户阻断域名: ${d}`,
-  }));
+  const userRules: DomainRule[] = [];
+  for (const d of blockedDomains ?? []) {
+    try {
+      userRules.push({
+        pattern: new RegExp(d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"),
+        severity: "high" as Severity,
+        title: `访问被阻断域名: ${d}`,
+        description: `访问用户阻断域名: ${d}`,
+      });
+    } catch {
+      // 跳过无效输入，避免运行时崩溃
+    }
+  }
 
   const allRules = [...SUSPICIOUS_DOMAINS, ...userRules];
 
