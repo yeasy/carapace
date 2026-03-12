@@ -23,7 +23,7 @@ export async function trustCommand(
     }
 
     // 加载配置
-    let config = loadConfig();
+    const config = loadConfig();
 
     if (action === "trust") {
       // 添加到信任列表
