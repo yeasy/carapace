@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-03-11
+
+### Added
+- **SQLite persistent storage** (`StorageBackend`): Abstract storage backend with `MemoryBackend` (in-memory, default) and `SqliteBackend` (optional, via `better-sqlite3`). Schema: events, sessions, skill_baselines tables with indexes. Factory `createStore()` auto-detects backend availability.
+- **CLI tool** (`@carapace/cli`): Full command-line interface — `carapace status`, `config`, `events` (with filters/CSV export), `skills`, `trust/untrust`, `scan`, `report`, `baseline`, `dismiss/dismissals`. Lightweight arg parser, ANSI colors, zero external CLI deps.
+- **Alert escalation** (`AlertEscalation`): Repeated events auto-upgrade severity. 3+ in 10 min → severity +1 level; 10+ → forced CRITICAL. Configurable window/thresholds.
+- **HookMessage Sink** (`HookMessageSink`): Inject security alerts directly into agent conversation. Configurable minimum severity (default: high). Icons for blocked (🛡️) vs alert (⚠️).
+- **False positive dismissal** (`DismissalManager`): Pattern-based event dismissal with optional expiration. Match by rule, tool, skill name. Integrated into AlertRouter pipeline.
+- **First-run report**: OpenClaw adapter generates per-skill first-run reports on session end — tools used, files accessed, domains contacted, commands executed.
+- **`gateway_stop` hook**: Graceful shutdown — flushes session stats, cleans up timers, logs summary on exit.
+- New test suites: 44 alerter tests, 34 store tests, 32 CLI tests (367 total across all packages).
+
+### Changed
+- Monorepo expanded to 6 packages: core + 3 adapters + dashboard + CLI.
+- `AlertRouter` now accepts optional config for escalation and dismissal features.
+- All package versions bumped to 0.6.0.
+- Root build/test scripts updated for CLI package.
+- **Open source strategy**: Removed Pro/Enterprise commercial tier distinctions. All features (Dashboard, SIEM, Policy Management, ML detection, compliance reporting) are now free and open source under MIT license.
+
 ## [0.5.0] - 2026-03-11
 
 ### Added

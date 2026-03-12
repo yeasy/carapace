@@ -148,39 +148,35 @@ Carapace is an **OpenClaw plugin** that provides runtime security monitoring fro
 
 ---
 
-## 5. Business Model
+## 5. Open Source Strategy
 
-### 5.1 Open Core
+### 5.1 Fully Open Source (MIT License)
 
-**Free (Open Source — MIT)**:
-- Core rule engine (ExecGuard, PathGuard, NetworkGuard)
-- Real-time alerts (console, webhook, log file)
+Carapace is a **100% open-source** project with all features freely available to everyone:
+
+- Core rule engine (ExecGuard, PathGuard, NetworkGuard, PromptInjection, DataExfil, BaselineDrift, RateLimiter)
+- Real-time alerts (console, webhook, log file, email/SMS)
 - JSONL session log tailing
 - Per-skill behavioral baselines
 - New skill first-run reports
-- Manual audit CLI commands
-
-**Pro (Paid License, $15/user/month)**:
+- CLI audit tools
 - Dashboard Web UI (event timeline, skill trust score visualization)
-- SIEM integration (Splunk, ELK, Datadog connectors)
-- Team centralized policy management
-- Advanced ML anomaly detection
-- Email/SMS alert channels
-- Priority support
-
-**Enterprise (Contact Sales)**:
-- On-premise deployment support
-- Custom rule development
+- SIEM integration (Splunk, Elasticsearch, Datadog, Syslog connectors)
+- Team centralized policy management (inheritance chains, import/export)
+- YAML custom rules
+- MCP proxy adapter
+- LangChain/CrewAI Python bridge
+- ML anomaly detection
 - SOC2/ISO27001 compliance reporting
 - SSO and RBAC policy management
-- SLA guarantees
 
-### 5.2 Revenue Projections (Conservative)
+### 5.2 Sustainability
 
-Assumptions: OpenClaw has ~500K active users (based on GitHub star growth trends)
-- Year 1: Focus on free-tier adoption, target 5K installs (1% security-aware users)
-- Year 2: 500 Pro subscriptions = $90K ARR
-- Year 3: 2K Pro + 5 Enterprise = $500K ARR
+As an open-source project, Carapace relies on community contributions and sponsorship:
+
+- **GitHub Sponsors**: Individual and corporate sponsorship accepted
+- **Community contributions**: New rules, adapters, and bug fixes welcome
+- **Consulting services**: Optional professional consulting for enterprises needing custom security policies
 
 ---
 

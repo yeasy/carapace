@@ -8,7 +8,7 @@
   <p align="center">
     <a href="https://github.com/yeasy/carapace"><img src="https://img.shields.io/github/stars/yeasy/carapace?style=social" alt="GitHub stars"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-257%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-367%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -195,12 +195,13 @@ carapace/
 │   │   ├── src/
 │   │   │   ├── rules/        # ExecGuard / PathGuard / NetworkGuard / RateLimiter / PromptInjection / DataExfil / BaselineDrift
 │   │   │   ├── engine.ts     # Rule evaluation engine
-│   │   │   ├── alerter.ts    # Alert router + sinks
+│   │   │   ├── alerter.ts    # Alert router + sinks + escalation + dismissal
+│   │   │   ├── store.ts      # Storage backend (Memory + SQLite)
 │   │   │   └── types.ts      # Type definitions
-│   │   └── test/             # 205 unit tests (vitest)
+│   │   └── test/             # 283 unit tests (vitest)
 │   ├── adapter-openclaw/     # @carapace/adapter-openclaw — native plugin
 │   │   └── src/
-│   │       ├── index.ts      # Plugin entry, registers hooks
+│   │       ├── index.ts      # Plugin entry, registers hooks, first-run reports
 │   │       └── tailer.ts     # JSONL session log tailer
 │   ├── adapter-mcp/          # @carapace/adapter-mcp — MCP proxy
 │   │   └── src/
@@ -208,12 +209,17 @@ carapace/
 │   ├── adapter-langchain/    # @carapace/adapter-langchain — Python bridge
 │   │   └── src/
 │   │       └── index.ts      # HTTP server for LangChain/CrewAI/AutoGen
-│   └── dashboard/            # @carapace/dashboard — Web UI + SIEM + policies
+│   ├── dashboard/            # @carapace/dashboard — Web UI + SIEM + policies
+│   │   └── src/
+│   │       ├── server.ts     # HTTP server with REST API + SSE + embedded UI
+│   │       ├── event-store.ts # In-memory event database with query/stats
+│   │       ├── siem.ts       # Splunk / Elastic / Datadog / Syslog sinks
+│   │       └── policy.ts     # Team policy management with inheritance
+│   └── cli/                  # @carapace/cli — command-line interface
 │       └── src/
-│           ├── server.ts     # HTTP server with REST API + SSE + embedded UI
-│           ├── event-store.ts # In-memory event database with query/stats
-│           ├── siem.ts       # Splunk / Elastic / Datadog / Syslog sinks
-│           └── policy.ts     # Team policy management with inheritance
+│           ├── index.ts      # CLI entry point + command dispatcher
+│           ├── commands/     # status / config / events / skills / trust / scan / report / baseline / dismiss
+│           └── utils.ts      # Arg parser, table formatter, config loader
 ├── docs/
 │   ├── DESIGN.md             # Product & architecture design (Chinese)
 │   └── DESIGN.en.md          # Product & architecture design (English)
@@ -225,7 +231,7 @@ carapace/
 ```bash
 npm install              # install all dependencies
 npm run build            # build core → adapter (sequential)
-npm run test                     # run 257 tests across all packages
+npm run test                     # run 367 tests across all packages
 ```
 
 ## Installation
@@ -248,7 +254,8 @@ cd carapace && npm install && npm run build
 - **v0.2** — Rate limiter rule, ESLint + CI pipeline, regex validation hardening, error logging improvements
 - **v0.3** — PromptInjection, DataExfil, BaselineDrift rules, session statistics, response data-exfil scanning
 - **v0.4** — MCP proxy adapter, LangChain/CrewAI Python bridge, YAML custom rules
-- **v0.5** (current) — Dashboard Web UI, SIEM connectors, team policy management
+- **v0.5** — Dashboard Web UI, SIEM connectors, team policy management
+- **v0.6** (current) — SQLite persistent storage, CLI tool, alert escalation, HookMessage sink, false positive dismissal, first-run reports, all features open source
 
 ## Contributing
 
