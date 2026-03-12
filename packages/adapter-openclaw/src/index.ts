@@ -21,6 +21,7 @@ import {
   createPromptInjectionRule,
   createDataExfilRule,
   createBaselineDriftRule,
+  generateEventId,
   type CarapaceConfig,
   type RuleContext,
 } from "@carapace/core";
@@ -47,11 +48,23 @@ interface OpenClawPluginApi {
 
 // ── 会话级计数器 ──
 
+interface FirstRunReport {
+  skillName: string;
+  sessionId: string;
+  startedAt: number;
+  toolsUsed: Set<string>;
+  filesAccessed: Set<string>;
+  domainsContacted: Set<string>;
+  commandsExecuted: string[];
+  eventCount: number;
+}
+
 interface SessionStats {
   toolCalls: number;
   blockedCalls: number;
   alertsFired: number;
   startTime: number;
+  lastActivity: number;
 }
 
 // ── 插件定义 ──
@@ -116,6 +129,23 @@ const plugin = {
     // ── 会话计数器 ──
     const sessionStats = new Map<string, SessionStats>();
 
+    // ── TTL 清理：每 5 分钟清理超过 1 小时未活动的会话数据 ──
+    const SESSION_TTL_MS = 60 * 60 * 1000; // 1 小时
+    const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 分钟
+    const cleanupTimer = setInterval(() => {
+      const now = Date.now();
+      for (const [sessionId, stats] of sessionStats) {
+        if (now - stats.lastActivity > SESSION_TTL_MS) {
+          if (debug) {
+            api.logger.info(`[carapace] TTL 清理过期会话: ${sessionId}`);
+          }
+          sessionStats.delete(sessionId);
+        }
+      }
+    }, CLEANUP_INTERVAL_MS);
+    // 避免 timer 阻止进程退出
+    if (cleanupTimer.unref) cleanupTimer.unref();
+
     // ── 3. 注册 before_tool_call hook（主拦截点） ──
     api.on(
       "before_tool_call",
@@ -143,13 +173,14 @@ const plugin = {
         const stats = sessionStats.get(sessionId);
         if (stats) {
           stats.toolCalls++;
+          stats.lastActivity = Date.now();
           if (events.length > 0) stats.alertsFired += events.length;
           if (decision.block) stats.blockedCalls++;
         }
 
         // 发送所有触发的事件到告警渠道
         for (const evt of events) {
-          alertRouter.send(evt); // 不 await，不阻塞工具调用
+          alertRouter.send(evt).catch(() => {/* 告警失败不阻塞工具调用 */});
         }
 
         if (decision.block) {
@@ -207,13 +238,13 @@ const plugin = {
               if (check.triggered && check.event) {
                 const fullEvent = {
                   ...check.event,
-                  id: "",
+                  id: generateEventId(),
                   timestamp: Date.now(),
                   action: "alert" as const,
                   ruleName: "data-exfil",
                   title: `[响应] ${check.event.title}`,
                 };
-                alertRouter.send(fullEvent);
+                alertRouter.send(fullEvent).catch(() => {/* 不阻塞 */});
               }
             } catch {
               // 响应检测不应影响主流程
@@ -231,11 +262,13 @@ const plugin = {
         api.logger.info(`[carapace] 会话开始: ${sessionId}`);
       }
       // 初始化会话级计数器
+      const now = Date.now();
       sessionStats.set(sessionId, {
         toolCalls: 0,
         blockedCalls: 0,
         alertsFired: 0,
-        startTime: Date.now(),
+        startTime: now,
+        lastActivity: now,
       });
     });
 
@@ -265,10 +298,125 @@ const plugin = {
     api.on("gateway_start", async () => {
       const ruleCount = engine.getRules().length;
       api.logger.info(
-        `[carapace] 🛡️ Carapace Security Monitor v0.5.0 已启动 (${ruleCount} 条规则, ` +
+        `[carapace] 🛡️ Carapace Security Monitor v0.6.0 已启动 (${ruleCount} 条规则, ` +
           `阻断=${config.blockOnCritical ? "开启" : "关闭"}` +
           (baselineTracker ? ", 基线=开启" : "") + ")"
       );
+    });
+
+    // ── 7. 注册 gateway_stop（优雅关闭） ──
+    api.on("gateway_stop", async () => {
+      // 打印所有活跃会话的摘要
+      if (sessionStats.size > 0) {
+        api.logger.info(`[carapace] 关闭中... 刷新 ${sessionStats.size} 个活跃会话的统计数据`);
+        for (const [sessionId, stats] of sessionStats) {
+          if (stats.alertsFired > 0 || debug) {
+            const duration = Math.round((Date.now() - stats.startTime) / 1000);
+            api.logger.info(
+              `[carapace] 会话 ${sessionId}: ` +
+                `工具调用=${stats.toolCalls}, 告警=${stats.alertsFired}, ` +
+                `阻断=${stats.blockedCalls}, 时长=${duration}s`
+            );
+          }
+        }
+      }
+      // 清理资源
+      sessionStats.clear();
+      clearInterval(cleanupTimer);
+      api.logger.info("[carapace] 🛡️ Carapace 已关闭");
+    });
+
+    // ── 8. 首次运行报告生成器 ──
+    // 追踪每个 skill 的首次会话，记录其所有工具调用、路径和域名
+    const firstRunData = new Map<string, FirstRunReport>();
+
+    api.on(
+      "after_tool_call",
+      async (
+        event: {
+          toolName: string;
+          params: Record<string, unknown>;
+          result?: unknown;
+          skillName?: string;
+        },
+        ctx: { sessionId?: string }
+      ) => {
+        const skillName = event.skillName;
+        if (!skillName) return;
+
+        // 仅在该 skill 从未被观测过，且基线处于学习阶段时收集首次运行数据
+        if (baselineTracker && !baselineTracker.isLearning(skillName)) {
+          return; // 已学习完成，不再收集
+        }
+
+        if (!firstRunData.has(skillName)) {
+          firstRunData.set(skillName, {
+            skillName,
+            sessionId: ctx.sessionId ?? "__default__",
+            startedAt: Date.now(),
+            toolsUsed: new Set<string>(),
+            filesAccessed: new Set<string>(),
+            domainsContacted: new Set<string>(),
+            commandsExecuted: [],
+            eventCount: 0,
+          });
+        }
+
+        const report = firstRunData.get(skillName)!;
+        report.toolsUsed.add(event.toolName);
+
+        // 提取文件路径
+        const params = event.params;
+        const pathLike = params.path ?? params.file ?? params.filePath ?? params.filename;
+        if (typeof pathLike === "string") {
+          report.filesAccessed.add(pathLike);
+        }
+
+        // 提取域名
+        const urlLike = params.url ?? params.domain ?? params.host;
+        if (typeof urlLike === "string") {
+          try {
+            const url = new URL(urlLike.startsWith("http") ? urlLike : `https://${urlLike}`);
+            report.domainsContacted.add(url.hostname);
+          } catch {
+            // 非 URL 格式，忽略
+          }
+        }
+
+        // 提取命令
+        const cmdLike = params.command ?? params.cmd;
+        if (typeof cmdLike === "string") {
+          report.commandsExecuted.push(cmdLike);
+        }
+      },
+      { priority: 10 } // 低优先级，在安全检查之后
+    );
+
+    // 会话结束时输出首次运行报告
+    api.on("session_end", async (_event: unknown, ctx: { sessionId?: string }) => {
+      const sessionId = ctx.sessionId ?? "__default__";
+
+      for (const [skillName, report] of firstRunData) {
+        if (report.sessionId !== sessionId) continue;
+
+        // 生成首次运行报告
+        const duration = Math.round((Date.now() - report.startedAt) / 1000);
+        api.logger.info(
+          `\n${"─".repeat(60)}\n` +
+            `[carapace] 📋 首次运行报告: ${skillName}\n` +
+            `${"─".repeat(60)}\n` +
+            `  会话: ${sessionId}\n` +
+            `  时长: ${duration}s\n` +
+            `  工具使用: ${[...report.toolsUsed].join(", ") || "无"}\n` +
+            `  文件访问: ${[...report.filesAccessed].join(", ") || "无"}\n` +
+            `  网络域名: ${[...report.domainsContacted].join(", ") || "无"}\n` +
+            `  命令执行: ${report.commandsExecuted.length > 0 ? "\n    " + report.commandsExecuted.join("\n    ") : "无"}\n` +
+            `  安全事件: ${report.eventCount}\n` +
+            `${"─".repeat(60)}\n`
+        );
+
+        firstRunData.delete(skillName);
+      }
     });
 
     if (debug) api.logger.info("[carapace] 初始化完成");
