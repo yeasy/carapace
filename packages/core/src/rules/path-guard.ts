@@ -84,8 +84,9 @@ export function createPathGuardRule(additionalPatterns?: string[]): SecurityRule
         title: `自定义敏感路径匹配: ${p}`,
         category: "custom",
       });
-    } catch {
-      // 跳过无效正则，避免运行时崩溃
+    } catch (err) {
+      // 跳过无效正则，避免运行时崩溃；输出警告帮助用户排查配置问题
+      console.warn(`[carapace/path-guard] 忽略无效的 sensitivePathPattern: "${p}" — ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

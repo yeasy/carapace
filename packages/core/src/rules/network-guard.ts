@@ -91,8 +91,9 @@ export function createNetworkGuardRule(blockedDomains?: string[]): SecurityRule 
         title: `访问被阻断域名: ${d}`,
         description: `访问用户阻断域名: ${d}`,
       });
-    } catch {
-      // 跳过无效输入，避免运行时崩溃
+    } catch (err) {
+      // 跳过无效输入，避免运行时崩溃；输出警告帮助用户排查配置问题
+      console.warn(`[carapace/network-guard] 忽略无效的 blockedDomain: "${d}" — ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
