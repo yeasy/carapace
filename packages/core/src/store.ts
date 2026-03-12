@@ -393,11 +393,11 @@ export class SqliteBackend extends StorageBackend {
       title: row.title,
       description: row.description,
       details: JSON.parse(row.details_json || "{}"),
-      toolName: row.tool_name,
-      skillName: row.skill_name,
-      sessionId: row.session_id,
-      agentId: row.agent_id,
-      ruleName: row.rule_name,
+      toolName: row.tool_name ?? undefined,
+      skillName: row.skill_name ?? undefined,
+      sessionId: row.session_id ?? undefined,
+      agentId: row.agent_id ?? undefined,
+      ruleName: row.rule_name ?? undefined,
       action: row.action as "alert" | "blocked",
     }));
   }
@@ -561,9 +561,9 @@ export class SqliteBackend extends StorageBackend {
 
     return {
       sessionId: row.session_id,
-      agentId: row.agent_id,
+      agentId: row.agent_id ?? undefined,
       startedAt: row.started_at,
-      endedAt: row.ended_at,
+      endedAt: row.ended_at ?? undefined,
       toolCallCount: row.tool_call_count,
       eventCount: row.event_count,
       skillsUsed: row.skills_used_json ? JSON.parse(row.skills_used_json) : undefined,
