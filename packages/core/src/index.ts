@@ -10,6 +10,15 @@ export {
   ConsoleSink,
   WebhookSink,
   LogFileSink,
+  HookMessageSink,
+  AlertEscalation,
+  DismissalManager,
+} from "./alerter.js";
+export type {
+  HookMessageCallback,
+  DismissalPattern,
+  EscalationConfig,
+  AlertRouterConfig,
 } from "./alerter.js";
 export {
   execGuardRule,
@@ -24,3 +33,17 @@ export {
 export type { BaselineConfig, YamlRuleDefinition } from "./rules/index.js";
 export { createYamlRule, loadYamlRules, parseSimpleYaml } from "./rules/index.js";
 export { generateEventId } from "./utils/id.js";
+export {
+  StorageBackend,
+  MemoryBackend,
+  SqliteBackend,
+  createStore,
+} from "./store.js";
+export type {
+  StoreConfig,
+  EventQuery,
+  EventStats,
+  TimeSeriesBucket,
+  Session,
+  SkillBaseline,
+} from "./store.js";
