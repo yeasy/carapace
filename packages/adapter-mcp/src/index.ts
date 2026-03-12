@@ -36,13 +36,13 @@ import {
   createDataExfilRule,
   createBaselineDriftRule,
   loadYamlRules,
+  generateEventId,
   type CarapaceConfig,
   type RuleContext,
   type SecurityEvent,
 } from "@carapace/core";
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { createInterface } from "node:readline";
 
 // ── JSON-RPC 类型 ──
 
@@ -200,7 +200,7 @@ export class McpProxy {
     if (events.length > 0) {
       this.stats.alerts += events.length;
       for (const evt of events) {
-        this.alertRouter.send(evt);
+        this.alertRouter.send(evt).catch(() => {/* 告警发送失败不影响主流程 */});
       }
     }
 
@@ -262,13 +262,13 @@ export class McpProxy {
       if (check.triggered && check.event) {
         const fullEvent: SecurityEvent = {
           ...check.event,
-          id: "",
+          id: generateEventId(),
           timestamp: Date.now(),
           action: "alert",
           ruleName: "data-exfil",
           title: `[响应] ${check.event.title}`,
         };
-        this.alertRouter.send(fullEvent);
+        this.alertRouter.send(fullEvent).catch(() => {/* 不阻塞 */});
         return [fullEvent];
       }
     } catch {
@@ -297,8 +297,18 @@ export class McpProxy {
     const child = this.childProcess;
 
     // 读取 stdin（来自 LLM client）并拦截
-    const stdinReader = createInterface({ input: process.stdin });
     let stdinBuffer = "";
+
+    // 处理 stdin EOF（client 断开连接时优雅关闭子进程）
+    process.stdin.on("end", () => {
+      this.log("stdin EOF，正在关闭子进程...");
+      child.stdin?.end();
+    });
+
+    process.stdin.on("error", (err) => {
+      this.log(`stdin 错误: ${err.message}`);
+      child.stdin?.end();
+    });
 
     process.stdin.on("data", (chunk: Buffer) => {
       stdinBuffer += chunk.toString();
@@ -337,6 +347,9 @@ export class McpProxy {
     if (child.stdout) {
       child.stdout.on("data", (chunk: Buffer) => {
         process.stdout.write(chunk);
+      });
+      child.stdout.on("end", () => {
+        this.log("子进程 stdout 已关闭");
       });
     }
 

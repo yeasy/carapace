@@ -46,7 +46,6 @@ import {
   loadYamlRules,
   type CarapaceConfig,
   type RuleContext,
-  type SecurityEvent,
   type SecurityRule,
 } from "@carapace/core";
 
@@ -61,6 +60,8 @@ export interface BridgeConfig extends CarapaceConfig {
   yamlRules?: string;
   /** CORS 允许的来源（默认 *） */
   corsOrigin?: string;
+  /** 请求体最大字节数（默认 1MB） */
+  maxBodySize?: number;
 }
 
 // ── 请求/响应类型 ──
@@ -190,7 +191,7 @@ export class CarapaceBridge {
     if (events.length > 0) {
       this.stats.totalAlerts += events.length;
       for (const evt of events) {
-        this.alertRouter.send(evt);
+        this.alertRouter.send(evt).catch(() => {/* 告警发送失败不影响主流程 */});
       }
     }
 
@@ -224,7 +225,7 @@ export class CarapaceBridge {
   getStatus(): StatusResponse {
     return {
       status: "ok",
-      version: "0.4.0",
+      version: "0.6.0",
       rules: this.engine.getRules().length,
       trustedSkills: [...this.engine.getTrustedSkills()],
       stats: { ...this.stats },
@@ -238,6 +239,7 @@ export class CarapaceBridge {
     const port = this.config.port ?? 9876;
     const host = this.config.host ?? "127.0.0.1";
     const corsOrigin = this.config.corsOrigin ?? "*";
+    const maxBodySize = this.config.maxBodySize ?? 1_048_576; // 1 MB
 
     this.server = createServer((req: IncomingMessage, res: ServerResponse) => {
       // CORS 头
@@ -267,13 +269,36 @@ export class CarapaceBridge {
         return;
       }
 
-      // POST /check
-      if (req.method === "POST" && url === "/check") {
+      // ── 限制请求体大小的辅助函数 ──
+      const readBody = (req: IncomingMessage, cb: (body: string) => void): void => {
         let body = "";
+        let exceeded = false;
         req.on("data", (chunk: Buffer) => {
           body += chunk.toString();
+          if (body.length > maxBodySize) {
+            exceeded = true;
+            req.destroy();
+          }
         });
         req.on("end", () => {
+          if (exceeded) {
+            res.writeHead(413, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: `Request body exceeds limit (${maxBodySize} bytes)` }));
+            return;
+          }
+          cb(body);
+        });
+        req.on("error", () => {
+          if (exceeded) {
+            res.writeHead(413, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: `Request body exceeds limit (${maxBodySize} bytes)` }));
+          }
+        });
+      };
+
+      // POST /check
+      if (req.method === "POST" && url === "/check") {
+        readBody(req, (body) => {
           try {
             const checkReq = JSON.parse(body) as CheckRequest;
 
@@ -300,11 +325,7 @@ export class CarapaceBridge {
 
       // POST /check/batch
       if (req.method === "POST" && url === "/check/batch") {
-        let body = "";
-        req.on("data", (chunk: Buffer) => {
-          body += chunk.toString();
-        });
-        req.on("end", () => {
+        readBody(req, (body) => {
           try {
             const checks = JSON.parse(body) as CheckRequest[];
             if (!Array.isArray(checks)) {

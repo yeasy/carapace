@@ -95,7 +95,7 @@ describe("CarapaceBridge", () => {
 
     const status = bridge.getStatus();
     expect(status.status).toBe("ok");
-    expect(status.version).toBe("0.4.0");
+    expect(status.version).toBe("0.6.0");
     expect(status.rules).toBeGreaterThanOrEqual(5);
     expect(status.stats.totalChecks).toBe(2);
     expect(status.stats.totalAlerts).toBeGreaterThan(0);

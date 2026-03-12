@@ -8,8 +8,7 @@
  * - 策略导入/导出（JSON 格式）
  */
 
-import type { CarapaceConfig, SecurityRule } from "@carapace/core";
-import { loadYamlRules } from "@carapace/core";
+import type { CarapaceConfig } from "@carapace/core";
 
 // ── 策略定义 ──
 

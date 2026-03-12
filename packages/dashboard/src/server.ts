@@ -157,6 +157,22 @@ export class DashboardServer {
       });
       this.sseClients.add(res);
       req.on("close", () => this.sseClients.delete(res));
+      req.on("error", () => this.sseClients.delete(res));
+      // 定期发送心跳，帮助检测死连接
+      const heartbeat = setInterval(() => {
+        try {
+          if (res.destroyed) {
+            this.sseClients.delete(res);
+            clearInterval(heartbeat);
+            return;
+          }
+          res.write(":heartbeat\n\n");
+        } catch {
+          this.sseClients.delete(res);
+          clearInterval(heartbeat);
+        }
+      }, 30_000);
+      req.on("close", () => clearInterval(heartbeat));
       return;
     }
 
@@ -278,10 +294,33 @@ export class DashboardServer {
     res.end(JSON.stringify(data));
   }
 
-  private readBody(req: IncomingMessage, cb: (body: string) => void): void {
+  private readBody(req: IncomingMessage, cb: (body: string) => void, res?: ServerResponse): void {
+    const MAX_BODY = 1_048_576; // 1 MB
     let body = "";
-    req.on("data", (chunk: Buffer) => (body += chunk.toString()));
-    req.on("end", () => cb(body));
+    let exceeded = false;
+    req.on("data", (chunk: Buffer) => {
+      body += chunk.toString();
+      if (body.length > MAX_BODY) {
+        exceeded = true;
+        req.destroy();
+      }
+    });
+    req.on("end", () => {
+      if (exceeded) {
+        if (res) {
+          res.writeHead(413, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Request body too large" }));
+        }
+        return;
+      }
+      cb(body);
+    });
+    req.on("error", () => {
+      if (exceeded && res) {
+        res.writeHead(413, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Request body too large" }));
+      }
+    });
   }
 }
 
@@ -363,9 +402,9 @@ function card(label,value,cls){
 }
 function eventRow(e){
   const t=new Date(e.timestamp).toLocaleTimeString();
-  return '<div class="event"><div class="sev '+e.severity+'"></div><div class="meta"><div class="title">'+esc(e.title)+'</div><div class="sub">'+t+' · '+e.ruleName+' · '+e.toolName+'</div></div><span class="action '+e.action+'">'+e.action.toUpperCase()+'</span></div>';
+  return '<div class="event"><div class="sev '+esc(e.severity)+'"></div><div class="meta"><div class="title">'+esc(e.title)+'</div><div class="sub">'+esc(t)+' · '+esc(e.ruleName||'')+' · '+esc(e.toolName||'')+'</div></div><span class="action '+esc(e.action)+'">'+esc(e.action||'').toUpperCase()+'</span></div>';
 }
-function esc(s){return s.replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 loadStats();loadEvents();
 const es=new EventSource('/api/events/stream');
 es.onmessage=function(e){

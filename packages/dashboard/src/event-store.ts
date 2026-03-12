@@ -118,8 +118,8 @@ export class EventStore {
       timeRange:
         events.length > 0
           ? {
-              first: Math.min(...events.map((e) => e.timestamp)),
-              last: Math.max(...events.map((e) => e.timestamp)),
+              first: events.reduce((min, e) => e.timestamp < min ? e.timestamp : min, events[0].timestamp),
+              last: events.reduce((max, e) => e.timestamp > max ? e.timestamp : max, events[0].timestamp),
             }
           : null,
     };
