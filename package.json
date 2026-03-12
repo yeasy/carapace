@@ -5,8 +5,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @carapace/core && npm run build -w @carapace/adapter-openclaw && npm run build -w @carapace/adapter-mcp && npm run build -w @carapace/adapter-langchain && npm run build -w @carapace/dashboard",
-    "test": "npm run test -w @carapace/core && npm run test -w @carapace/adapter-mcp && npm run test -w @carapace/adapter-langchain && npm run test -w @carapace/dashboard",
+    "build": "npm run build -w @carapace/core && npm run build -w @carapace/adapter-openclaw && npm run build -w @carapace/adapter-mcp && npm run build -w @carapace/adapter-langchain && npm run build -w @carapace/dashboard && npm run build -w @carapace/cli",
+    "test": "npm run test -w @carapace/core && npm run test -w @carapace/adapter-mcp && npm run test -w @carapace/adapter-langchain && npm run test -w @carapace/dashboard && npm run test -w @carapace/cli",
     "lint": "eslint packages/*/src/"
   },
   "engines": {

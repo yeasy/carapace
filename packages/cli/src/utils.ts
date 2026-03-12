@@ -1,0 +1,225 @@
+/**
+ * CLI 工具函数
+ */
+
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
+
+/**
+ * 解析命令行参数
+ * 返回 { command, args, flags }
+ */
+export function parseArgs(argv: string[]): {
+  command: string | null;
+  args: string[];
+  flags: Record<string, string | boolean>;
+} {
+  const [, , command, ...rest] = argv;
+  const args: string[] = [];
+  const flags: Record<string, string | boolean> = {};
+
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i];
+    if (arg.startsWith("--")) {
+      const key = arg.slice(2);
+      const nextArg = rest[i + 1];
+      if (nextArg && !nextArg.startsWith("--")) {
+        flags[key] = nextArg;
+        i++;
+      } else {
+        flags[key] = true;
+      }
+    } else if (arg.startsWith("-")) {
+      const key = arg.slice(1);
+      const nextArg = rest[i + 1];
+      if (nextArg && !nextArg.startsWith("-")) {
+        flags[key] = nextArg;
+        i++;
+      } else {
+        flags[key] = true;
+      }
+    } else {
+      args.push(arg);
+    }
+  }
+
+  return { command: command || null, args, flags };
+}
+
+/**
+ * 将字符串持续时间转换为毫秒
+ * 支持: "24h", "7d", "30m", "1000ms"
+ */
+export function parseDuration(str: string): number {
+  const match = str.match(/^(\d+)([a-z]+)$/i);
+  if (!match) return 0;
+
+  const num = parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
+
+  switch (unit) {
+    case "ms":
+      return num;
+    case "s":
+    case "sec":
+      return num * 1000;
+    case "m":
+    case "min":
+      return num * 60 * 1000;
+    case "h":
+    case "hr":
+      return num * 60 * 60 * 1000;
+    case "d":
+    case "day":
+      return num * 24 * 60 * 60 * 1000;
+    case "w":
+    case "week":
+      return num * 7 * 24 * 60 * 60 * 1000;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * ANSI 颜色代码
+ */
+export const COLORS = {
+  reset: "\x1b[0m",
+  bright: "\x1b[1m",
+  dim: "\x1b[2m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m",
+  gray: "\x1b[90m",
+};
+
+/**
+ * 给文本添加 ANSI 颜色
+ */
+export function color(text: string, colorCode: string): string {
+  return `${colorCode}${text}${COLORS.reset}`;
+}
+
+/**
+ * 格式化简单 ASCII 表格
+ */
+export function formatTable(
+  headers: string[],
+  rows: (string | number)[][]
+): string {
+  if (rows.length === 0) {
+    return "No data";
+  }
+
+  // 计算列宽度
+  const colWidths = headers.map((h, i) => {
+    const maxRowWidth = Math.max(
+      ...rows.map((r) => String(r[i] || "").length)
+    );
+    return Math.max(h.length, maxRowWidth);
+  });
+
+  // 构建表格
+  const lines: string[] = [];
+
+  // 标题行
+  const headerRow = headers
+    .map((h, i) => h.padEnd(colWidths[i]))
+    .join(" │ ");
+  lines.push(headerRow);
+
+  // 分隔线
+  const separator = colWidths
+    .map((w) => "─".repeat(w))
+    .join("─┼─");
+  lines.push(separator);
+
+  // 数据行
+  for (const row of rows) {
+    const dataRow = row
+      .map((cell, i) => String(cell || "").padEnd(colWidths[i]))
+      .join(" │ ");
+    lines.push(dataRow);
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * 加载配置文件
+ * 合并来自多个源的配置: ~/.carapace/config.json 和 .carapace.yml (在当前工作目录)
+ */
+export function loadConfig(): Record<string, any> {
+  const config: Record<string, any> = {};
+
+  // 从 ~/.carapace/config.json 加载
+  const homeConfigPath = join(homedir(), ".carapace", "config.json");
+  if (existsSync(homeConfigPath)) {
+    try {
+      const content = readFileSync(homeConfigPath, "utf-8");
+      const parsed = JSON.parse(content);
+      Object.assign(config, parsed);
+    } catch {
+      // 忽略加载错误
+    }
+  }
+
+  // 从 .carapace.yml 加载 (当前目录)
+  const cwdConfigPath = join(process.cwd(), ".carapace.yml");
+  if (existsSync(cwdConfigPath)) {
+    try {
+      const content = readFileSync(cwdConfigPath, "utf-8");
+      // 简单的 YAML 解析 (仅支持基本格式)
+      const lines = content.split("\n");
+      for (const line of lines) {
+        const match = line.match(/^(\w+):\s*(.+)$/);
+        if (match) {
+          const key = match[1];
+          let value: any = match[2].trim();
+
+          // 尝试解析值
+          if (value === "true") value = true;
+          else if (value === "false") value = false;
+          else if (!isNaN(Number(value))) value = Number(value);
+
+          config[key] = value;
+        }
+      }
+    } catch {
+      // 忽略加载错误
+    }
+  }
+
+  return config;
+}
+
+/**
+ * 获取数据库路径
+ */
+export function getDbPath(): string {
+  return join(homedir(), ".carapace", "carapace.db");
+}
+
+/**
+ * 格式化时间戳为可读格式
+ */
+export function formatTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  return date.toISOString().replace("T", " ").substring(0, 19);
+}
+
+/**
+ * 格式化相对时间
+ */
+export function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+
+  if (diff < 60000) return "just now";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return `${Math.floor(diff / 86400000)}d ago`;
+}
