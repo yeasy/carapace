@@ -298,6 +298,7 @@ export class McpProxy {
 
     // 读取 stdin（来自 LLM client）并拦截
     let stdinBuffer = "";
+    const MAX_STDIN_BUFFER = 10 * 1024 * 1024; // 10MB 上限，防止内存耗尽
 
     // 处理 stdin EOF（client 断开连接时优雅关闭子进程）
     process.stdin.on("end", () => {
@@ -312,6 +313,13 @@ export class McpProxy {
 
     process.stdin.on("data", (chunk: Buffer) => {
       stdinBuffer += chunk.toString();
+
+      // 防止缓冲区无限增长导致内存耗尽
+      if (stdinBuffer.length > MAX_STDIN_BUFFER) {
+        this.log(`stdin 缓冲区超过 ${MAX_STDIN_BUFFER} 字节限制，断开连接`);
+        child.stdin?.end();
+        process.exit(1);
+      }
 
       // JSON-RPC 消息以换行分隔
       const lines = stdinBuffer.split("\n");
