@@ -69,6 +69,7 @@ export class RuleEngine {
     const events: SecurityEvent[] = [];
     let shouldBlock = false;
     let highestSeverity: Severity = "info";
+    let highestBlockSeverity: Severity = "info";
     let blockReason: string | undefined;
 
     for (const rule of this.rules) {
@@ -91,9 +92,10 @@ export class RuleEngine {
           if (
             !blockReason ||
             SEVERITY_ORDER[result.event.severity] >
-              SEVERITY_ORDER[highestSeverity]
+              SEVERITY_ORDER[highestBlockSeverity]
           ) {
             blockReason = result.event.title;
+            highestBlockSeverity = result.event.severity;
           }
         }
 
