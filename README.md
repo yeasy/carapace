@@ -226,24 +226,52 @@ All sinks include a 5-minute dedup window to prevent alert storms.
 
 Carapace uses an adapter pattern — the core engine is **framework-agnostic**. OpenClaw is the first adapter; LangChain, CrewAI, AutoGen, and MCP adapters are on the roadmap.
 
+```mermaid
+flowchart TD
+    A["AI Agent Framework\n(OpenClaw / LangChain / CrewAI / AutoGen)"] -->|hook / callback| B["Framework Adapter"]
+    B -->|RuleContext| C["Carapace Core"]
+    C --> D["RuleEngine\n7 built-in rules, extensible"]
+    C --> E["AlertRouter\nconsole + webhook + logfile"]
 ```
-┌─────────────────────────────────────────────┐
-│              AI Agent Framework              │
-│  (OpenClaw / LangChain / CrewAI / AutoGen)  │
-└──────────────────┬──────────────────────────┘
-                   │ hook / callback
-          ┌────────▼────────┐
-          │    Framework     │
-          │    Adapter       │
-          └────────┬────────┘
-                   │ RuleContext
-          ┌────────▼────────┐
-          │  Carapace Core   │
-          │  ┌────────────┐ │
-          │  │ RuleEngine  │ │  ← 7 built-in rules, extensible
-          │  │ AlertRouter │ │  ← console + webhook + logfile
-          │  └────────────┘ │
-          └─────────────────┘
+
+### Tool Call Interception Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent as AI Agent
+    participant Adapter as Framework Adapter
+    participant Engine as RuleEngine
+    participant Alert as AlertRouter
+    participant Tool as Tool Execution
+
+    Agent->>Adapter: tool_call(name, params)
+    Adapter->>Engine: evaluate(RuleContext)
+    Engine->>Engine: Run all rules in parallel
+    alt No threats detected
+        Engine-->>Adapter: []
+        Adapter-->>Tool: Execute tool
+        Tool-->>Agent: Result
+    else Threat detected (alert mode)
+        Engine-->>Alert: SecurityEvent[]
+        Alert-->>Alert: Deduplicate & route
+        Adapter-->>Tool: Execute tool (with warning)
+    else Critical threat (block mode)
+        Engine-->>Alert: SecurityEvent[] (critical)
+        Alert-->>Alert: Deduplicate & route
+        Adapter--xAgent: BLOCKED
+    end
+```
+
+### Alert Routing
+
+```mermaid
+flowchart LR
+    SE["SecurityEvent"] --> AR["AlertRouter"]
+    AR --> DD{"5-min Dedup"}
+    DD -->|New| CS["ConsoleSink\n(stderr)"]
+    DD -->|New| WS["WebhookSink\n(Slack / Discord)"]
+    DD -->|New| LS["LogFileSink\n(JSONL → SIEM)"]
+    DD -->|Duplicate| SK["Skip"]
 ```
 
 ## Project Structure

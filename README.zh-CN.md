@@ -226,24 +226,52 @@ Carapace 支持同时向多个输出路由告警：
 
 Carapace 采用适配器模式——核心引擎**与框架无关**。OpenClaw 是第一个适配器；LangChain、CrewAI、AutoGen 和 MCP 适配器已在路线图中。
 
+```mermaid
+flowchart TD
+    A["AI Agent 框架\n(OpenClaw / LangChain / CrewAI / AutoGen)"] -->|hook / callback| B["框架适配器"]
+    B -->|RuleContext| C["Carapace 核心"]
+    C --> D["RuleEngine\n7 条内置规则，可扩展"]
+    C --> E["AlertRouter\n控制台 + webhook + 日志文件"]
 ```
-┌─────────────────────────────────────────────┐
-│              AI Agent 框架                   │
-│  (OpenClaw / LangChain / CrewAI / AutoGen)  │
-└──────────────────┬──────────────────────────┘
-                   │ hook / callback
-          ┌────────▼────────┐
-          │    Framework     │
-          │    Adapter       │
-          └────────┬────────┘
-                   │ RuleContext
-          ┌────────▼────────┐
-          │  Carapace Core   │
-          │  ┌────────────┐ │
-          │  │ RuleEngine  │ │  ← 7 条内置规则，可扩展
-          │  │ AlertRouter │ │  ← 控制台 + webhook + 日志文件
-          │  └────────────┘ │
-          └─────────────────┘
+
+### 工具调用拦截流程
+
+```mermaid
+sequenceDiagram
+    participant Agent as AI Agent
+    participant Adapter as 框架适配器
+    participant Engine as RuleEngine
+    participant Alert as AlertRouter
+    participant Tool as 工具执行
+
+    Agent->>Adapter: tool_call(name, params)
+    Adapter->>Engine: evaluate(RuleContext)
+    Engine->>Engine: 并行执行所有规则
+    alt 未检测到威胁
+        Engine-->>Adapter: []
+        Adapter-->>Tool: 执行工具
+        Tool-->>Agent: 返回结果
+    else 检测到威胁（告警模式）
+        Engine-->>Alert: SecurityEvent[]
+        Alert-->>Alert: 去重 & 路由
+        Adapter-->>Tool: 执行工具（附带警告）
+    else 严重威胁（阻断模式）
+        Engine-->>Alert: SecurityEvent[]（严重）
+        Alert-->>Alert: 去重 & 路由
+        Adapter--xAgent: 已阻断
+    end
+```
+
+### 告警路由流程
+
+```mermaid
+flowchart LR
+    SE["SecurityEvent"] --> AR["AlertRouter"]
+    AR --> DD{"5 分钟去重"}
+    DD -->|新事件| CS["ConsoleSink\n(stderr)"]
+    DD -->|新事件| WS["WebhookSink\n(Slack / Discord)"]
+    DD -->|新事件| LS["LogFileSink\n(JSONL → SIEM)"]
+    DD -->|重复| SK["跳过"]
 ```
 
 ## 项目结构
