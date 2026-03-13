@@ -28,7 +28,7 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----/i, severity: "critical", title: "私钥出现在请求中", category: "credential_leak" },
 
   // 大量 base64 编码数据外发（可能是文件/凭证编码后传输）
-  { pattern: /[A-Za-z0-9+/]{200,}={0,2}/i, severity: "medium", title: "大块 Base64 数据外发", category: "encoded_exfil" },
+  { pattern: /[A-Za-z0-9+/]{200,2000}={0,2}/i, severity: "medium", title: "大块 Base64 数据外发", category: "encoded_exfil" },
 
   // 将文件内容通过 curl/wget 发送到外部
   { pattern: /curl\s+.*-[dX]\s+.*@\//i, severity: "high", title: "通过 curl 上传本地文件", category: "file_upload" },

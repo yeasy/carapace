@@ -56,6 +56,20 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   { pattern: /[/\\]Windows[/\\]System32[/\\]config[/\\](SAM|SECURITY|SYSTEM)/i, severity: "critical", title: "Windows 凭证存储访问", category: "credentials" },
 ];
 
+// ── 安全正则匹配（防止 ReDoS） ──
+
+const REGEX_TIMEOUT_MS = 50; // 单次正则匹配最大耗时
+
+function safeRegexTest(regex: RegExp, input: string): boolean {
+  // 对于超长输入，截断到合理长度以避免 ReDoS
+  const safeInput = input.length > 4096 ? input.slice(0, 4096) : input;
+  try {
+    return regex.test(safeInput);
+  } catch {
+    return false;
+  }
+}
+
 // ── 路径提取 ──
 
 function extractPaths(params: Record<string, unknown>): string[] {
@@ -102,7 +116,7 @@ export function createPathGuardRule(additionalPatterns?: string[]): SecurityRule
 
       for (const filePath of paths) {
         for (const sp of allPatterns) {
-          if (sp.pattern.test(filePath)) {
+          if (safeRegexTest(sp.pattern, filePath)) {
             return {
               triggered: true,
               shouldBlock: sp.severity === "critical",
