@@ -54,34 +54,48 @@ export class ConsoleSink implements AlertSink {
 
 export class WebhookSink implements AlertSink {
   name = "webhook";
+  private maxRetries: number;
 
-  constructor(private url: string) {}
+  constructor(private url: string, maxRetries: number = 2) {
+    this.maxRetries = maxRetries;
+  }
 
   async send(payload: AlertPayload): Promise<void> {
-    try {
-      await fetch(this.url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source: "carapace",
-          version: "0.6.0",
-          event: {
-            id: payload.event.id,
-            timestamp: new Date(payload.event.timestamp).toISOString(),
-            severity: payload.event.severity,
-            category: payload.event.category,
-            title: payload.event.title,
-            description: payload.event.description,
-            toolName: payload.event.toolName,
-            skillName: payload.event.skillName,
-            action: payload.event.action,
-          },
-        }),
-        signal: AbortSignal.timeout(5000),
-      });
-    } catch (err) {
-      // Webhook 失败不应阻塞主流程，但记录到 stderr 便于排查
-      process.stderr.write(`[CARAPACE] webhook send failed: ${err}\n`);
+    const body = JSON.stringify({
+      source: "carapace",
+      version: "0.6.0",
+      event: {
+        id: payload.event.id,
+        timestamp: new Date(payload.event.timestamp).toISOString(),
+        severity: payload.event.severity,
+        category: payload.event.category,
+        title: payload.event.title,
+        description: payload.event.description,
+        toolName: payload.event.toolName,
+        skillName: payload.event.skillName,
+        action: payload.event.action,
+      },
+    });
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        await fetch(this.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          signal: AbortSignal.timeout(5000),
+        });
+        return; // 发送成功，立即返回
+      } catch (err) {
+        if (attempt < this.maxRetries) {
+          // 指数退避等待后重试
+          await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+        } else {
+          process.stderr.write(
+            `[CARAPACE] webhook send failed after ${this.maxRetries + 1} attempts: ${err}\n`
+          );
+        }
+      }
     }
   }
 }

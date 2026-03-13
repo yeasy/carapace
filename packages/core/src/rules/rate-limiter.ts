@@ -13,6 +13,9 @@ interface CallRecord {
 
 export function createRateLimiterRule(maxCallsPerMinute: number = 60): SecurityRule {
   const sessions = new Map<string, CallRecord>();
+  let lastFullCleanup = 0;
+  const FULL_CLEANUP_INTERVAL = 5 * 60_000; // 每 5 分钟清理一次空 session
+  const MAX_SESSIONS = 10_000; // session Map 上限
 
   // 清理过期记录，防止内存泄漏（保留最近 2 分钟）
   function cleanup(record: CallRecord, now: number): void {
@@ -22,6 +25,30 @@ export function createRateLimiterRule(maxCallsPerMinute: number = 60): SecurityR
       record.timestamps = record.timestamps.slice(idx);
     } else if (idx === -1) {
       record.timestamps = [];
+    }
+  }
+
+  // 定期清理空 session 条目和超限淘汰
+  function cleanupSessions(now: number): void {
+    if (now - lastFullCleanup < FULL_CLEANUP_INTERVAL) return;
+    lastFullCleanup = now;
+    for (const [key, record] of sessions) {
+      if (record.timestamps.length === 0) {
+        sessions.delete(key);
+      }
+    }
+    // 超限时淘汰最旧的 session（LRU 近似）
+    if (sessions.size > MAX_SESSIONS) {
+      const entries = [...sessions.entries()];
+      entries.sort((a, b) => {
+        const aLast = a[1].timestamps[a[1].timestamps.length - 1] ?? 0;
+        const bLast = b[1].timestamps[b[1].timestamps.length - 1] ?? 0;
+        return aLast - bLast;
+      });
+      const toRemove = entries.slice(0, entries.length - MAX_SESSIONS);
+      for (const [key] of toRemove) {
+        sessions.delete(key);
+      }
     }
   }
 
@@ -40,6 +67,7 @@ export function createRateLimiterRule(maxCallsPerMinute: number = 60): SecurityR
       const record = sessions.get(sessionKey)!;
       record.timestamps.push(now);
       cleanup(record, now);
+      cleanupSessions(now);
 
       // 计算最近 60 秒内的调用数
       const windowStart = now - 60_000;
