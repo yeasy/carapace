@@ -162,11 +162,11 @@ export class MemoryBackend extends StorageBackend {
           ? {
               first: events.reduce(
                 (min, e) => (e.timestamp < min ? e.timestamp : min),
-                events[0].timestamp
+                Number.MAX_SAFE_INTEGER
               ),
               last: events.reduce(
                 (max, e) => (e.timestamp > max ? e.timestamp : max),
-                events[0].timestamp
+                0
               ),
             }
           : null,
@@ -448,11 +448,11 @@ export class SqliteBackend extends StorageBackend {
           ? {
               first: rows.reduce(
                 (min, row) => (row.timestamp < min ? row.timestamp : min),
-                rows[0].timestamp
+                Number.MAX_SAFE_INTEGER
               ),
               last: rows.reduce(
                 (max, row) => (row.timestamp > max ? row.timestamp : max),
-                rows[0].timestamp
+                0
               ),
             }
           : null,
