@@ -10,7 +10,7 @@
     <a href="https://www.npmjs.com/package/carapace"><img src="https://img.shields.io/npm/v/carapace?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-367%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-771%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -260,10 +260,10 @@ Carapace 采用适配器模式——核心引擎**与框架无关**。OpenClaw �
 
 ```mermaid
 flowchart TD
-    A["AI Agent 框架\n(OpenClaw / LangChain / CrewAI / AutoGen)"] -->|hook / callback| B["框架适配器"]
+    A["AI Agent 框架<br/>(OpenClaw / LangChain / CrewAI / AutoGen)"] -->|hook / callback| B["框架适配器"]
     B -->|RuleContext| C["Carapace 核心"]
-    C --> D["RuleEngine\n7 条内置规则，可扩展"]
-    C --> E["AlertRouter\n控制台 + webhook + 日志文件"]
+    C --> D["RuleEngine<br/>7 条内置规则，可扩展"]
+    C --> E["AlertRouter<br/>控制台 + webhook + 日志文件"]
 ```
 
 ### 工具调用拦截流程
@@ -300,9 +300,9 @@ sequenceDiagram
 flowchart LR
     SE["SecurityEvent"] --> AR["AlertRouter"]
     AR --> DD{"5 分钟去重"}
-    DD -->|新事件| CS["ConsoleSink\n(stderr)"]
-    DD -->|新事件| WS["WebhookSink\n(Slack / Discord)"]
-    DD -->|新事件| LS["LogFileSink\n(JSONL → SIEM)"]
+    DD -->|新事件| CS["ConsoleSink<br/>(stderr)"]
+    DD -->|新事件| WS["WebhookSink<br/>(Slack / Discord)"]
+    DD -->|新事件| LS["LogFileSink<br/>(JSONL → SIEM)"]
     DD -->|重复| SK["跳过"]
 ```
 

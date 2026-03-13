@@ -10,7 +10,7 @@
     <a href="https://www.npmjs.com/package/carapace"><img src="https://img.shields.io/npm/v/carapace?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-367%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-771%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -260,10 +260,10 @@ Carapace uses an adapter pattern — the core engine is **framework-agnostic**. 
 
 ```mermaid
 flowchart TD
-    A["AI Agent Framework\n(OpenClaw / LangChain / CrewAI / AutoGen)"] -->|hook / callback| B["Framework Adapter"]
+    A["AI Agent Framework<br/>(OpenClaw / LangChain / CrewAI / AutoGen)"] -->|hook / callback| B["Framework Adapter"]
     B -->|RuleContext| C["Carapace Core"]
-    C --> D["RuleEngine\n7 built-in rules, extensible"]
-    C --> E["AlertRouter\nconsole + webhook + logfile"]
+    C --> D["RuleEngine<br/>7 built-in rules, extensible"]
+    C --> E["AlertRouter<br/>console + webhook + logfile"]
 ```
 
 ### Tool Call Interception Flow
@@ -300,9 +300,9 @@ sequenceDiagram
 flowchart LR
     SE["SecurityEvent"] --> AR["AlertRouter"]
     AR --> DD{"5-min Dedup"}
-    DD -->|New| CS["ConsoleSink\n(stderr)"]
-    DD -->|New| WS["WebhookSink\n(Slack / Discord)"]
-    DD -->|New| LS["LogFileSink\n(JSONL → SIEM)"]
+    DD -->|New| CS["ConsoleSink<br/>(stderr)"]
+    DD -->|New| WS["WebhookSink<br/>(Slack / Discord)"]
+    DD -->|New| LS["LogFileSink<br/>(JSONL → SIEM)"]
     DD -->|Duplicate| SK["Skip"]
 ```
 
