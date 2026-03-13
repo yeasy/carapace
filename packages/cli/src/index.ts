@@ -12,6 +12,8 @@ import { dismissCommand } from "./commands/dismiss.js";
 import { scanCommand } from "./commands/scan.js";
 import { reportCommand } from "./commands/report.js";
 import { baselineCommand } from "./commands/baseline.js";
+import { initCommand } from "./commands/init.js";
+import { setupCommand } from "./commands/setup.js";
 import { parseArgs, color, COLORS } from "./utils.js";
 
 const VERSION = "0.6.0";
@@ -25,6 +27,8 @@ ${color("Usage:", COLORS.cyan)}
   carapace <command> [options]
 
 ${color("Commands:", COLORS.cyan)}
+  init                                生成默认配置文件 (.carapace.yml)
+  setup                               交互式配置向导
   status                              显示 Carapace 状态、活跃规则、最近事件
   config                              显示有效配置
   events                              列表最近安全事件
@@ -49,6 +53,8 @@ ${color("Commands:", COLORS.cyan)}
   version                             显示版本号
 
 ${color("Examples:", COLORS.cyan)}
+  carapace init
+  carapace setup
   carapace status
   carapace events --severity critical --since 24h
   carapace events --export csv > events.csv
@@ -71,6 +77,14 @@ async function main(): Promise<void> {
 
   try {
     switch (command) {
+      case "init":
+        await initCommand();
+        break;
+
+      case "setup":
+        await setupCommand();
+        break;
+
       case "status":
         await statusCommand();
         break;
