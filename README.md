@@ -27,6 +27,19 @@ AI agents can execute shell commands, read any file, and make network requests ‚
 
 **Carapace sits inside the agent pipeline**, monitoring every tool call in real time. It hooks into the framework's native plugin system ‚Äî no source code patches, no external daemons, no eBPF. One command to install, zero config to start catching threats.
 
+## Why Carapace? (vs Static Audits)
+
+| Feature | Static Audits | Carapace |
+|---------|---|---|
+| **Analysis Type** | Static code analysis | Runtime behavior monitoring |
+| **Threat Detection** | Audit reports only | Real-time blocking & alerts |
+| **Learning Phase** | N/A | 5-session warmup for behavior baseline |
+| **Framework Support** | Limited | MCP, LangChain, CrewAI, AutoGen, OpenClaw |
+| **Policy Management** | Manual review | Team policies with inheritance chain |
+| **Integration** | Point tools | SIEM-ready (Splunk, Elastic, Datadog) |
+| **Alert Routing** | Email summaries | Console + Webhook + JSONL (deduplicated) |
+| **False Positive Handling** | Manual adjustment | Smart dismissal & escalation |
+
 ## What It Catches
 
 ```
@@ -49,6 +62,51 @@ AI agents can execute shell commands, read any file, and make network requests ‚
   encoding bypass     pipe exfil chains
   hidden injections   env var leak
   ...19 patterns      ...14+ patterns      configurable threshold
+```
+
+## Key Features
+
+```mermaid
+mindmap
+  root((üõ°Ô∏è Carapace))
+    7 Built-in Rules
+      ExecGuard (18 patterns)
+      PathGuard (20+ patterns)
+      NetworkGuard (6 categories)
+      RateLimiter
+      PromptInjection (19 patterns)
+      DataExfil (14+ patterns)
+      BaselineDrift (anomaly detection)
+    Smart Alert Routing
+      5-min dedup window
+      Escalation chains
+      Dismissal & overrides
+      Console / Webhook / JSONL
+    Behavior Baseline Learning
+      5-session warmup
+      Per-skill profiling
+      Anomaly detection
+      Novelty ratio alerts
+    Multi-Framework
+      OpenClaw (native plugin)
+      MCP (proxy adapter)
+      LangChain / CrewAI
+      AutoGen, custom adapters
+    YAML Custom Rules
+      Extend detection patterns
+      Team-wide policies
+      Inheritance chain
+      Dynamic loading
+    Dashboard & SIEM
+      Web UI + REST API
+      Splunk integration
+      Elastic integration
+      Datadog integration
+    Team Policies
+      Inheritance hierarchy
+      Role-based access
+      Policy versioning
+      Audit logging
 ```
 
 ## Quick Start
