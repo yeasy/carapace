@@ -1,0 +1,53 @@
+name: Carapace Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      scan-path:
+        description: 'Path to scan'
+        required: false
+        default: '.'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Carapace Scan
+        uses: ./
+        with:
+          block-on-critical: 'true'
+          config-path: '.carapace.yml'
+          scan-path: ${{ github.event.inputs.scan-path || '.' }}
+          node-version: '20'
+
+      - name: Upload scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carapace-scan-results
+          path: |
+            .carapace/
+          retention-days: 30
+
+      - name: Comment PR on failure
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ Carapace security scan found critical issues. Please review and fix them before merging.'
+            })
