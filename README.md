@@ -210,6 +210,38 @@ const networkGuard = createNetworkGuardRule([
 engine.setTrustedSkills(["my-deploy-skill", "internal-backup"]);
 ```
 
+## CLI Quick Reference
+
+```bash
+# Check overall security status
+carapace status
+
+# View recent threat alerts
+carapace events --since 1h
+carapace events --since 24h --severity critical
+
+# Mark a skill as trusted (bypass checks)
+carapace trust <skill-name>
+
+# Scan a file or directory for threats
+carapace scan <file-or-dir>
+
+# Dismiss a false positive alert
+carapace dismiss <alert-id>
+
+# Generate security report
+carapace report --format json
+carapace report --format html > report.html
+
+# Display threat baseline for skills
+carapace baseline --show
+carapace baseline --reset <skill-name>
+
+# View configuration
+carapace config get blockOnCritical
+carapace config set maxToolCallsPerMinute 100
+```
+
 ## Alert Sinks
 
 Carapace routes alerts to multiple outputs simultaneously:

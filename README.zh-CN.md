@@ -210,6 +210,38 @@ const networkGuard = createNetworkGuardRule([
 engine.setTrustedSkills(["my-deploy-skill", "internal-backup"]);
 ```
 
+## CLI 快速参考
+
+```bash
+# 查看整体安全状态
+carapace status
+
+# 查看最近的威胁告警
+carapace events --since 1h
+carapace events --since 24h --severity critical
+
+# 将技能标记为受信（跳过检查）
+carapace trust <skill-name>
+
+# 扫描文件或目录中的威胁
+carapace scan <file-or-dir>
+
+# 驳回误报告警
+carapace dismiss <alert-id>
+
+# 生成安全报告
+carapace report --format json
+carapace report --format html > report.html
+
+# 查看威胁基线
+carapace baseline --show
+carapace baseline --reset <skill-name>
+
+# 查看配置
+carapace config get blockOnCritical
+carapace config set maxToolCallsPerMinute 100
+```
+
 ## 告警渠道
 
 Carapace 支持同时向多个输出路由告警：
