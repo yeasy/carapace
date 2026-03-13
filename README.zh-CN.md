@@ -264,7 +264,3 @@ cd carapace && npm install && npm run build
 ## 许可证
 
 [MIT](./LICENSE) — 完全开源。
-
-## 作者
-
-**Albert Yang** — [yangbaohua@gmail.com](mailto:yangbaohua@gmail.com)

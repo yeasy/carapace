@@ -264,7 +264,3 @@ Contributions are welcome! Whether it's new detection rules, framework adapters,
 ## License
 
 [MIT](./LICENSE) — Fully open source.
-
-## Author
-
-**Albert Yang** — [yangbaohua@gmail.com](mailto:yangbaohua@gmail.com)
