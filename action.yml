@@ -37,9 +37,8 @@ runs:
 
     - name: Run Carapace Scan
       shell: bash
-      working-directory: ${{ inputs.scan-path }}
       run: |
-        npx carapace scan --config ${{ inputs.config-path }}
+        node packages/cli/dist/index.js scan --config ${{ inputs.config-path }}
 
     - name: Check for critical findings
       if: inputs.block-on-critical == 'true'

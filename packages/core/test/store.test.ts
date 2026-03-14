@@ -680,11 +680,13 @@ describe("MemoryBackend", createBackendTests(async () => new MemoryBackend()));
 
 // ─── SqliteBackend 测试 ──────────────────────────────────────────
 
-// 检查 better-sqlite3 是否可用
+// 检查 better-sqlite3 是否可用（需要原生绑定能实际加载）
 let isSqliteAvailable = false;
 
 try {
-  require.resolve("better-sqlite3");
+  const Database = require("better-sqlite3");
+  const db = new Database(":memory:");
+  db.close();
   isSqliteAvailable = true;
 } catch {
   isSqliteAvailable = false;
