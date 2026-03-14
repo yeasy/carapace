@@ -16,7 +16,7 @@ import { initCommand } from "./commands/init.js";
 import { setupCommand } from "./commands/setup.js";
 import { parseArgs, color, COLORS } from "./utils.js";
 
-const VERSION = "0.6.0";
+const VERSION = "0.7.0";
 
 function printHelp(): void {
   console.log(`

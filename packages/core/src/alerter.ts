@@ -63,7 +63,7 @@ export class WebhookSink implements AlertSink {
   async send(payload: AlertPayload): Promise<void> {
     const body = JSON.stringify({
       source: "carapace",
-      version: "0.6.0",
+      version: "0.7.0",
       event: {
         id: payload.event.id,
         timestamp: new Date(payload.event.timestamp).toISOString(),

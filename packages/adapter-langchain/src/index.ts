@@ -225,7 +225,7 @@ export class CarapaceBridge {
   getStatus(): StatusResponse {
     return {
       status: "ok",
-      version: "0.6.0",
+      version: "0.7.0",
       rules: this.engine.getRules().length,
       trustedSkills: [...this.engine.getTrustedSkills()],
       stats: { ...this.stats },

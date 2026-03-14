@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-03-14
+
+### Added
+- **`carapace init` command**: Auto-detect AI framework from package.json (OpenClaw, LangChain, CrewAI, AutoGen, MCP) and generate `.carapace.yml` config file.
+- **`carapace setup` wizard**: Interactive 5-step configuration wizard for blocking policy, webhook URL, baseline learning, and rate limit.
+- **Dockerfile**: Multi-stage Alpine-based Docker image for `carapace scan`.
+- **GitHub Action** (`action.yml`): Reusable composite action for CI security scanning.
+- **CI workflows**: `ci.yml` (lint, test, Docker build) and `carapace-scan.yml` (security audit).
+- **New test suites**: init/setup command tests, error recovery tests, integration tests, MCP edge case tests, advanced policy tests (832 total).
+- Webhook retry with exponential backoff (500ms × 2^attempt, max 2 retries).
+- MCP proxy stdin buffer size limit (10MB) to prevent memory exhaustion.
+- Rate limiter session map cleanup with LRU eviction at 10K cap.
+
+### Fixed
+- ReDoS vulnerability in data-exfil base64 regex — capped quantifier to `{200,2000}`.
+- Path guard ReDoS — added `safeRegexTest` with 4096-char input truncation.
+- Engine `blockReason` tracking with separate `highestBlockSeverity` variable.
+- Store `timeRange` min/max initial values (was `events[0].timestamp`, now `MAX_SAFE_INTEGER`/`0`).
+- SQLite test detection — now validates native binding loads, not just module resolution.
+
+### Changed
+- README: added Mermaid architecture diagrams, feature mindmap, sequence diagram, CLI quick reference.
+- All package versions bumped to 0.7.0.
+
 ## [0.6.0] - 2026-03-11
 
 ### Added

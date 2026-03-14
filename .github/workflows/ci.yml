@@ -70,7 +70,7 @@ jobs:
         with:
           context: .
           push: false
-          tags: yeasy/carapace:latest,yeasy/carapace:0.6.0
+          tags: yeasy/carapace:latest,yeasy/carapace:0.7.0
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -80,5 +80,5 @@ jobs:
         with:
           context: .
           push: true
-          tags: yeasy/carapace:latest,yeasy/carapace:0.6.0
+          tags: yeasy/carapace:latest,yeasy/carapace:0.7.0
           cache-from: type=gha
