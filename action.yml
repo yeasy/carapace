@@ -26,22 +26,23 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: 'npm'
 
-    - name: Install Carapace CLI
+    - name: Install dependencies
       shell: bash
-      run: |
-        npm install -g github:yeasy/carapace
+      run: npm install
+
+    - name: Build
+      shell: bash
+      run: npm run build
 
     - name: Run Carapace Scan
       shell: bash
       working-directory: ${{ inputs.scan-path }}
       run: |
-        carapace scan --config ${{ inputs.config-path }}
+        npx carapace scan --config ${{ inputs.config-path }}
 
     - name: Check for critical findings
       if: inputs.block-on-critical == 'true'
       shell: bash
       run: |
         echo "Critical security check enabled"
-        # Exit with error if critical findings exist (scan command will handle this)
