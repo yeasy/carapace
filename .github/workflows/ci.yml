@@ -45,7 +45,7 @@ jobs:
       - run: npm test
 
   build-image:
-    name: Build Docker Image
+    name: Build & Push Docker Image
     runs-on: ubuntu-latest
     needs: [lint, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -58,6 +58,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Login to Docker Hub
         if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
         uses: docker/login-action@v3
@@ -65,20 +72,24 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build Docker image
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: false
-          tags: yeasy/carapace:latest,yeasy/carapace:0.7.0
+          push: true
+          tags: |
+            ghcr.io/yeasy/carapace:latest
+            ghcr.io/yeasy/carapace:0.7.0
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Push Docker image
+      - name: Push to Docker Hub
         if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: yeasy/carapace:latest,yeasy/carapace:0.7.0
+          tags: |
+            yeasy/carapace:latest
+            yeasy/carapace:0.7.0
           cache-from: type=gha

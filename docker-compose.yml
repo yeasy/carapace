@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   demo:
+    image: ghcr.io/yeasy/carapace:latest
     build: .
     command: ["node", "packages/cli/dist/index.js", "demo", "--port", "9877"]
     ports:
@@ -11,6 +12,7 @@ services:
     restart: unless-stopped
 
   dashboard:
+    image: ghcr.io/yeasy/carapace:latest
     build: .
     command: ["node", "packages/cli/dist/index.js", "dashboard", "--port", "9877"]
     ports:
