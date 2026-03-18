@@ -18,7 +18,8 @@
   "author": "Albert Yang",
   "license": "MIT",
   "dependencies": {
-    "@carapace/core": "*"
+    "@carapace/core": "*",
+    "@carapace/dashboard": "*"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

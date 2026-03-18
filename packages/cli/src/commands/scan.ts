@@ -2,13 +2,20 @@
  * 一次性配置审计
  */
 
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { createStore } from "@carapace/core";
 import { color, COLORS, loadConfig, getDbPath } from "../utils.js";
 
-export async function scanCommand(): Promise<void> {
+export async function scanCommand(flags: Record<string, string | boolean> = {}): Promise<void> {
   console.log(`${color("Configuration Audit", COLORS.bright)}\n`);
 
   try {
+    // Support --config flag for custom config path
+    const configPath = typeof flags.config === "string" ? resolve(flags.config) : undefined;
+    if (configPath && !existsSync(configPath)) {
+      console.log(color(`⚠ Config file not found: ${configPath}`, COLORS.yellow));
+    }
     const config = loadConfig();
     const dbPath = getDbPath();
 

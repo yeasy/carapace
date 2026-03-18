@@ -52,13 +52,14 @@ function printEvent(event: SecurityEvent): void {
 
 export async function demoCommand(flags: Record<string, string | boolean> = {}): Promise<void> {
   const port = flags.port ? parseInt(String(flags.port), 10) : 9877;
+  const host = typeof flags.host === "string" ? flags.host : "0.0.0.0";
   const sessionId = `demo-${Date.now().toString(36)}`;
 
   console.log(`${color("Carapace Demo", COLORS.bright)}\n`);
   console.log(`Starting demo with session: ${color(sessionId, COLORS.cyan)}\n`);
 
   // Create dashboard server with in-memory store
-  const server = new DashboardServer({ port });
+  const server = new DashboardServer({ port, host });
   const store = server.getStore();
 
   // Start the server

@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # Default: one-click demo with simulated attacks + dashboard
   demo:
     image: ghcr.io/yeasy/carapace:latest
     build: .
@@ -11,12 +12,13 @@ services:
       - NODE_ENV=production
     restart: unless-stopped
 
+  # Standalone dashboard (use: docker-compose --profile dashboard up)
   dashboard:
     image: ghcr.io/yeasy/carapace:latest
     build: .
-    command: ["node", "packages/cli/dist/index.js", "dashboard", "--port", "9877"]
+    command: ["node", "packages/cli/dist/index.js", "dashboard", "--port", "9878"]
     ports:
-      - "9877:9877"
+      - "9878:9878"
     volumes:
       - carapace-data:/root/.carapace
     environment:

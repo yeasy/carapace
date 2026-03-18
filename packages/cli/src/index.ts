@@ -131,7 +131,7 @@ async function main(): Promise<void> {
         break;
 
       case "scan":
-        await scanCommand();
+        await scanCommand(flags);
         break;
 
       case "report":

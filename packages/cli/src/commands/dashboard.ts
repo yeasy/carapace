@@ -4,10 +4,11 @@ import { color, COLORS, loadConfig, getDbPath } from "../utils.js";
 export async function dashboardCommand(flags: Record<string, string | boolean> = {}): Promise<void> {
   const config = loadConfig();
   const port = typeof flags.port === "string" ? parseInt(flags.port, 10) : 9877;
+  const host = typeof flags.host === "string" ? flags.host : "0.0.0.0";
 
   console.log(`\n${color("Carapace Dashboard", COLORS.bright)}\n`);
 
-  const server = new DashboardServer({ port });
+  const server = new DashboardServer({ port, host });
   await server.start();
 
   console.log(`  ${color("●", COLORS.green)} Dashboard running at ${color(`http://localhost:${port}/dashboard`, COLORS.cyan)}`);

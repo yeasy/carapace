@@ -3,7 +3,11 @@
  */
 
 import { createStore } from "@carapace/core";
+import { createRequire } from "node:module";
 import { color, COLORS, formatTable, getDbPath } from "../utils.js";
+
+const require = createRequire(import.meta.url);
+const { version: VERSION } = require("../../package.json");
 
 export async function statusCommand(): Promise<void> {
   console.log(`${color("Carapace Status", COLORS.bright)}\n`);
@@ -16,7 +20,7 @@ export async function statusCommand(): Promise<void> {
     const stats = await store.getStats();
 
     console.log(
-      `${color("Version:", COLORS.cyan)} 0.6.0`
+      `${color("Version:", COLORS.cyan)} ${VERSION}`
     );
     console.log(
       `${color("Storage Backend:", COLORS.cyan)} SQLite`
