@@ -205,11 +205,13 @@ Carapace 是一个 **100% 开源** 的项目，所有功能对所有用户免费
 │  │                 │                                      │  │
 │  │  ┌──────────────▼───────────────────────────────────┐  │  │
 │  │  │              规则引擎                              │  │  │
-│  │  │  • ExecGuard     (危险 shell 命令)                │  │  │
-│  │  │  • PathGuard     (敏感文件路径)                    │  │  │
-│  │  │  • NetworkGuard  (可疑 URL/域名)                  │  │  │
-│  │  │  • RateGuard     (工具调用频率异常)                │  │  │
-│  │  │  • BaselineGuard (行为偏离检测)                    │  │  │
+│  │  │  • ExecGuard        (危险 shell 命令)             │  │  │
+│  │  │  • PathGuard        (敏感文件路径)                 │  │  │
+│  │  │  • NetworkGuard     (可疑 URL/域名)               │  │  │
+│  │  │  • PromptInjection  (提示词注入检测)              │  │  │
+│  │  │  • DataExfil        (数据外泄检测)                │  │  │
+│  │  │  • RateGuard        (工具调用频率异常)             │  │  │
+│  │  │  • BaselineGuard    (行为偏离检测)                │  │  │
 │  │  └──────────────┬───────────────────────────────────┘  │  │
 │  │                 │                                      │  │
 │  │  ┌──────────────▼───────────────────────────────────┐  │  │
@@ -466,6 +468,8 @@ CREATE TABLE sessions (
 | **PathGuard** | path_violation | 敏感文件访问（~/.ssh/、~/.aws/、浏览器数据、加密钱包、.env 文件） | 阻断严重，告警其他 |
 | **NetworkGuard** | network_suspect | 可疑 URL（粘贴服务、文件共享、webhook 捕获器、.onion、裸 IP） | 阻断 .onion，告警其他 |
 | **RateGuard** | rate_anomaly | 工具调用频率超阈值（默认 60/分钟）或突增（基线的 3 倍） | 仅告警 |
+| **PromptInjection** | prompt_injection | 工具输出中检测到提示词注入模式（指令覆盖、角色劫持、编码注入） | 阻断严重，告警其他 |
+| **DataExfil** | data_exfil | 检测到数据外泄模式（敏感数据经网络/文件/剪贴板外传） | 阻断严重，告警其他 |
 | **BaselineGuard** | baseline_drift | Skill 访问了不在其学习画像中的新工具/路径/域名 | 仅告警 |
 
 ### 8.3 规则优先级与冲突解决
@@ -657,10 +661,19 @@ carapace skills inspect <name>  # 显示详细行为画像
 carapace trust <skill> [--tool X] [--path Y] [--domain Z]
 carapace untrust <skill>
 
+# 初始化和配置
+carapace init                # 初始化 Carapace 配置文件
+carapace setup               # 交互式安全策略配置向导
+
 # 手动操作
 carapace scan                # 一次性审计当前 OpenClaw 配置
 carapace report <session-id> # 生成某会话的详细报告
 carapace baseline reset <skill>  # 重置某 skill 的基线
+
+# 演示和监控
+carapace demo                # 运行内置演示场景
+carapace dashboard           # 启动安全事件仪表盘
+carapace test-rule <rule>    # 测试单条规则
 
 # 驳回管理
 carapace dismiss <event-id>
@@ -675,57 +688,57 @@ carapace dismissals clear
 ### Phase 0：基础搭建（第 1 周）
 
 **交付物：**
-- [ ] 项目脚手架：package.json、tsconfig、目录结构
-- [ ] 类型定义（SecurityEvent、RuleContext、CarapaceConfig）
-- [ ] 插件入口与 hook 注册骨架
-- [ ] SQLite 初始化和 schema 迁移
-- [ ] 单元测试框架（vitest）
+- [x] 项目脚手架：package.json、tsconfig、目录结构
+- [x] 类型定义（SecurityEvent、RuleContext、CarapaceConfig）
+- [x] 插件入口与 hook 注册骨架
+- [x] SQLite 初始化和 schema 迁移
+- [x] 单元测试框架（vitest）
 
 **完成标准：** 插件可在 OpenClaw 中加载无报错，hook 已注册
 
 ### Phase 1：核心规则（第 2 周）
 
 **交付物：**
-- [ ] ExecGuard：20+ 危险命令模式
-- [ ] PathGuard：30+ 敏感路径模式（Windows、macOS、Linux）
-- [ ] NetworkGuard：15+ 可疑域名模式
-- [ ] 带优先级和冲突解决的规则引擎
-- [ ] 控制台告警（带颜色的 stderr）
+- [x] ExecGuard：20+ 危险命令模式
+- [x] PathGuard：30+ 敏感路径模式（Windows、macOS、Linux）
+- [x] NetworkGuard：15+ 可疑域名模式
+- [x] 带优先级和冲突解决的规则引擎
+- [x] 控制台告警（带颜色的 stderr）
 
 **完成标准：** 三条规则在单元测试中检测已知攻击模式准确率 >95%
 
 ### Phase 2：Hook 集成（第 3 周）
 
 **交付物：**
-- [ ] `before_tool_call` hook 含阻断支持
-- [ ] `after_tool_call` hook 用于结果观测
-- [ ] `session_start` / `session_end` hook 用于会话追踪
-- [ ] 带去重的事件处理器
-- [ ] Webhook 告警（Slack/Discord 格式）
+- [x] `before_tool_call` hook 含阻断支持
+- [x] `after_tool_call` hook 用于结果观测
+- [x] `session_start` / `session_end` hook 用于会话追踪
+- [x] 带去重的事件处理器
+- [x] Webhook 告警（Slack/Discord 格式）
 
 **完成标准：** 端到端测试：恶意 skill → 检测 → 告警 → 阻断（blockOnCritical 开启时）
 
 ### Phase 3：行为基线（第 4-5 周）
 
 **交付物：**
-- [ ] JSONL 会话日志 tailer
-- [ ] 逐 skill 基线建模器
-- [ ] RateGuard（频率异常）
-- [ ] BaselineGuard（偏离检测）
-- [ ] 首次运行报告生成器
-- [ ] `carapace skills` CLI 命令
+- [x] JSONL 会话日志 tailer
+- [x] 逐 skill 基线建模器
+- [x] RateGuard（频率异常）
+- [x] BaselineGuard（偏离检测）
+- [x] 首次运行报告生成器
+- [x] `carapace skills` CLI 命令
 
 **完成标准：** 基线在 5 个会话后建立，能检测到新工具/路径/域名访问
 
 ### Phase 4：打磨与发布（第 6 周）
 
 **交付物：**
-- [ ] README（安装指南和截图）
-- [ ] 配置文档
-- [ ] npm 包发布
-- [ ] GitHub Actions CI/CD
-- [ ] ClawHub 上架（如适用）
-- [ ] 发布博文草稿
+- [x] README（安装指南和截图）
+- [x] 配置文档
+- [x] npm 包发布
+- [x] GitHub Actions CI/CD
+- [x] ClawHub 上架（如适用）
+- [x] 发布博文草稿
 
 **完成标准：** `openclaw plugins install carapace` 端到端可用
 

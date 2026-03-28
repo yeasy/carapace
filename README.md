@@ -10,7 +10,7 @@
     <a href="https://www.npmjs.com/package/carapace"><img src="https://img.shields.io/npm/v/carapace?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-832%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-933%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -104,9 +104,9 @@ mindmap
       Datadog integration
     Team Policies
       Inheritance hierarchy
-      Role-based access
-      Policy versioning
-      Audit logging
+      Role-based access (planned)
+      Policy versioning (planned)
+      Audit logging (planned)
 ```
 
 ## Quick Start
@@ -250,26 +250,31 @@ carapace status
 carapace events --since 1h
 carapace events --since 24h --severity critical
 
-# Mark a skill as trusted (bypass checks)
+# Mark a skill as trusted / untrusted
 carapace trust <skill-name>
+carapace untrust <skill-name>
 
-# Scan a file or directory for threats
-carapace scan <file-or-dir>
+# Inspect a specific skill
+carapace skills inspect <skill-name>
+
+# Audit configuration for security issues
+carapace scan
 
 # Dismiss a false positive alert
 carapace dismiss <alert-id>
 
-# Generate security report
-carapace report --format json
-carapace report --format html > report.html
+# List and clear dismissals
+carapace dismissals list
+carapace dismissals clear
 
-# Display threat baseline for skills
-carapace baseline --show
-carapace baseline --reset <skill-name>
+# Generate session security report
+carapace report <session-id>
 
-# View configuration
-carapace config get blockOnCritical
-carapace config set maxToolCallsPerMinute 100
+# Reset threat baseline for a skill
+carapace baseline reset <skill-name>
+
+# View effective configuration
+carapace config
 ```
 
 ## Alert Sinks
@@ -286,7 +291,7 @@ All sinks include a 5-minute dedup window to prevent alert storms.
 
 ## Architecture
 
-Carapace uses an adapter pattern — the core engine is **framework-agnostic**. OpenClaw is the first adapter; LangChain, CrewAI, AutoGen, and MCP adapters are on the roadmap.
+Carapace uses an adapter pattern — the core engine is **framework-agnostic**. Adapters are available for OpenClaw (native plugin), MCP (transparent proxy), and LangChain/CrewAI/AutoGen (HTTP bridge).
 
 ```mermaid
 flowchart TD
@@ -348,7 +353,7 @@ carapace/
 │   │   │   ├── alerter.ts    # Alert router + sinks + escalation + dismissal
 │   │   │   ├── store.ts      # Storage backend (Memory + SQLite)
 │   │   │   └── types.ts      # Type definitions
-│   │   └── test/             # 283 unit tests (vitest)
+│   │   └── test/             # 471 tests (vitest)
 │   ├── adapter-openclaw/     # @carapace/adapter-openclaw — native plugin
 │   │   └── src/
 │   │       ├── index.ts      # Plugin entry, registers hooks, first-run reports
@@ -368,7 +373,7 @@ carapace/
 │   └── cli/                  # @carapace/cli — command-line interface
 │       └── src/
 │           ├── index.ts      # CLI entry point + command dispatcher
-│           ├── commands/     # status / config / events / skills / trust / scan / report / baseline / dismiss
+│           ├── commands/     # status / config / events / skills / trust / scan / report / baseline / dismiss / demo / dashboard / test-rule / init / setup
 │           └── utils.ts      # Arg parser, table formatter, config loader
 ├── docs/
 │   ├── DESIGN.md             # Product & architecture design (Chinese)
@@ -381,7 +386,7 @@ carapace/
 ```bash
 npm install              # install all dependencies
 npm run build            # build core → adapter (sequential)
-npm run test                     # run 367 tests across all packages
+npm run test                     # run 933 tests across all packages
 ```
 
 ## Installation
@@ -405,7 +410,8 @@ cd carapace && npm install && npm run build
 - **v0.3** — PromptInjection, DataExfil, BaselineDrift rules, session statistics, response data-exfil scanning
 - **v0.4** — MCP proxy adapter, LangChain/CrewAI Python bridge, YAML custom rules
 - **v0.5** — Dashboard Web UI, SIEM connectors, team policy management
-- **v0.6** (current) — SQLite persistent storage, CLI tool, alert escalation, HookMessage sink, false positive dismissal, first-run reports, all features open source
+- **v0.6** — SQLite persistent storage, CLI tool, alert escalation, HookMessage sink, false positive dismissal, first-run reports, all features open source
+- **v0.7** (current) — Docker support, demo/dashboard/test-rule CLI commands, GHCR image publishing, docker-compose, dynamic version management
 
 ## Contributing
 

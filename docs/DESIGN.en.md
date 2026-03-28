@@ -205,11 +205,13 @@ As an open-source project, Carapace relies on community contributions and sponso
 │  │                 │                                      │  │
 │  │  ┌──────────────▼───────────────────────────────────┐  │  │
 │  │  │              Rule Engine                          │  │  │
-│  │  │  • ExecGuard     (dangerous shell commands)      │  │  │
-│  │  │  • PathGuard     (sensitive file paths)          │  │  │
-│  │  │  • NetworkGuard  (suspicious URLs/domains)       │  │  │
-│  │  │  • RateGuard     (tool call rate anomaly)        │  │  │
-│  │  │  • BaselineGuard (behavioral drift detection)    │  │  │
+│  │  │  • ExecGuard        (dangerous shell commands)   │  │  │
+│  │  │  • PathGuard        (sensitive file paths)       │  │  │
+│  │  │  • NetworkGuard     (suspicious URLs/domains)    │  │  │
+│  │  │  • PromptInjection  (prompt injection detection) │  │  │
+│  │  │  • DataExfil        (data exfiltration detection)│  │  │
+│  │  │  • RateGuard        (tool call rate anomaly)     │  │  │
+│  │  │  • BaselineGuard    (behavioral drift detection) │  │  │
 │  │  └──────────────┬───────────────────────────────────┘  │  │
 │  │                 │                                      │  │
 │  │  ┌──────────────▼───────────────────────────────────┐  │  │
@@ -466,6 +468,8 @@ Tool Call Event
 | **PathGuard** | path_violation | Sensitive file access (~/.ssh/, ~/.aws/, browser data, crypto wallets, .env files) | Block critical, alert others |
 | **NetworkGuard** | network_suspect | Suspicious URLs (paste services, file sharing, webhook catchers, .onion, raw IP) | Block .onion, alert others |
 | **RateGuard** | rate_anomaly | Tool call rate exceeds threshold (default 60/min) or sudden spike (3x baseline) | Alert only |
+| **PromptInjection** | prompt_injection | Prompt injection patterns detected in tool output (instruction override, role hijacking, encoded injection) | Block critical, alert others |
+| **DataExfil** | data_exfil | Data exfiltration patterns detected (sensitive data sent via network/file/clipboard) | Block critical, alert others |
 | **BaselineGuard** | baseline_drift | Skill accesses new tools/paths/domains not in its learned profile | Alert only |
 
 ### 8.3 Rule Priority & Conflict Resolution
@@ -657,10 +661,19 @@ carapace skills inspect <name>  # Show detailed behavioral profile
 carapace trust <skill> [--tool X] [--path Y] [--domain Z]
 carapace untrust <skill>
 
+# Initialization and configuration
+carapace init                # Initialize Carapace configuration file
+carapace setup               # Interactive security policy setup wizard
+
 # Manual operations
 carapace scan                # One-time audit of current OpenClaw config
 carapace report <session-id> # Generate detailed report for a session
 carapace baseline reset <skill>  # Reset a skill's baseline
+
+# Demo and monitoring
+carapace demo                # Run built-in demo scenarios
+carapace dashboard           # Launch security event dashboard
+carapace test-rule <rule>    # Test a single rule
 
 # Dismissal management
 carapace dismiss <event-id>
@@ -675,57 +688,57 @@ carapace dismissals clear
 ### Phase 0: Foundation (Week 1)
 
 **Deliverables:**
-- [ ] Project scaffolding: package.json, tsconfig, directory structure
-- [ ] Type definitions (SecurityEvent, RuleContext, CarapaceConfig)
-- [ ] Plugin entry and hook registration skeleton
-- [ ] SQLite initialization and schema migration
-- [ ] Unit test framework (vitest)
+- [x] Project scaffolding: package.json, tsconfig, directory structure
+- [x] Type definitions (SecurityEvent, RuleContext, CarapaceConfig)
+- [x] Plugin entry and hook registration skeleton
+- [x] SQLite initialization and schema migration
+- [x] Unit test framework (vitest)
 
 **Done Criteria:** Plugin loads in OpenClaw without errors, hooks registered
 
 ### Phase 1: Core Rules (Week 2)
 
 **Deliverables:**
-- [ ] ExecGuard: 20+ dangerous command patterns
-- [ ] PathGuard: 30+ sensitive path patterns (Windows, macOS, Linux)
-- [ ] NetworkGuard: 15+ suspicious domain patterns
-- [ ] Rule engine with priority and conflict resolution
-- [ ] Console alerting (colored stderr)
+- [x] ExecGuard: 20+ dangerous command patterns
+- [x] PathGuard: 30+ sensitive path patterns (Windows, macOS, Linux)
+- [x] NetworkGuard: 15+ suspicious domain patterns
+- [x] Rule engine with priority and conflict resolution
+- [x] Console alerting (colored stderr)
 
 **Done Criteria:** Three rules detect known attack patterns with >95% accuracy in unit tests
 
 ### Phase 2: Hook Integration (Week 3)
 
 **Deliverables:**
-- [ ] `before_tool_call` hook with blocking support
-- [ ] `after_tool_call` hook for result observation
-- [ ] `session_start` / `session_end` hooks for session tracking
-- [ ] Event processor with deduplication
-- [ ] Webhook alerting (Slack/Discord format)
+- [x] `before_tool_call` hook with blocking support
+- [x] `after_tool_call` hook for result observation
+- [x] `session_start` / `session_end` hooks for session tracking
+- [x] Event processor with deduplication
+- [x] Webhook alerting (Slack/Discord format)
 
 **Done Criteria:** End-to-end test: malicious skill → detection → alert → block (with blockOnCritical enabled)
 
 ### Phase 3: Behavioral Baselines (Weeks 4–5)
 
 **Deliverables:**
-- [ ] JSONL session log tailer
-- [ ] Per-skill baseline modeler
-- [ ] RateGuard (rate anomaly)
-- [ ] BaselineGuard (drift detection)
-- [ ] First-run report generator
-- [ ] `carapace skills` CLI command
+- [x] JSONL session log tailer
+- [x] Per-skill baseline modeler
+- [x] RateGuard (rate anomaly)
+- [x] BaselineGuard (drift detection)
+- [x] First-run report generator
+- [x] `carapace skills` CLI command
 
 **Done Criteria:** Baseline established after 5 sessions, can detect new tool/path/domain access
 
 ### Phase 4: Polish & Release (Week 6)
 
 **Deliverables:**
-- [ ] README (install guide and screenshots)
-- [ ] Configuration docs
-- [ ] npm package publishing
-- [ ] GitHub Actions CI/CD
-- [ ] ClawHub listing (if applicable)
-- [ ] Launch blog post draft
+- [x] README (install guide and screenshots)
+- [x] Configuration docs
+- [x] npm package publishing
+- [x] GitHub Actions CI/CD
+- [x] ClawHub listing (if applicable)
+- [x] Launch blog post draft
 
 **Done Criteria:** `openclaw plugins install carapace` works end-to-end
 

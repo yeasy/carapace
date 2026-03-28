@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - **Dockerfile**: Multi-stage Alpine-based Docker image for `carapace scan`.
 - **GitHub Action** (`action.yml`): Reusable composite action for CI security scanning.
 - **CI workflows**: `ci.yml` (lint, test, Docker build) and `carapace-scan.yml` (security audit).
-- **New test suites**: init/setup command tests, error recovery tests, integration tests, MCP edge case tests, advanced policy tests (832 total).
+- **New test suites**: init/setup command tests, error recovery tests, integration tests, MCP edge case tests, advanced policy tests (933 total).
 - Webhook retry with exponential backoff (500ms × 2^attempt, max 2 retries).
 - MCP proxy stdin buffer size limit (10MB) to prevent memory exhaustion.
 - Rate limiter session map cleanup with LRU eviction at 10K cap.

