@@ -14,6 +14,7 @@ import {
   createBaselineDriftRule,
   type RuleContext,
 } from "@carapace/core";
+import { parseArgs } from "../src/utils.js";
 
 // ── test-rule: core logic tests ──
 
@@ -165,11 +166,8 @@ describe("test-rule command logic", () => {
 
   it("should detect GitHub token leak", () => {
     const results = evaluateInput("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm");
-    // GitHub tokens may not trigger exec/path/network rules directly
-    // This tests the data exfil rule's credential pattern matching
-    // Token must be in a context where data-exfil patterns apply
-    // Skip if no rule covers raw token strings outside of tool output
-    expect(results.length).toBeGreaterThanOrEqual(0);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.some((r) => r.ruleName === "data-exfil")).toBe(true);
   });
 
   it("should detect crypto wallet access", () => {
@@ -271,28 +269,6 @@ describe("dashboard command config", () => {
 // ── CLI routing: new commands in index.ts ──
 
 describe("CLI routing for new commands", () => {
-  function parseArgs(argv: string[]) {
-    const [, , command, ...rest] = argv;
-    const args: string[] = [];
-    const flags: Record<string, string | boolean> = {};
-    for (let i = 0; i < rest.length; i++) {
-      const arg = rest[i];
-      if (arg.startsWith("--")) {
-        const key = arg.slice(2);
-        const nextArg = rest[i + 1];
-        if (nextArg && !nextArg.startsWith("--")) {
-          flags[key] = nextArg;
-          i++;
-        } else {
-          flags[key] = true;
-        }
-      } else {
-        args.push(arg);
-      }
-    }
-    return { command: command || null, args, flags };
-  }
-
   it("should parse 'demo' command", () => {
     const result = parseArgs(["node", "cli", "demo"]);
     expect(result.command).toBe("demo");

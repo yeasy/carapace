@@ -2,12 +2,11 @@
  * 显示 Carapace 状态
  */
 
+import { readFileSync } from "node:fs";
 import { createStore } from "@carapace/core";
-import { createRequire } from "node:module";
 import { color, COLORS, formatTable, getDbPath } from "../utils.js";
 
-const require = createRequire(import.meta.url);
-const { version: VERSION } = require("../../package.json");
+const VERSION = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf-8")).version;
 
 export async function statusCommand(): Promise<void> {
   console.log(`${color("Carapace Status", COLORS.bright)}\n`);
@@ -16,6 +15,7 @@ export async function statusCommand(): Promise<void> {
     const dbPath = getDbPath();
     const store = await createStore({ sqlitePath: dbPath });
 
+    try {
     // 获取统计信息
     const stats = await store.getStats();
 
@@ -66,6 +66,9 @@ export async function statusCommand(): Promise<void> {
       );
       console.log(`  Time: ${new Date(session.timestamp).toISOString()}`);
       console.log(`  Category: ${session.category}`);
+    }
+    } finally {
+      await store.close();
     }
   } catch (err) {
     console.error(

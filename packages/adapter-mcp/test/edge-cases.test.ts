@@ -53,7 +53,9 @@ describe("MCP adapter malformed messages", () => {
       params: { name: "bash", arguments: { command: "ls" } },
     } as any;
 
-    expect(() => proxy.interceptRequest(req)).not.toThrow();
+    const result = proxy.interceptRequest(req);
+    expect(result).toBeDefined();
+    expect(result.allowed).toBe(true);
   });
 
   it("handles non-2.0 jsonrpc version", () => {
@@ -261,7 +263,7 @@ describe("MCP adapter large parameters", () => {
 
     const result = proxy.interceptRequest(req);
     expect(result).toBeDefined();
-    expect(typeof result.allowed).toBe("boolean");
+    expect(result.allowed).toBe(true);
   });
 
   it("handles 10MB argument string without hanging", () => {

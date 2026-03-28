@@ -2,7 +2,7 @@
  * 管理技能和信任分数
  */
 
-import { createStore } from "@carapace/core";
+import { createStore, type StorageBackend, type SecurityEvent } from "@carapace/core";
 import {
   color,
   COLORS,
@@ -12,16 +12,20 @@ import {
 
 export async function skillsCommand(
   args: string[],
-  flags: Record<string, string | boolean>
+  _flags: Record<string, string | boolean>
 ): Promise<void> {
   try {
     const dbPath = getDbPath();
     const store = await createStore({ sqlitePath: dbPath });
 
-    if (args.length > 0 && args[0] === "inspect") {
-      await inspectSkill(store, args[1]);
-    } else {
-      await listSkills(store);
+    try {
+      if (args.length > 0 && args[0] === "inspect") {
+        await inspectSkill(store, args[1]);
+      } else {
+        await listSkills(store);
+      }
+    } finally {
+      await store.close();
     }
   } catch (err) {
     console.error(
@@ -34,7 +38,7 @@ export async function skillsCommand(
 /**
  * 列出所有技能
  */
-async function listSkills(store: any): Promise<void> {
+async function listSkills(store: StorageBackend): Promise<void> {
   console.log(`${color("Skills and Trust Scores", COLORS.bright)}\n`);
 
   // 查询所有事件，提取技能名称
@@ -55,13 +59,13 @@ async function listSkills(store: any): Promise<void> {
   const rows: (string | number)[][] = [];
 
   for (const skillName of skillNames) {
-    const skillEvents = allEvents.filter((e: any) => e.skillName === skillName);
-    const toolCount = new Set(skillEvents.map((e: any) => e.toolName)).size;
+    const skillEvents = allEvents.filter((e: SecurityEvent) => e.skillName === skillName);
+    const toolCount = new Set(skillEvents.map((e: SecurityEvent) => e.toolName)).size;
     rows.push([
       skillName,
       "1.0",
-      toolCount as number,
-      skillEvents.length as number,
+      toolCount,
+      skillEvents.length,
     ]);
   }
 
@@ -75,7 +79,7 @@ async function listSkills(store: any): Promise<void> {
 /**
  * 检查技能详情
  */
-async function inspectSkill(store: any, skillName: string): Promise<void> {
+async function inspectSkill(store: StorageBackend, skillName: string): Promise<void> {
   if (!skillName) {
     console.error(
       color("Error: Skill name required. Usage: carapace skills inspect <name>", COLORS.red)

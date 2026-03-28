@@ -2,18 +2,12 @@
  * 交互式配置向导
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
+import { writeFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { stdin as input, stdout as output } from "process";
 import { createInterface, Interface } from "readline";
-import { color, COLORS } from "../utils.js";
-
-interface FrameworkConfig {
-  name: string;
-  adapter?: string;
-  description: string;
-}
+import { color, COLORS, detectFramework, type FrameworkConfig } from "../utils.js";
 
 interface SetupConfig {
   framework: FrameworkConfig | null;
@@ -21,62 +15,6 @@ interface SetupConfig {
   webhookUrl: string;
   enableBaseline: boolean;
   maxToolCallsPerMinute: number;
-}
-
-function detectFramework(): FrameworkConfig | null {
-  const packageJsonPath = join(process.cwd(), "package.json");
-
-  if (!existsSync(packageJsonPath)) {
-    return null;
-  }
-
-  try {
-    const content = readFileSync(packageJsonPath, "utf-8");
-    const packageJson = JSON.parse(content);
-    const deps = {
-      ...packageJson.dependencies,
-      ...packageJson.devDependencies,
-    };
-
-    // 检测框架
-    if (deps.openclaw) {
-      return {
-        name: "openclaw",
-        adapter: "openclaw",
-        description: "OpenClaw Agent Framework",
-      };
-    }
-    if (deps.langchain || deps["@langchain/core"]) {
-      return {
-        name: "langchain",
-        adapter: "langchain",
-        description: "LangChain Framework",
-      };
-    }
-    if (deps.crewai) {
-      return {
-        name: "crewai",
-        description: "CrewAI Framework",
-      };
-    }
-    if (deps.autogen) {
-      return {
-        name: "autogen",
-        description: "AutoGen Framework",
-      };
-    }
-    if (deps["@modelcontextprotocol/sdk"]) {
-      return {
-        name: "mcp",
-        adapter: "mcp",
-        description: "Model Context Protocol",
-      };
-    }
-  } catch {
-    // 忽略解析错误
-  }
-
-  return null;
 }
 
 /**
@@ -250,6 +188,20 @@ export async function setupCommand(): Promise<void> {
     const configContent = generateSetupConfig(config);
 
     const configPath = join(process.cwd(), ".carapace.yml");
+
+    // Check if config already exists and confirm overwrite
+    if (existsSync(configPath)) {
+      const overwrite = await ask(
+        rl,
+        color("Configuration file already exists. Overwrite? (y/n)", COLORS.yellow),
+        "n"
+      );
+      if (overwrite.toLowerCase() !== "y") {
+        console.log(color("Setup cancelled. Existing configuration preserved.", COLORS.cyan));
+        return;
+      }
+    }
+
     writeFileSync(configPath, configContent, "utf-8");
     console.log(
       `${color("✓", COLORS.green)} Configuration file created: ${color(configPath, COLORS.cyan)}`

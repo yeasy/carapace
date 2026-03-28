@@ -18,8 +18,9 @@ import { demoCommand } from "./commands/demo.js";
 import { dashboardCommand } from "./commands/dashboard.js";
 import { testRuleCommand } from "./commands/test-rule.js";
 import { parseArgs, color, COLORS } from "./utils.js";
+import { readFileSync } from "node:fs";
 
-const VERSION = "0.7.0";
+const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
 
 function printHelp(): void {
   console.log(`
@@ -99,7 +100,7 @@ async function main(): Promise<void> {
         break;
 
       case "init":
-        await initCommand();
+        await initCommand(flags);
         break;
 
       case "setup":

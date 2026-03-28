@@ -2,12 +2,11 @@
  * 列出和查询事件
  */
 
-import { createStore, EventQuery } from "@carapace/core";
+import { createStore, type EventQuery, type Severity, type SecurityEvent } from "@carapace/core";
 import {
   color,
   COLORS,
   formatTable,
-  formatTime,
   formatRelativeTime,
   getDbPath,
   parseDuration,
@@ -20,10 +19,18 @@ export async function eventsCommand(
     const dbPath = getDbPath();
     const store = await createStore({ sqlitePath: dbPath });
 
+    try {
     // 构建查询条件
-    const query: EventQuery = {
-      limit: flags.limit ? parseInt(String(flags.limit), 10) : 100,
-    };
+    const query: EventQuery = { limit: 100 };
+
+    if (flags.limit) {
+      const n = parseInt(String(flags.limit), 10);
+      if (isNaN(n) || n <= 0) {
+        console.error(color("Invalid --limit value (must be a positive integer)", COLORS.red));
+        return;
+      }
+      query.limit = n;
+    }
 
     // 处理时间过滤
     if (flags.since) {
@@ -34,9 +41,14 @@ export async function eventsCommand(
     }
 
     // 处理严重程度过滤
+    const VALID_SEVERITIES = new Set(["critical", "high", "medium", "low", "info"]);
     if (flags.severity) {
-      const sev = String(flags.severity) as any;
-      query.severity = sev;
+      const sev = String(flags.severity).toLowerCase();
+      if (!VALID_SEVERITIES.has(sev)) {
+        console.error(color(`Invalid severity: ${flags.severity}. Must be one of: critical, high, medium, low, info`, COLORS.red));
+        return;
+      }
+      query.severity = sev as Severity;
     }
 
     // 处理技能过滤
@@ -92,6 +104,9 @@ export async function eventsCommand(
         `\n${color("Tip:", COLORS.cyan)} Use 'carapace events --export csv' to export events`
       );
     }
+    } finally {
+      await store.close();
+    }
   } catch (err) {
     console.error(
       color(`Error: ${err instanceof Error ? err.message : String(err)}`, COLORS.red)
@@ -103,7 +118,20 @@ export async function eventsCommand(
 /**
  * 导出事件为 CSV
  */
-function exportCsv(events: any[]): void {
+/**
+ * Sanitize a CSV cell value to prevent formula injection.
+ * Prefixes dangerous leading characters with a single quote.
+ */
+function csvSafe(value: string): string {
+  const escaped = value.replace(/"/g, '""');
+  // Prevent CSV formula injection
+  if (/^[=+\-@\t\r]/.test(escaped)) {
+    return `"'${escaped}"`;
+  }
+  return `"${escaped}"`;
+}
+
+function exportCsv(events: SecurityEvent[]): void {
   // CSV 标题
   console.log("timestamp,severity,rule,skill,tool,category,message");
 
@@ -115,10 +143,10 @@ function exportCsv(events: any[]): void {
     const skill = evt.skillName || "";
     const tool = evt.toolName || "";
     const category = evt.category || "";
-    const message = (evt.description || "").replace(/"/g, '""');
+    const message = evt.description || "";
 
     console.log(
-      `"${timestamp}","${severity}","${rule}","${skill}","${tool}","${category}","${message}"`
+      `${csvSafe(timestamp)},${csvSafe(severity)},${csvSafe(rule)},${csvSafe(skill)},${csvSafe(tool)},${csvSafe(category)},${csvSafe(message)}`
     );
   }
 }

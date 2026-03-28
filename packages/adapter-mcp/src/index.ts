@@ -200,7 +200,7 @@ export class McpProxy {
     if (events.length > 0) {
       this.stats.alerts += events.length;
       for (const evt of events) {
-        this.alertRouter.send(evt).catch(() => {/* 告警发送失败不影响主流程 */});
+        this.alertRouter.send(evt).catch((err) => { process.stderr.write(`[carapace-mcp] alert send failed: ${err}\n`); });
       }
     }
 
@@ -268,7 +268,7 @@ export class McpProxy {
           ruleName: "data-exfil",
           title: `[响应] ${check.event.title}`,
         };
-        this.alertRouter.send(fullEvent).catch(() => {/* 不阻塞 */});
+        this.alertRouter.send(fullEvent).catch((err) => { process.stderr.write(`[carapace-mcp] alert send failed: ${err}\n`); });
         return [fullEvent];
       }
     } catch {
@@ -321,8 +321,8 @@ export class McpProxy {
         process.exit(1);
       }
 
-      // JSON-RPC 消息以换行分隔
-      const lines = stdinBuffer.split("\n");
+      // JSON-RPC 消息以换行分隔（兼容 \r\n 和 \n）
+      const lines = stdinBuffer.split(/\r?\n/);
       stdinBuffer = lines.pop() ?? "";
 
       for (const line of lines) {

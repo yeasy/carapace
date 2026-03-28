@@ -6,11 +6,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { CarapaceBridge, createBridge } from "../src/index.js";
 
-// 便捷辅助函数，获取可用的随机高位端口
-function getRandomPort(): number {
-  return Math.floor(Math.random() * 16000) + 49152;
-}
-
 describe("CarapaceBridge - Extra Tests", () => {
   let bridge: CarapaceBridge | null = null;
 
@@ -25,12 +20,12 @@ describe("CarapaceBridge - Extra Tests", () => {
 
   describe("Constructor with config options", () => {
     it("port 配置", () => {
-      bridge = createBridge({ port: getRandomPort() });
+      bridge = createBridge({ port: 0 });
       expect(bridge).toBeInstanceOf(CarapaceBridge);
     });
 
     it("host 配置", () => {
-      bridge = createBridge({ host: "127.0.0.1", port: getRandomPort() });
+      bridge = createBridge({ host: "127.0.0.1", port: 0 });
       expect(bridge).toBeInstanceOf(CarapaceBridge);
     });
 
@@ -60,7 +55,7 @@ describe("CarapaceBridge - Extra Tests", () => {
 
     it("多个配置选项组合", () => {
       bridge = createBridge({
-        port: getRandomPort(),
+        port: 0,
         host: "127.0.0.1",
         corsOrigin: "http://localhost:3000",
         maxBodySize: 5 * 1024 * 1024,
@@ -186,7 +181,7 @@ describe("CarapaceBridge - Extra Tests", () => {
   // ── getStatus 测试 ──
 
   describe("getStatus() response format", () => {
-    it("version 为 0.6.0", () => {
+    it("version 为 0.7.0", () => {
       bridge = createBridge();
       const status = bridge.getStatus();
       expect(status.version).toBe("0.7.0");
@@ -230,12 +225,13 @@ describe("CarapaceBridge - Extra Tests", () => {
   describe("addRule() - custom rules", () => {
     it("addRule 添加自定义规则", () => {
       bridge = createBridge();
-      const initialCount = bridge.getStatus().rules;
-
-      // 创建一个简单的自定义规则（需要实现 SecurityRule 接口）
-      // 这取决于 SecurityRule 的实际定义
-      // 作为占位符，我们验证方法存在并可调用
       expect(bridge.addRule).toBeDefined();
+      const customRule = {
+        name: "test-rule",
+        description: "A test rule",
+        check: () => ({ triggered: false, rule: "test-rule" }),
+      };
+      expect(() => bridge!.addRule(customRule)).not.toThrow();
     });
   });
 
@@ -244,7 +240,6 @@ describe("CarapaceBridge - Extra Tests", () => {
   describe("Batch check operations", () => {
     it("空数组批量检查", () => {
       bridge = createBridge();
-      // 虽然没有显式的 batch check 方法，但我们可以测试多个检查的累计
       const status = bridge.getStatus();
       expect(status.stats.totalChecks).toBe(0);
     });
@@ -282,25 +277,29 @@ describe("CarapaceBridge - Extra Tests", () => {
       bridge = createBridge({ port: 0 });
       await bridge.start();
       await bridge.stop();
-      // 如果没有异常，则通过
+      bridge = null;
     });
 
-    it("随机高位端口启动", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+    it("随机端口启动", async () => {
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
+      expect(port).toBeGreaterThan(0);
       await bridge.stop();
+      bridge = null;
     });
 
     it("多次 start/stop 周期", async () => {
-      bridge = createBridge({ port: getRandomPort() });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
       await bridge.stop();
+      bridge = null;
 
       // 重新创建并再次启动
-      bridge = createBridge({ port: getRandomPort() });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
       await bridge.stop();
+      bridge = null;
     });
   });
 
@@ -308,9 +307,9 @@ describe("CarapaceBridge - Extra Tests", () => {
 
   describe("HTTP /health endpoint", () => {
     it("GET /health 返回 200", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/health`);
       expect(response.status).toBe(200);
@@ -322,9 +321,9 @@ describe("CarapaceBridge - Extra Tests", () => {
 
   describe("HTTP /status endpoint", () => {
     it("GET /status 返回状态信息", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/status`);
       expect(response.status).toBe(200);
@@ -337,9 +336,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("/status 显示最新统计", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       // 进行一些检查
       bridge.check({
@@ -359,9 +358,9 @@ describe("CarapaceBridge - Extra Tests", () => {
 
   describe("HTTP POST /check endpoint", () => {
     it("有效的检查请求返回 200", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -379,9 +378,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("危险请求在检查中被标记", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -398,9 +397,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("包含 sessionId 的请求", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -416,9 +415,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("包含多个可选字段的请求", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -441,9 +440,9 @@ describe("CarapaceBridge - Extra Tests", () => {
 
   describe("HTTP POST /check with invalid JSON", () => {
     it("无效的 JSON 返回 400", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -457,9 +456,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("空 body 返回 400", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -473,9 +472,9 @@ describe("CarapaceBridge - Extra Tests", () => {
 
   describe("HTTP POST /check with missing required fields", () => {
     it("缺少 toolName 返回 400", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -491,9 +490,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("缺少 toolParams 返回 400", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -509,9 +508,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("两个必需字段都缺少返回 400", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -525,9 +524,9 @@ describe("CarapaceBridge - Extra Tests", () => {
 
   describe("HTTP POST /check/batch endpoint", () => {
     it("有效的批量检查请求", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check/batch`, {
         method: "POST",
@@ -546,9 +545,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("空数组批量检查", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check/batch`, {
         method: "POST",
@@ -563,9 +562,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("批量检查中混合安全和危险请求", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check/batch`, {
         method: "POST",
@@ -587,9 +586,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("批量检查中每个项目都应该有 events 字段", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check/batch`, {
         method: "POST",
@@ -607,9 +606,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("批量检查无效的 JSON 返回 400", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check/batch`, {
         method: "POST",
@@ -621,9 +620,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("批量检查非数组请求返回 400", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check/batch`, {
         method: "POST",
@@ -642,9 +641,9 @@ describe("CarapaceBridge - Extra Tests", () => {
 
   describe("HTTP 404 for unknown routes", () => {
     it("未知路由返回 404", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/unknown/route`);
       expect(response.status).toBe(404);
@@ -653,9 +652,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("POST 到未知路由返回 404", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/api/unknown`, {
         method: "POST",
@@ -669,9 +668,9 @@ describe("CarapaceBridge - Extra Tests", () => {
 
   describe("HTTP CORS headers and OPTIONS preflight", () => {
     it("OPTIONS 请求返回 204", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "OPTIONS",
@@ -685,9 +684,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("OPTIONS 返回正确的 CORS 头", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port, corsOrigin: "https://example.com" });
+      bridge = createBridge({ port: 0, corsOrigin: "https://example.com" });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "OPTIONS",
@@ -702,9 +701,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("POST 请求包含 CORS 头", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port, corsOrigin: "*" });
+      bridge = createBridge({ port: 0, corsOrigin: "*" });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -719,15 +718,25 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("GET 请求包含 CORS 头", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port, corsOrigin: "http://localhost:3000" });
+      bridge = createBridge({ port: 0, corsOrigin: "http://localhost:3000" });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/health`);
 
       expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
         "http://localhost:3000"
       );
+    });
+
+    it("默认不发送 CORS 头（无 corsOrigin 配置）", async () => {
+      bridge = createBridge({ port: 0 });
+      await bridge.start();
+      const port = bridge.getPort();
+
+      const response = await fetch(`http://127.0.0.1:${port}/health`);
+
+      expect(response.headers.get("Access-Control-Allow-Origin")).toBeNull();
     });
   });
 
@@ -736,23 +745,22 @@ describe("CarapaceBridge - Extra Tests", () => {
   describe("stop() method", () => {
     it("未启动的服务器调用 stop() 不抛异常", async () => {
       bridge = createBridge();
-      // 未调用 start()，直接调用 stop()
       await expect(bridge.stop()).resolves.not.toThrow();
     });
 
     it("启动后 stop() 成功", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
       await expect(bridge.stop()).resolves.not.toThrow();
+      bridge = null;
     });
 
     it("多次 stop() 调用", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
       await bridge.stop();
       await expect(bridge.stop()).resolves.not.toThrow();
+      bridge = null;
     });
   });
 
@@ -822,9 +830,9 @@ describe("CarapaceBridge - Extra Tests", () => {
 
   describe("Special characters and boundary cases", () => {
     it("工具参数包含特殊字符", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -841,9 +849,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("Unicode 字符在参数中", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -860,9 +868,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("非常长的工具参数", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const longString = "a".repeat(10000);
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
@@ -882,9 +890,9 @@ describe("CarapaceBridge - Extra Tests", () => {
 
   describe("Content-Type handling", () => {
     it("无 Content-Type 头的请求", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",
@@ -898,9 +906,9 @@ describe("CarapaceBridge - Extra Tests", () => {
     });
 
     it("text/plain Content-Type 返回 400", async () => {
-      const port = getRandomPort();
-      bridge = createBridge({ port });
+      bridge = createBridge({ port: 0 });
       await bridge.start();
+      const port = bridge.getPort();
 
       const response = await fetch(`http://127.0.0.1:${port}/check`, {
         method: "POST",

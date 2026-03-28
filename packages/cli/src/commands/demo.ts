@@ -4,10 +4,10 @@
  * opens the dashboard in the browser, and displays events in real-time.
  */
 
-import { color, COLORS } from "../utils.js";
+import { color, COLORS, parsePort } from "../utils.js";
 import { DashboardServer } from "@carapace/dashboard";
 import type { SecurityEvent } from "@carapace/core";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 
 /**
  * Generates a UUID-like string for event IDs
@@ -51,8 +51,8 @@ function printEvent(event: SecurityEvent): void {
 }
 
 export async function demoCommand(flags: Record<string, string | boolean> = {}): Promise<void> {
-  const port = flags.port ? parseInt(String(flags.port), 10) : 9877;
-  const host = typeof flags.host === "string" ? flags.host : "0.0.0.0";
+  const port = parsePort(flags.port, 9877);
+  const host = typeof flags.host === "string" ? flags.host : "127.0.0.1";
   const sessionId = `demo-${Date.now().toString(36)}`;
 
   console.log(`${color("Carapace Demo", COLORS.bright)}\n`);
@@ -323,10 +323,7 @@ export async function demoCommand(flags: Record<string, string | boolean> = {}):
   console.log(color("Injecting events...\n", COLORS.bright));
 
   // Inject events with delays
-  let currentDelay = 0;
   for (const scenario of scenarios) {
-    currentDelay += scenario.delay;
-
     await sleep(scenario.delay);
 
     // Create the full event
@@ -357,17 +354,22 @@ export async function demoCommand(flags: Record<string, string | boolean> = {}):
   );
   console.log();
 
-  // Try to open in browser
+  // Try to open in browser (use execFile to avoid shell injection)
   const openCommand = process.platform === "darwin" ? "open" :
-                     process.platform === "win32" ? "start" : "xdg-open";
+                     process.platform === "win32" ? "cmd" : "xdg-open";
+  const openArgs = process.platform === "win32" ? ["/c", "start", dashboardUrl] : [dashboardUrl];
   try {
-    exec(`${openCommand} "${dashboardUrl}"`);
+    execFile(openCommand, openArgs, () => {/* ignore errors */});
   } catch {
     console.log(color("(Could not auto-open browser)", COLORS.dim));
   }
 
-  // Keep running until Ctrl+C
-  await new Promise(() => {
-    // Will never resolve, keeping the process alive
+  // Keep running until Ctrl+C with graceful shutdown
+  await new Promise<void>((resolve) => {
+    process.once("SIGINT", async () => {
+      console.log(`\n  ${color("Shutting down demo...", COLORS.yellow)}`);
+      await server.stop();
+      resolve();
+    });
   });
 }

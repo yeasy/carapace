@@ -2,72 +2,10 @@
  * 初始化 Carapace 配置文件
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
+import { existsSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import { color, COLORS } from "../utils.js";
-
-interface FrameworkConfig {
-  name: string;
-  adapter?: string;
-  description: string;
-}
-
-function detectFramework(): FrameworkConfig | null {
-  const packageJsonPath = join(process.cwd(), "package.json");
-
-  if (!existsSync(packageJsonPath)) {
-    return null;
-  }
-
-  try {
-    const content = readFileSync(packageJsonPath, "utf-8");
-    const packageJson = JSON.parse(content);
-    const deps = {
-      ...packageJson.dependencies,
-      ...packageJson.devDependencies,
-    };
-
-    // 检测框架
-    if (deps.openclaw) {
-      return {
-        name: "openclaw",
-        adapter: "openclaw",
-        description: "OpenClaw Agent Framework",
-      };
-    }
-    if (deps.langchain || deps["@langchain/core"]) {
-      return {
-        name: "langchain",
-        adapter: "langchain",
-        description: "LangChain Framework",
-      };
-    }
-    if (deps.crewai) {
-      return {
-        name: "crewai",
-        description: "CrewAI Framework",
-      };
-    }
-    if (deps.autogen) {
-      return {
-        name: "autogen",
-        description: "AutoGen Framework",
-      };
-    }
-    if (deps["@modelcontextprotocol/sdk"]) {
-      return {
-        name: "mcp",
-        adapter: "mcp",
-        description: "Model Context Protocol",
-      };
-    }
-  } catch {
-    // 忽略解析错误
-  }
-
-  return null;
-}
+import { color, COLORS, detectFramework, type FrameworkConfig } from "../utils.js";
 
 function generateDefaultConfig(framework: FrameworkConfig | null): string {
   const lines: string[] = [];
@@ -145,7 +83,7 @@ function generateDefaultConfig(framework: FrameworkConfig | null): string {
   return lines.join("\n");
 }
 
-export async function initCommand(): Promise<void> {
+export async function initCommand(flags: Record<string, string | boolean> = {}): Promise<void> {
   console.log(`${color("Carapace Init", COLORS.bright)}\n`);
 
   try {
@@ -154,7 +92,7 @@ export async function initCommand(): Promise<void> {
     const carapaceDir = join(homeDir, ".carapace");
 
     // 检查配置文件是否已存在
-    if (existsSync(configPath)) {
+    if (existsSync(configPath) && !flags.force) {
       console.log(
         color(`Configuration file already exists: ${configPath}`, COLORS.yellow)
       );

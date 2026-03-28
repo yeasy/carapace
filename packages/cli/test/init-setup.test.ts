@@ -6,6 +6,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { parseArgs } from "../src/utils.js";
 
 // ── Helper: create a temporary project directory ──
 
@@ -323,28 +324,6 @@ describe("Setup Wizard Config Variants", () => {
 // ── CLI Argument Parsing for new commands ──
 
 describe("CLI Argument Parsing — init and setup", () => {
-  function parseArgs(argv: string[]) {
-    const [, , command, ...rest] = argv;
-    const args: string[] = [];
-    const flags: Record<string, string | boolean> = {};
-    for (let i = 0; i < rest.length; i++) {
-      const arg = rest[i];
-      if (arg.startsWith("--")) {
-        const key = arg.slice(2);
-        const nextArg = rest[i + 1];
-        if (nextArg && !nextArg.startsWith("--")) {
-          flags[key] = nextArg;
-          i++;
-        } else {
-          flags[key] = true;
-        }
-      } else {
-        args.push(arg);
-      }
-    }
-    return { command: command || null, args, flags };
-  }
-
   it("should parse 'init' command", () => {
     const result = parseArgs(["node", "cli", "init"]);
     expect(result.command).toBe("init");

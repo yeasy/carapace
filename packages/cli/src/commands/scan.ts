@@ -16,7 +16,7 @@ export async function scanCommand(flags: Record<string, string | boolean> = {}):
     if (configPath && !existsSync(configPath)) {
       console.log(color(`⚠ Config file not found: ${configPath}`, COLORS.yellow));
     }
-    const config = loadConfig();
+    const config = loadConfig(configPath);
     const dbPath = getDbPath();
 
     const results: { status: string; message: string }[] = [];
@@ -51,11 +51,15 @@ export async function scanCommand(flags: Record<string, string | boolean> = {}):
     // 检查数据库连接
     try {
       const store = await createStore({ sqlitePath: dbPath });
-      await store.getStats();
-      results.push({
-        status: "✓",
-        message: `Database accessible (${dbPath})`,
-      });
+      try {
+        await store.getStats();
+        results.push({
+          status: "✓",
+          message: `Database accessible (${dbPath})`,
+        });
+      } finally {
+        await store.close();
+      }
     } catch {
       results.push({
         status: "✗",

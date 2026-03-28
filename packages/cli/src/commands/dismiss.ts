@@ -2,7 +2,7 @@
  * 管理事件驳回 (dismissals)
  */
 
-import { createStore } from "@carapace/core";
+import { createStore, type StorageBackend } from "@carapace/core";
 import {
   color,
   COLORS,
@@ -19,25 +19,30 @@ export async function dismissCommand(
     const dbPath = getDbPath();
     const store = await createStore({ sqlitePath: dbPath });
 
-    const subcommand = args[0];
+    try {
+      const subcommand = args[0];
 
-    if (subcommand === "list") {
-      await listDismissals(store);
-    } else if (subcommand === "clear") {
-      await clearDismissals(store);
-    } else {
-      // 驳回单个事件
-      const eventId = args[0];
-      if (!eventId) {
-        console.error(
-          color(
-            "Error: Event ID required. Usage: carapace dismiss <event-id>",
-            COLORS.red
-          )
-        );
-        process.exit(1);
+      if (subcommand === "list") {
+        await listDismissals(store);
+      } else if (subcommand === "clear") {
+        await clearDismissals(store);
+      } else {
+        // 驳回单个事件
+        const eventId = args[0];
+        if (!eventId) {
+          console.error(
+            color(
+              "Error: Event ID required. Usage: carapace dismiss <event-id>",
+              COLORS.red
+            )
+          );
+          process.exit(1);
+        }
+        const reason = typeof flags.reason === "string" ? flags.reason : "Dismissed by user";
+        await dismissEvent(store, eventId, reason);
       }
-      await dismissEvent(store, eventId);
+    } finally {
+      await store.close();
     }
   } catch (err) {
     console.error(
@@ -48,48 +53,73 @@ export async function dismissCommand(
 }
 
 /**
- * 驳回单个事件
+ * 驳回单个事件 — 查找事件并创建驳回模式
  */
-async function dismissEvent(store: any, eventId: string): Promise<void> {
-  try {
-    // 由于存储后端没有驳回功能，我们只是显示成功消息
-    console.log(
-      color(`✓ Event ${eventId} dismissed`, COLORS.green)
-    );
-  } catch {
+async function dismissEvent(store: StorageBackend, eventId: string, reason: string): Promise<void> {
+  // Look up the event by ID to extract rule/tool info for the dismissal pattern
+  const event = await store.getEventById(eventId);
+
+  if (!event) {
     console.error(
-      color("Failed to dismiss event. Event may not exist.", COLORS.red)
+      color(`Event not found: ${eventId}`, COLORS.red)
     );
     process.exit(1);
   }
-}
 
-/**
- * 列出所有已驳回的事件
- */
-async function listDismissals(store: any): Promise<void> {
-  console.log(`${color("Dismissed Events", COLORS.bright)}\n`);
+  const dismissalId = `d-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  await store.addDismissal({
+    id: dismissalId,
+    ruleName: event.ruleName,
+    toolName: event.toolName,
+    skillName: event.skillName,
+    reason,
+    createdAt: Date.now(),
+  });
 
-  // 由于存储后端没有驳回功能，显示信息提示
   console.log(
-    color("Note: Dismissal feature requires custom implementation", COLORS.dim)
+    color(`✓ Event ${eventId} dismissed (dismissal ID: ${dismissalId})`, COLORS.green)
   );
-  console.log("You can filter events using query filters instead.");
+  console.log(
+    `  Rule: ${event.ruleName ?? "any"} | Tool: ${event.toolName ?? "any"} | Reason: ${reason}`
+  );
 }
 
 /**
- * 清空所有已驳回的事件
+ * 列出所有已驳回的模式
  */
-async function clearDismissals(store: any): Promise<void> {
-  try {
-    console.log(color("✓ All dismissals cleared", COLORS.green));
-  } catch (err) {
-    console.error(
-      color(
-        `Error clearing dismissals: ${err instanceof Error ? err.message : String(err)}`,
-        COLORS.red
-      )
-    );
-    process.exit(1);
+async function listDismissals(store: StorageBackend): Promise<void> {
+  console.log(`${color("Dismissed Patterns", COLORS.bright)}\n`);
+
+  const dismissals = await store.listDismissals();
+
+  if (dismissals.length === 0) {
+    console.log(color("No active dismissals.", COLORS.dim));
+    return;
   }
+
+  const rows = dismissals.map((d) => [
+    d.id,
+    d.ruleName ?? "*",
+    d.toolName ?? "*",
+    d.reason,
+    formatRelativeTime(d.createdAt),
+    d.expiresAt ? formatRelativeTime(d.expiresAt) : "never",
+  ]);
+
+  console.log(
+    formatTable(
+      ["ID", "Rule", "Tool", "Reason", "Created", "Expires"],
+      rows
+    )
+  );
+  console.log(`\n${color(`Total: ${dismissals.length} active dismissal(s)`, COLORS.dim)}`);
+}
+
+/**
+ * 清空所有驳回模式
+ */
+async function clearDismissals(store: StorageBackend): Promise<void> {
+  const dismissals = await store.listDismissals();
+  await store.clearDismissals();
+  console.log(color(`✓ Cleared ${dismissals.length} dismissal(s)`, COLORS.green));
 }

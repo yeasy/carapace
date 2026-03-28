@@ -28,7 +28,13 @@
  * ```
  */
 
+import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+
+let PKG_VERSION = "unknown";
+try {
+  PKG_VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
+} catch { /* fallback to "unknown" */ }
 
 import {
   RuleEngine,
@@ -58,7 +64,7 @@ export interface BridgeConfig extends CarapaceConfig {
   host?: string;
   /** YAML 自定义规则文本 */
   yamlRules?: string;
-  /** CORS 允许的来源（默认 *） */
+  /** CORS 允许的来源（默认不设置，仅同源可访问） */
   corsOrigin?: string;
   /** 请求体最大字节数（默认 1MB） */
   maxBodySize?: number;
@@ -191,7 +197,7 @@ export class CarapaceBridge {
     if (events.length > 0) {
       this.stats.totalAlerts += events.length;
       for (const evt of events) {
-        this.alertRouter.send(evt).catch(() => {/* 告警发送失败不影响主流程 */});
+        this.alertRouter.send(evt).catch((err) => { process.stderr.write(`[carapace-bridge] alert send failed: ${err}\n`); });
       }
     }
 
@@ -225,7 +231,7 @@ export class CarapaceBridge {
   getStatus(): StatusResponse {
     return {
       status: "ok",
-      version: "0.7.0",
+      version: PKG_VERSION,
       rules: this.engine.getRules().length,
       trustedSkills: [...this.engine.getTrustedSkills()],
       stats: { ...this.stats },
@@ -238,14 +244,16 @@ export class CarapaceBridge {
   async start(): Promise<void> {
     const port = this.config.port ?? 9876;
     const host = this.config.host ?? "127.0.0.1";
-    const corsOrigin = this.config.corsOrigin ?? "*";
+    const corsOrigin = this.config.corsOrigin;
     const maxBodySize = this.config.maxBodySize ?? 1_048_576; // 1 MB
 
     this.server = createServer((req: IncomingMessage, res: ServerResponse) => {
-      // CORS 头
-      res.setHeader("Access-Control-Allow-Origin", corsOrigin);
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      // CORS headers only when explicitly configured
+      if (corsOrigin) {
+        res.setHeader("Access-Control-Allow-Origin", corsOrigin);
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      }
 
       if (req.method === "OPTIONS") {
         res.writeHead(204);
@@ -273,6 +281,7 @@ export class CarapaceBridge {
       const readBody = (req: IncomingMessage, cb: (body: string) => void): void => {
         let body = "";
         let exceeded = false;
+        let responded = false;
         req.on("data", (chunk: Buffer) => {
           body += chunk.toString();
           if (body.length > maxBodySize) {
@@ -280,19 +289,18 @@ export class CarapaceBridge {
             req.destroy();
           }
         });
+        const send413 = () => {
+          if (responded) return;
+          responded = true;
+          res.writeHead(413, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: `Request body exceeds limit (${maxBodySize} bytes)` }));
+        };
         req.on("end", () => {
-          if (exceeded) {
-            res.writeHead(413, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: `Request body exceeds limit (${maxBodySize} bytes)` }));
-            return;
-          }
+          if (exceeded) { send413(); return; }
           cb(body);
         });
         req.on("error", () => {
-          if (exceeded) {
-            res.writeHead(413, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: `Request body exceeds limit (${maxBodySize} bytes)` }));
-          }
+          if (exceeded) send413();
         });
       };
 
@@ -334,6 +342,23 @@ export class CarapaceBridge {
               return;
             }
 
+            if (checks.length > 100) {
+              res.writeHead(400, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "Batch size exceeds maximum of 100 items" }));
+              return;
+            }
+
+            // Validate each item has required fields
+            for (let i = 0; i < checks.length; i++) {
+              if (!checks[i].toolName || !checks[i].toolParams) {
+                res.writeHead(400, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({
+                  error: `Item ${i}: missing required fields toolName, toolParams`,
+                }));
+                return;
+              }
+            }
+
             const results = checks.map((c) => this.check(c));
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify(results));
@@ -363,6 +388,19 @@ export class CarapaceBridge {
   }
 
   /**
+   * 获取当前监听端口（服务器启动后可用，端口 0 时获取实际分配端口）
+   */
+  getPort(): number {
+    if (this.server) {
+      const addr = this.server.address();
+      if (addr && typeof addr === "object") {
+        return addr.port;
+      }
+    }
+    return this.config.port ?? 9876;
+  }
+
+  /**
    * 停止 HTTP 服务
    */
   async stop(): Promise<void> {
@@ -372,6 +410,8 @@ export class CarapaceBridge {
           this.log("HTTP bridge 已停止");
           resolve();
         });
+        // Force-close active keep-alive connections (Node.js 18.2+)
+        this.server.closeAllConnections?.();
       } else {
         resolve();
       }

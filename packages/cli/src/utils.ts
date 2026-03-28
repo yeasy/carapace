@@ -5,6 +5,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { parseSimpleYaml } from "@carapace/core";
 
 /**
  * 解析命令行参数
@@ -33,7 +34,7 @@ export function parseArgs(argv: string[]): {
     } else if (arg.startsWith("-")) {
       const key = arg.slice(1);
       const nextArg = rest[i + 1];
-      if (nextArg && !nextArg.startsWith("-")) {
+      if (nextArg && (!nextArg.startsWith("-") || /^-\d/.test(nextArg))) {
         flags[key] = nextArg;
         i++;
       } else {
@@ -152,40 +153,34 @@ export function formatTable(
  * 加载配置文件
  * 合并来自多个源的配置: ~/.carapace/config.json 和 .carapace.yml (在当前工作目录)
  */
-export function loadConfig(): Record<string, any> {
-  const config: Record<string, any> = {};
+export function loadConfig(configPath?: string): Record<string, unknown> {
+  const config: Record<string, unknown> = {};
 
   // 从 ~/.carapace/config.json 加载
   const homeConfigPath = join(homedir(), ".carapace", "config.json");
   if (existsSync(homeConfigPath)) {
     try {
       const content = readFileSync(homeConfigPath, "utf-8");
-      const parsed = JSON.parse(content);
-      Object.assign(config, parsed);
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      for (const key of Object.keys(parsed)) {
+        if (key !== "__proto__" && key !== "constructor" && key !== "prototype") {
+          config[key] = parsed[key];
+        }
+      }
     } catch {
       // 忽略加载错误
     }
   }
 
   // 从 .carapace.yml 加载 (当前目录)
-  const cwdConfigPath = join(process.cwd(), ".carapace.yml");
+  const cwdConfigPath = configPath || join(process.cwd(), ".carapace.yml");
   if (existsSync(cwdConfigPath)) {
     try {
       const content = readFileSync(cwdConfigPath, "utf-8");
-      // 简单的 YAML 解析 (仅支持基本格式)
-      const lines = content.split("\n");
-      for (const line of lines) {
-        const match = line.match(/^(\w+):\s*(.+)$/);
-        if (match) {
-          const key = match[1];
-          let value: any = match[2].trim();
-
-          // 尝试解析值
-          if (value === "true") value = true;
-          else if (value === "false") value = false;
-          else if (!isNaN(Number(value))) value = Number(value);
-
-          config[key] = value;
+      const parsed = parseSimpleYaml(content);
+      for (const key of Object.keys(parsed)) {
+        if (key !== "__proto__" && key !== "constructor" && key !== "prototype") {
+          config[key] = parsed[key];
         }
       }
     } catch {
@@ -194,6 +189,55 @@ export function loadConfig(): Record<string, any> {
   }
 
   return config;
+}
+
+/**
+ * 框架配置
+ */
+export interface FrameworkConfig {
+  name: string;
+  adapter?: string;
+  description: string;
+}
+
+/**
+ * 检测当前项目使用的 AI 框架
+ */
+export function detectFramework(): FrameworkConfig | null {
+  const packageJsonPath = join(process.cwd(), "package.json");
+
+  if (!existsSync(packageJsonPath)) {
+    return null;
+  }
+
+  try {
+    const content = readFileSync(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(content);
+    const deps = {
+      ...packageJson.dependencies,
+      ...packageJson.devDependencies,
+    };
+
+    if (deps.openclaw) {
+      return { name: "openclaw", adapter: "openclaw", description: "OpenClaw Agent Framework" };
+    }
+    if (deps.langchain || deps["@langchain/core"]) {
+      return { name: "langchain", adapter: "langchain", description: "LangChain Framework" };
+    }
+    if (deps.crewai) {
+      return { name: "crewai", description: "CrewAI Framework" };
+    }
+    if (deps.autogen) {
+      return { name: "autogen", description: "AutoGen Framework" };
+    }
+    if (deps["@modelcontextprotocol/sdk"]) {
+      return { name: "mcp", adapter: "mcp", description: "Model Context Protocol" };
+    }
+  } catch {
+    // 忽略解析错误
+  }
+
+  return null;
 }
 
 /**
@@ -214,6 +258,19 @@ export function formatTime(timestamp: number): string {
 /**
  * 格式化相对时间
  */
+/**
+ * 解析并验证端口号
+ */
+export function parsePort(value: string | boolean | undefined, defaultPort: number): number {
+  if (!value || typeof value === "boolean") return defaultPort;
+  const port = parseInt(value, 10);
+  if (isNaN(port) || port < 0 || port > 65535) {
+    console.error(color(`Invalid port: ${value} (must be 0-65535)`, COLORS.red));
+    process.exit(1);
+  }
+  return port;
+}
+
 export function formatRelativeTime(timestamp: number): string {
   const now = Date.now();
   const diff = now - timestamp;

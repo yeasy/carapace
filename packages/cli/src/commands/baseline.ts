@@ -33,29 +33,33 @@ export async function baselineCommand(args: string[]): Promise<void> {
     const dbPath = getDbPath();
     const store = await createStore({ sqlitePath: dbPath });
 
-    // 重置基准 - 清除该技能的基准数据
-    const emptyBaseline = {
-      skillName: skillName,
-      firstSeen: Date.now(),
-      lastSeen: Date.now(),
-      sessionCount: 0,
-      toolUsage: {},
-      pathPatterns: [],
-      domainPatterns: [],
-      commandPatterns: [],
-      avgCallsPerSession: 0,
-      stdDevCalls: 0,
-      maxCallsObserved: 0,
-    };
+    try {
+      // 重置基准 - 清除该技能的基准数据
+      const emptyBaseline = {
+        skillName: skillName,
+        firstSeen: Date.now(),
+        lastSeen: Date.now(),
+        sessionCount: 0,
+        toolUsage: {},
+        pathPatterns: [],
+        domainPatterns: [],
+        commandPatterns: [],
+        avgCallsPerSession: 0,
+        stdDevCalls: 0,
+        maxCallsObserved: 0,
+      };
 
-    await store.saveBaseline(emptyBaseline);
+      await store.saveBaseline(emptyBaseline);
 
-    console.log(
-      color(
-        `✓ Baseline reset for skill '${skillName}'`,
-        COLORS.green
-      )
-    );
+      console.log(
+        color(
+          `✓ Baseline reset for skill '${skillName}'`,
+          COLORS.green
+        )
+      );
+    } finally {
+      await store.close();
+    }
   } catch (err) {
     console.error(
       color(`Error: ${err instanceof Error ? err.message : String(err)}`, COLORS.red)

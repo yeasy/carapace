@@ -2,7 +2,10 @@
  * 管理技能信任
  */
 
-import { color, COLORS, loadConfig } from "../utils.js";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { homedir } from "node:os";
+import { color, COLORS } from "../utils.js";
 
 export async function trustCommand(
   args: string[],
@@ -22,16 +25,22 @@ export async function trustCommand(
       process.exit(1);
     }
 
-    // 加载配置
-    const config = loadConfig();
+    // Load existing config from ~/.carapace/config.json
+    const configPath = join(homedir(), ".carapace", "config.json");
+    let config: Record<string, unknown> = {};
+    if (existsSync(configPath)) {
+      try {
+        config = JSON.parse(readFileSync(configPath, "utf-8"));
+      } catch {
+        // Start with empty config if file is invalid
+      }
+    }
 
     if (action === "trust") {
-      // 添加到信任列表
-      if (!config.trustedSkills) {
-        config.trustedSkills = {};
-      }
+      const trusted = (config.trustedSkills as Record<string, unknown>) ?? {};
+      config.trustedSkills = trusted;
 
-      const rules: any = {};
+      const rules: Record<string, string> = {};
 
       if (flags.tool) {
         rules.tool = String(flags.tool);
@@ -43,7 +52,7 @@ export async function trustCommand(
         rules.domain = String(flags.domain);
       }
 
-      config.trustedSkills[skillName] = Object.keys(rules).length > 0 ? rules : true;
+      trusted[skillName] = Object.keys(rules).length > 0 ? rules : true;
 
       console.log(
         color(
@@ -52,9 +61,8 @@ export async function trustCommand(
         )
       );
     } else {
-      // 从信任列表移除
-      if (config.trustedSkills) {
-        delete config.trustedSkills[skillName];
+      if (config.trustedSkills && typeof config.trustedSkills === "object") {
+        delete (config.trustedSkills as Record<string, unknown>)[skillName];
       }
 
       console.log(
@@ -65,10 +73,14 @@ export async function trustCommand(
       );
     }
 
-    // 注意：配置保存逻辑应该在实际应用中实现
-    // 这里我们只是展示了配置更新的逻辑
+    // Persist to ~/.carapace/config.json
+    const configDir = dirname(configPath);
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true });
+    }
+    writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
     console.log(
-      color(`Tip: Save configuration to ~/.carapace/config.json or .carapace.yml`, COLORS.dim)
+      color(`  Saved to ${configPath}`, COLORS.dim)
     );
   } catch (err) {
     console.error(

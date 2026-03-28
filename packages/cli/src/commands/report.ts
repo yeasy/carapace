@@ -2,7 +2,7 @@
  * 生成会话报告
  */
 
-import { createStore } from "@carapace/core";
+import { createStore, type SecurityEvent } from "@carapace/core";
 import {
   color,
   COLORS,
@@ -28,6 +28,7 @@ export async function reportCommand(args: string[]): Promise<void> {
     const dbPath = getDbPath();
     const store = await createStore({ sqlitePath: dbPath });
 
+    try {
     // 获取会话
     const session = await store.getSession(sessionId);
 
@@ -101,7 +102,7 @@ export async function reportCommand(args: string[]): Promise<void> {
     if (events.length > 0) {
       console.log(color("Recent Events:", COLORS.cyan));
       const recentEvents = events.slice(0, 5);
-      const rows = recentEvents.map((evt: any) => [
+      const rows = recentEvents.map((evt: SecurityEvent) => [
         formatTime(evt.timestamp),
         evt.severity || "info",
         evt.ruleName || "unknown",
@@ -111,6 +112,9 @@ export async function reportCommand(args: string[]): Promise<void> {
       if (events.length > 5) {
         console.log(`\n  ... and ${events.length - 5} more events`);
       }
+    }
+    } finally {
+      await store.close();
     }
   } catch (err) {
     console.error(
