@@ -5,7 +5,9 @@
  * 裸 IP 地址、挖矿池等的网络访问。
  */
 
+import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
+import { isRedosSafe } from "../utils/regex.js";
 
 interface DomainRule {
   pattern: RegExp;
@@ -55,7 +57,7 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
 
   // 加密货币挖矿池
   {
-    pattern: /\b(pool\.\w+\.com|mining\.\w+|stratum\+tcp)/i,
+    pattern: /\b(mining-?pool|crypto-?pool|stratum\+tcp|xmrig|hashrate\.\w+|minergate)/i,
     severity: "high",
     title: "加密货币挖矿端点",
     description: "连接到疑似加密货币挖矿池。",
@@ -85,15 +87,22 @@ export function createNetworkGuardRule(blockedDomains?: string[]): SecurityRule 
   const userRules: DomainRule[] = [];
   for (const d of blockedDomains ?? []) {
     try {
+      // Use word boundary to prevent substring matches (e.g., "evil.com" should not match "notevil.com")
+      const escaped = d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const patternStr = `(?:^|[/.]|\\b)${escaped}(?:[:/]|$)`;
+      if (!isRedosSafe(patternStr)) {
+        process.stderr.write(`[carapace/network-guard] 忽略不安全的 blockedDomain 正则: "${d}"\n`);
+        continue;
+      }
       userRules.push({
-        pattern: new RegExp(d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"),
+        pattern: new RegExp(patternStr, "i"),
         severity: "high" as Severity,
         title: `访问被阻断域名: ${d}`,
         description: `访问用户阻断域名: ${d}`,
       });
     } catch (err) {
       // 跳过无效输入，避免运行时崩溃；输出警告帮助用户排查配置问题
-      console.warn(`[carapace/network-guard] 忽略无效的 blockedDomain: "${d}" — ${err instanceof Error ? err.message : String(err)}`);
+      process.stderr.write(`[carapace/network-guard] 忽略无效的 blockedDomain: "${d}" — ${err instanceof Error ? err.message : String(err)}\n`);
     }
   }
 
@@ -107,30 +116,43 @@ export function createNetworkGuardRule(blockedDomains?: string[]): SecurityRule 
       const urls = extractUrls(ctx.toolParams);
       if (urls.length === 0) return { triggered: false };
 
+      let bestMatch: { rule: DomainRule; url: string } | null = null;
+
       for (const url of urls) {
         for (const rule of allRules) {
           if (rule.pattern.test(url)) {
-            return {
-              triggered: true,
-              shouldBlock: rule.severity === "critical",
-              event: {
-                category: "network_suspect",
-                severity: rule.severity,
-                title: rule.title,
-                description: rule.description,
-                details: { url, matchedPattern: rule.pattern.source },
-                toolName: ctx.toolName,
-                toolParams: ctx.toolParams,
-                skillName: ctx.skillName,
-                sessionId: ctx.sessionId,
-                agentId: ctx.agentId,
-                matchedPattern: rule.pattern.source,
-              },
-            };
+            if (
+              !bestMatch ||
+              SEVERITY_RANK[rule.severity] > SEVERITY_RANK[bestMatch.rule.severity]
+            ) {
+              bestMatch = { rule, url };
+            }
+            if (rule.severity === "critical") break;
           }
         }
+        if (bestMatch?.rule.severity === "critical") break;
       }
-      return { triggered: false };
+
+      if (!bestMatch) return { triggered: false };
+
+      const { rule, url } = bestMatch;
+      return {
+        triggered: true,
+        shouldBlock: rule.severity === "critical",
+        event: {
+          category: "network_suspect",
+          severity: rule.severity,
+          title: rule.title,
+          description: rule.description,
+          details: { url, matchedPattern: rule.pattern.source },
+          toolName: ctx.toolName,
+          toolParams: ctx.toolParams,
+          skillName: ctx.skillName,
+          sessionId: ctx.sessionId,
+          agentId: ctx.agentId,
+          matchedPattern: rule.pattern.source,
+        },
+      };
     },
   };
 }

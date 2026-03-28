@@ -8,6 +8,7 @@
  * - 编码绕过尝试：base64 编码的指令
  */
 
+import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
 
 interface InjectionPattern {
@@ -49,20 +50,24 @@ const INJECTION_PATTERNS: InjectionPattern[] = [
 
 // ── 从工具参数中提取所有文本内容 ──
 
+const MAX_WALK_DEPTH = 10;
+const MAX_TEXT_LEN = 8192;
+
 function extractTextValues(params: Record<string, unknown>): string[] {
   const texts: string[] = [];
 
-  function walk(val: unknown): void {
+  function walk(val: unknown, depth: number): void {
+    if (depth > MAX_WALK_DEPTH) return;
     if (typeof val === "string" && val.length > 10) {
-      texts.push(val);
+      texts.push(val.length > MAX_TEXT_LEN ? val.slice(0, MAX_TEXT_LEN) : val);
     } else if (Array.isArray(val)) {
-      for (const item of val) walk(item);
+      for (const item of val) walk(item, depth + 1);
     } else if (val && typeof val === "object") {
-      for (const v of Object.values(val as Record<string, unknown>)) walk(v);
+      for (const v of Object.values(val as Record<string, unknown>)) walk(v, depth + 1);
     }
   }
 
-  walk(params);
+  walk(params, 0);
   return texts;
 }
 
@@ -77,41 +82,51 @@ export function createPromptInjectionRule(): SecurityRule {
       const texts = extractTextValues(ctx.toolParams);
       if (texts.length === 0) return { triggered: false };
 
+      let bestMatch: { ip: InjectionPattern; snippet: string } | null = null;
+
       for (const text of texts) {
         for (const ip of INJECTION_PATTERNS) {
           if (ip.pattern.test(text)) {
-            // 提取匹配片段（最多 80 字符）
-            const match = text.match(ip.pattern);
-            const snippet = match
-              ? match[0].slice(0, 80)
-              : text.slice(0, 80);
-
-            return {
-              triggered: true,
-              shouldBlock: ip.severity === "critical",
-              event: {
-                category: "prompt_injection",
-                severity: ip.severity,
-                title: ip.title,
-                description: `工具 "${ctx.toolName}" 的参数中检测到潜在 Prompt 注入（${ip.category}类）`,
-                details: {
-                  matchedPattern: ip.pattern.source,
-                  injectionCategory: ip.category,
-                  snippet,
-                },
-                toolName: ctx.toolName,
-                toolParams: ctx.toolParams,
-                skillName: ctx.skillName,
-                sessionId: ctx.sessionId,
-                agentId: ctx.agentId,
-                matchedPattern: ip.pattern.source,
-              },
-            };
+            if (
+              !bestMatch ||
+              SEVERITY_RANK[ip.severity] > SEVERITY_RANK[bestMatch.ip.severity]
+            ) {
+              const match = text.match(ip.pattern);
+              bestMatch = {
+                ip,
+                snippet: match ? match[0].slice(0, 80) : text.slice(0, 80),
+              };
+            }
+            if (ip.severity === "critical") break;
           }
         }
+        if (bestMatch?.ip.severity === "critical") break;
       }
 
-      return { triggered: false };
+      if (!bestMatch) return { triggered: false };
+
+      const { ip, snippet } = bestMatch;
+      return {
+        triggered: true,
+        shouldBlock: ip.severity === "critical",
+        event: {
+          category: "prompt_injection",
+          severity: ip.severity,
+          title: ip.title,
+          description: `工具 "${ctx.toolName}" 的参数中检测到潜在 Prompt 注入（${ip.category}类）`,
+          details: {
+            matchedPattern: ip.pattern.source,
+            injectionCategory: ip.category,
+            snippet,
+          },
+          toolName: ctx.toolName,
+          toolParams: ctx.toolParams,
+          skillName: ctx.skillName,
+          sessionId: ctx.sessionId,
+          agentId: ctx.agentId,
+          matchedPattern: ip.pattern.source,
+        },
+      };
     },
   };
 }

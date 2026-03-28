@@ -5,6 +5,7 @@
  * 远程代码执行、反弹 shell、凭证窃取、编码混淆、破坏性操作。
  */
 
+import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
 
 interface DangerPattern {
@@ -101,7 +102,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 破坏性操作 ──
   {
-    pattern: /\brm\s+(-rf|--recursive\s+--force)\s+\//i,
+    pattern: /\brm\s+(-[rRfF]{2,}|-[rR]\s+-[fF]|-[fF]\s+-[rR]|--recursive\s+--force|--force\s+--recursive)\s+\//i,
     severity: "critical",
     title: "从根目录递归强制删除",
     description: "尝试从根目录递归删除文件。",
@@ -174,32 +175,43 @@ export const execGuardRule: SecurityRule = {
     const command = extractCommand(ctx.toolParams);
     if (!command) return { triggered: false };
 
+    let bestMatch: DangerPattern | null = null;
+
     for (const dp of DANGER_PATTERNS) {
       if (dp.pattern.test(command)) {
-        return {
-          triggered: true,
-          shouldBlock: dp.severity === "critical",
-          event: {
-            category: "exec_danger",
-            severity: dp.severity,
-            title: dp.title,
-            description: dp.description,
-            details: {
-              command,
-              matchedPattern: dp.pattern.source,
-              toolName: ctx.toolName,
-              skillName: ctx.skillName,
-            },
-            toolName: ctx.toolName,
-            toolParams: ctx.toolParams,
-            skillName: ctx.skillName,
-            sessionId: ctx.sessionId,
-            agentId: ctx.agentId,
-            matchedPattern: dp.pattern.source,
-          },
-        };
+        if (
+          !bestMatch ||
+          SEVERITY_RANK[dp.severity] > SEVERITY_RANK[bestMatch.severity]
+        ) {
+          bestMatch = dp;
+        }
+        if (dp.severity === "critical") break;
       }
     }
-    return { triggered: false };
+
+    if (!bestMatch) return { triggered: false };
+
+    return {
+      triggered: true,
+      shouldBlock: bestMatch.severity === "critical",
+      event: {
+        category: "exec_danger",
+        severity: bestMatch.severity,
+        title: bestMatch.title,
+        description: bestMatch.description,
+        details: {
+          command,
+          matchedPattern: bestMatch.pattern.source,
+          toolName: ctx.toolName,
+          skillName: ctx.skillName,
+        },
+        toolName: ctx.toolName,
+        toolParams: ctx.toolParams,
+        skillName: ctx.skillName,
+        sessionId: ctx.sessionId,
+        agentId: ctx.agentId,
+        matchedPattern: bestMatch.pattern.source,
+      },
+    };
   },
 };

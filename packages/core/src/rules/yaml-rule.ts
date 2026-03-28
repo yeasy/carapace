@@ -32,6 +32,7 @@ import type {
   Severity,
   EventCategory,
 } from "../types.js";
+import { isRedosSafe } from "../utils/regex.js";
 
 // ── YAML 规则定义结构 ──
 
@@ -53,6 +54,8 @@ export interface YamlRuleDefinition {
 }
 
 // ── YAML 解析器（轻量级，无外部依赖） ──
+
+const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 export function parseSimpleYaml(text: string): Record<string, unknown> {
   const result: Record<string, unknown> = {};
@@ -85,6 +88,7 @@ export function parseSimpleYaml(text: string): Record<string, unknown> {
 
       const parent = currentParent();
       const key = parent.lastKey;
+      if (key && DANGEROUS_KEYS.has(key)) continue;
       if (key) {
         if (!Array.isArray(parent.obj[key])) {
           parent.obj[key] = [];
@@ -99,6 +103,7 @@ export function parseSimpleYaml(text: string): Record<string, unknown> {
 
     const indent = match[1].length;
     const key = match[2];
+    if (DANGEROUS_KEYS.has(key)) continue;
     let value: string | undefined = match[3].trim();
 
     // 弹出缩进层级
@@ -129,7 +134,8 @@ export function parseSimpleYaml(text: string): Record<string, unknown> {
       // 类型转换
       if (value === "true") parent.obj[key] = true;
       else if (value === "false") parent.obj[key] = false;
-      else if (/^\d+$/.test(value)) parent.obj[key] = parseInt(value, 10);
+      else if (/^-?\d+$/.test(value)) parent.obj[key] = parseInt(value, 10);
+      else if (/^-?\d+\.\d+$/.test(value)) parent.obj[key] = parseFloat(value);
       else parent.obj[key] = value;
       parent.lastKey = key;
     }
@@ -226,6 +232,10 @@ export function loadYamlRules(yamlText: string): SecurityRule[] {
 
 function safeRegex(pattern: string): RegExp | null {
   try {
+    if (!isRedosSafe(pattern)) {
+      process.stderr.write(`[carapace/yaml-rule] 拒绝可能导致 ReDoS 的正则模式: "${pattern}"\n`);
+      return null;
+    }
     return new RegExp(pattern, "i");
   } catch {
     return null;
@@ -263,11 +273,15 @@ function buildResult(
   };
 }
 
+const MAX_PARAM_DEPTH = 10;
+
 function matchAnyParam(
   params: Record<string, unknown>,
   patterns: RegExp[],
-  prefix = ""
+  prefix = "",
+  depth = 0
 ): { paramKey: string; pattern: string } | null {
+  if (depth > MAX_PARAM_DEPTH) return null;
   for (const [key, value] of Object.entries(params)) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
     if (typeof value === "string") {
@@ -280,7 +294,8 @@ function matchAnyParam(
       const result = matchAnyParam(
         value as Record<string, unknown>,
         patterns,
-        fullKey
+        fullKey,
+        depth + 1
       );
       if (result) return result;
     } else if (Array.isArray(value)) {
@@ -334,12 +349,36 @@ function validateYamlRuleDef(
     return null;
   }
 
+  // Validate match structure to prevent runtime crashes from malformed input
+  const matchObj = match as Record<string, unknown>;
+  const validatedMatch: YamlRuleDefinition["match"] = {};
+
+  if (typeof matchObj["toolName"] === "string") {
+    validatedMatch.toolName = matchObj["toolName"];
+  }
+
+  if (matchObj["params"] && typeof matchObj["params"] === "object" && !Array.isArray(matchObj["params"])) {
+    const params: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(matchObj["params"] as Record<string, unknown>)) {
+      if (Array.isArray(v)) {
+        params[k] = v.filter((item): item is string => typeof item === "string");
+      }
+    }
+    if (Object.keys(params).length > 0) validatedMatch.params = params;
+  }
+
+  if (Array.isArray(matchObj["any_param"])) {
+    validatedMatch.any_param = (matchObj["any_param"] as unknown[]).filter(
+      (item): item is string => typeof item === "string"
+    );
+  }
+
   return {
     name,
     description,
     severity: severity as Severity,
     category: category as EventCategory,
     shouldBlock: parsed["shouldBlock"] === true,
-    match: match as YamlRuleDefinition["match"],
+    match: validatedMatch,
   };
 }

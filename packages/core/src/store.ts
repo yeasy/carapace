@@ -3,6 +3,39 @@
  */
 
 import type { SecurityEvent, Severity, EventCategory } from "./types.js";
+import type { DismissalPattern } from "./alerter.js";
+
+/** Minimal type for better-sqlite3 Statement (optional dependency) */
+interface SqliteStatement {
+  run(...params: unknown[]): { changes: number };
+  get(...params: unknown[]): SqliteRow | undefined;
+  all(...params: unknown[]): SqliteRow[];
+}
+
+/** Minimal type for better-sqlite3 Database (optional dependency) */
+interface SqliteDatabase {
+  pragma(pragma: string): unknown;
+  exec(sql: string): void;
+  prepare(sql: string): SqliteStatement;
+  close(): void;
+}
+
+/** Generic row type for better-sqlite3 query results */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SqliteRow = Record<string, any>;
+// Note: ideally SqliteRow would be Record<string, unknown>, but better-sqlite3
+// returns Record<string, any> and changing it would require casts at every access.
+// Keeping as-is for compatibility with the driver's own typings.
+
+/** Safe JSON.parse that returns fallback on error instead of throwing */
+function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
+  if (!json) return fallback;
+  try {
+    return JSON.parse(json);
+  } catch {
+    return fallback;
+  }
+}
 
 // ─── 配置与接口 ──────────────────────────────────────────────────
 
@@ -69,6 +102,7 @@ export interface SkillBaseline {
  */
 export abstract class StorageBackend {
   abstract addEvent(event: SecurityEvent): Promise<void>;
+  abstract getEventById(id: string): Promise<SecurityEvent | null>;
   abstract queryEvents(query: EventQuery): Promise<SecurityEvent[]>;
   abstract getStats(since?: number): Promise<EventStats>;
   abstract timeSeries(
@@ -82,6 +116,12 @@ export abstract class StorageBackend {
 
   abstract saveBaseline(baseline: SkillBaseline): Promise<void>;
   abstract getBaseline(skillName: string): Promise<SkillBaseline | null>;
+  abstract listBaselines(): Promise<SkillBaseline[]>;
+
+  abstract addDismissal(pattern: DismissalPattern): Promise<void>;
+  abstract removeDismissal(id: string): Promise<boolean>;
+  abstract listDismissals(): Promise<DismissalPattern[]>;
+  abstract clearDismissals(): Promise<void>;
 
   abstract clear(): Promise<void>;
   abstract close(): Promise<void>;
@@ -93,6 +133,7 @@ export class MemoryBackend extends StorageBackend {
   private events: SecurityEvent[] = [];
   private sessions: Map<string, Session> = new Map();
   private baselines: Map<string, SkillBaseline> = new Map();
+  private dismissals: Map<string, DismissalPattern> = new Map();
   private maxEvents: number;
 
   constructor(maxEvents = 10000) {
@@ -102,10 +143,15 @@ export class MemoryBackend extends StorageBackend {
 
   async addEvent(event: SecurityEvent): Promise<void> {
     this.events.push(event);
-    // 超过上限时淘汰最旧的事件
-    if (this.events.length > this.maxEvents) {
+    // Batch eviction: trim when buffer exceeds capacity + headroom to avoid copying on every insert
+    const headroom = Math.min(Math.floor(this.maxEvents * 0.5), 500);
+    if (this.events.length > this.maxEvents + headroom) {
       this.events = this.events.slice(-this.maxEvents);
     }
+  }
+
+  async getEventById(id: string): Promise<SecurityEvent | null> {
+    return this.events.find((e) => e.id === id) ?? null;
   }
 
   async queryEvents(query: EventQuery = {}): Promise<SecurityEvent[]> {
@@ -141,6 +187,8 @@ export class MemoryBackend extends StorageBackend {
     const byRule: Record<string, number> = {};
     let blockedCount = 0;
     let alertCount = 0;
+    let firstTs = Number.MAX_SAFE_INTEGER;
+    let lastTs = 0;
 
     for (const e of events) {
       bySeverity[e.severity] = (bySeverity[e.severity] ?? 0) + 1;
@@ -148,6 +196,8 @@ export class MemoryBackend extends StorageBackend {
       if (e.ruleName) byRule[e.ruleName] = (byRule[e.ruleName] ?? 0) + 1;
       if (e.action === "blocked") blockedCount++;
       else alertCount++;
+      if (e.timestamp < firstTs) firstTs = e.timestamp;
+      if (e.timestamp > lastTs) lastTs = e.timestamp;
     }
 
     return {
@@ -159,16 +209,7 @@ export class MemoryBackend extends StorageBackend {
       alertCount,
       timeRange:
         events.length > 0
-          ? {
-              first: events.reduce(
-                (min, e) => (e.timestamp < min ? e.timestamp : min),
-                Number.MAX_SAFE_INTEGER
-              ),
-              last: events.reduce(
-                (max, e) => (e.timestamp > max ? e.timestamp : max),
-                0
-              ),
-            }
+          ? { first: firstTs, last: lastTs }
           : null,
     };
   }
@@ -223,10 +264,34 @@ export class MemoryBackend extends StorageBackend {
     return this.baselines.get(skillName) ?? null;
   }
 
+  async listBaselines(): Promise<SkillBaseline[]> {
+    return [...this.baselines.values()];
+  }
+
+  async addDismissal(pattern: DismissalPattern): Promise<void> {
+    this.dismissals.set(pattern.id, pattern);
+  }
+
+  async removeDismissal(id: string): Promise<boolean> {
+    return this.dismissals.delete(id);
+  }
+
+  async listDismissals(): Promise<DismissalPattern[]> {
+    const now = Date.now();
+    return [...this.dismissals.values()].filter(
+      (p) => !p.expiresAt || p.expiresAt >= now
+    );
+  }
+
+  async clearDismissals(): Promise<void> {
+    this.dismissals.clear();
+  }
+
   async clear(): Promise<void> {
     this.events = [];
     this.sessions.clear();
     this.baselines.clear();
+    this.dismissals.clear();
   }
 
   async close(): Promise<void> {
@@ -237,8 +302,9 @@ export class MemoryBackend extends StorageBackend {
 // ─── SQLite 后端 ─────────────────────────────────────────────────
 
 export class SqliteBackend extends StorageBackend {
-  private db: any;
+  private db!: SqliteDatabase;
   private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor(dbPath: string = ":memory:") {
     super();
@@ -250,6 +316,13 @@ export class SqliteBackend extends StorageBackend {
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
+    // Guard against concurrent initialization
+    if (this.initPromise) return this.initPromise;
+    this.initPromise = this.doInitialize();
+    return this.initPromise;
+  }
+
+  private async doInitialize(): Promise<void> {
 
     try {
       // 动态导入 better-sqlite3，允许其作为可选依赖
@@ -273,8 +346,10 @@ export class SqliteBackend extends StorageBackend {
           session_id TEXT,
           agent_id TEXT,
           rule_name TEXT,
+          matched_pattern TEXT,
           action TEXT NOT NULL,
           details_json TEXT,
+          tool_params_json TEXT,
           created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
         );
 
@@ -305,10 +380,22 @@ export class SqliteBackend extends StorageBackend {
           event_count INTEGER DEFAULT 0,
           skills_used_json TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS dismissals (
+          id TEXT PRIMARY KEY,
+          rule_name TEXT,
+          tool_name TEXT,
+          skill_name TEXT,
+          reason TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER
+        );
       `);
 
       this.initialized = true;
     } catch (error) {
+      // Reset so next call can retry
+      this.initPromise = null;
       throw new Error(
         `Failed to initialize SQLite backend: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -319,8 +406,8 @@ export class SqliteBackend extends StorageBackend {
     await this.initialize();
 
     const stmt = this.db.prepare(`
-      INSERT INTO events (id, timestamp, category, severity, title, description, tool_name, skill_name, session_id, agent_id, rule_name, action, details_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO events (id, timestamp, category, severity, title, description, tool_name, skill_name, session_id, agent_id, rule_name, matched_pattern, action, details_json, tool_params_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -335,16 +422,44 @@ export class SqliteBackend extends StorageBackend {
       event.sessionId,
       event.agentId,
       event.ruleName,
+      event.matchedPattern,
       event.action,
-      JSON.stringify(event.details)
+      JSON.stringify(event.details),
+      event.toolParams ? JSON.stringify(event.toolParams) : null
     );
+  }
+
+  async getEventById(id: string): Promise<SecurityEvent | null> {
+    await this.initialize();
+
+    const stmt = this.db.prepare("SELECT * FROM events WHERE id = ?");
+    const row = stmt.get(id) as SqliteRow;
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      timestamp: row.timestamp,
+      category: row.category as EventCategory,
+      severity: row.severity as Severity,
+      title: row.title,
+      description: row.description,
+      details: safeJsonParse(row.details_json, {}),
+      toolName: row.tool_name ?? undefined,
+      toolParams: safeJsonParse(row.tool_params_json, undefined),
+      skillName: row.skill_name ?? undefined,
+      sessionId: row.session_id ?? undefined,
+      agentId: row.agent_id ?? undefined,
+      ruleName: row.rule_name ?? undefined,
+      matchedPattern: row.matched_pattern ?? undefined,
+      action: row.action as "alert" | "blocked",
+    };
   }
 
   async queryEvents(query: EventQuery = {}): Promise<SecurityEvent[]> {
     await this.initialize();
 
     let sql = "SELECT * FROM events WHERE 1=1";
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (query.category) {
       sql += " AND category = ?";
@@ -383,7 +498,7 @@ export class SqliteBackend extends StorageBackend {
     params.push(limit, offset);
 
     const stmt = this.db.prepare(sql);
-    const rows = stmt.all(...params) as any[];
+    const rows = stmt.all(...params) as SqliteRow[];
 
     return rows.map((row) => ({
       id: row.id,
@@ -392,12 +507,14 @@ export class SqliteBackend extends StorageBackend {
       severity: row.severity as Severity,
       title: row.title,
       description: row.description,
-      details: JSON.parse(row.details_json || "{}"),
+      details: safeJsonParse(row.details_json, {}),
       toolName: row.tool_name ?? undefined,
+      toolParams: safeJsonParse(row.tool_params_json, undefined),
       skillName: row.skill_name ?? undefined,
       sessionId: row.session_id ?? undefined,
       agentId: row.agent_id ?? undefined,
       ruleName: row.rule_name ?? undefined,
+      matchedPattern: row.matched_pattern ?? undefined,
       action: row.action as "alert" | "blocked",
     }));
   }
@@ -405,56 +522,58 @@ export class SqliteBackend extends StorageBackend {
   async getStats(since?: number): Promise<EventStats> {
     await this.initialize();
 
-    let sql = "SELECT * FROM events WHERE 1=1";
-    const params: any[] = [];
+    const whereClause = since ? " WHERE timestamp >= ?" : "";
+    const params: unknown[] = since ? [since] : [];
 
-    if (since) {
-      sql += " AND timestamp >= ?";
-      params.push(since);
-    }
-
-    const stmt = this.db.prepare(sql);
-    const rows = stmt.all(...params) as any[];
+    // Use SQL aggregation instead of loading all rows into memory
+    const totalRow = this.db.prepare(
+      `SELECT COUNT(*) as total,
+              MIN(timestamp) as first_ts,
+              MAX(timestamp) as last_ts,
+              SUM(CASE WHEN action = 'blocked' THEN 1 ELSE 0 END) as blocked_count,
+              SUM(CASE WHEN action != 'blocked' THEN 1 ELSE 0 END) as alert_count
+       FROM events${whereClause}`
+    ).get(...params) as SqliteRow;
 
     const bySeverity: Record<string, number> = {
-      critical: 0,
-      high: 0,
-      medium: 0,
-      low: 0,
-      info: 0,
+      critical: 0, high: 0, medium: 0, low: 0, info: 0,
     };
-    const byCategory: Record<string, number> = {};
-    const byRule: Record<string, number> = {};
-    let blockedCount = 0;
-    let alertCount = 0;
+    const sevRows = this.db.prepare(
+      `SELECT severity, COUNT(*) as cnt FROM events${whereClause} GROUP BY severity`
+    ).all(...params) as SqliteRow[];
+    for (const row of sevRows) {
+      bySeverity[row.severity] = row.cnt;
+    }
 
-    for (const row of rows) {
-      bySeverity[row.severity] = (bySeverity[row.severity] ?? 0) + 1;
-      byCategory[row.category] = (byCategory[row.category] ?? 0) + 1;
-      if (row.rule_name) byRule[row.rule_name] = (byRule[row.rule_name] ?? 0) + 1;
-      if (row.action === "blocked") blockedCount++;
-      else alertCount++;
+    const byCategory: Record<string, number> = {};
+    const catRows = this.db.prepare(
+      `SELECT category, COUNT(*) as cnt FROM events${whereClause} GROUP BY category`
+    ).all(...params) as SqliteRow[];
+    for (const row of catRows) {
+      byCategory[row.category] = row.cnt;
+    }
+
+    const byRule: Record<string, number> = {};
+    const ruleWhereClause = since
+      ? " WHERE timestamp >= ? AND rule_name IS NOT NULL"
+      : " WHERE rule_name IS NOT NULL";
+    const ruleRows = this.db.prepare(
+      `SELECT rule_name, COUNT(*) as cnt FROM events${ruleWhereClause} GROUP BY rule_name`
+    ).all(...params) as SqliteRow[];
+    for (const row of ruleRows) {
+      byRule[row.rule_name] = row.cnt;
     }
 
     return {
-      total: rows.length,
+      total: totalRow.total,
       bySeverity: bySeverity as Record<Severity, number>,
       byCategory,
       byRule,
-      blockedCount,
-      alertCount,
+      blockedCount: totalRow.blocked_count ?? 0,
+      alertCount: totalRow.alert_count ?? 0,
       timeRange:
-        rows.length > 0
-          ? {
-              first: rows.reduce(
-                (min, row) => (row.timestamp < min ? row.timestamp : min),
-                Number.MAX_SAFE_INTEGER
-              ),
-              last: rows.reduce(
-                (max, row) => (row.timestamp > max ? row.timestamp : max),
-                0
-              ),
-            }
+        totalRow.total > 0
+          ? { first: totalRow.first_ts, last: totalRow.last_ts }
           : null,
     };
   }
@@ -465,36 +584,24 @@ export class SqliteBackend extends StorageBackend {
   ): Promise<TimeSeriesBucket[]> {
     await this.initialize();
 
-    let sql = "SELECT timestamp, action FROM events WHERE 1=1";
-    const params: any[] = [];
+    const whereClause = since ? " WHERE timestamp >= ?" : "";
+    const params: unknown[] = since ? [since] : [];
 
-    if (since) {
-      sql += " AND timestamp >= ?";
-      params.push(since);
-    }
+    // Use SQL aggregation to bucket timestamps
+    const rows = this.db.prepare(
+      `SELECT (timestamp / ? * ?) as bucket_ts,
+              COUNT(*) as cnt,
+              SUM(CASE WHEN action = 'blocked' THEN 1 ELSE 0 END) as blocked_cnt
+       FROM events${whereClause}
+       GROUP BY bucket_ts
+       ORDER BY bucket_ts ASC`
+    ).all(bucketMs, bucketMs, ...params) as SqliteRow[];
 
-    const stmt = this.db.prepare(sql);
-    const rows = stmt.all(...params) as any[];
-
-    if (rows.length === 0) return [];
-
-    const buckets = new Map<number, { count: number; blocked: number }>();
-
-    for (const row of rows) {
-      const key = Math.floor(row.timestamp / bucketMs) * bucketMs;
-      const bucket = buckets.get(key) ?? { count: 0, blocked: 0 };
-      bucket.count++;
-      if (row.action === "blocked") bucket.blocked++;
-      buckets.set(key, bucket);
-    }
-
-    return Array.from(buckets.entries())
-      .sort(([a], [b]) => a - b)
-      .map(([timestamp, data]) => ({
-        timestamp,
-        count: data.count,
-        blocked: data.blocked,
-      }));
+    return rows.map((row: SqliteRow) => ({
+      timestamp: row.bucket_ts,
+      count: row.cnt,
+      blocked: row.blocked_cnt ?? 0,
+    }));
   }
 
   async addSession(session: Session): Promise<void> {
@@ -520,7 +627,7 @@ export class SqliteBackend extends StorageBackend {
     await this.initialize();
 
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
 
     if (updates.agentId !== undefined) {
       fields.push("agent_id = ?");
@@ -555,7 +662,7 @@ export class SqliteBackend extends StorageBackend {
     await this.initialize();
 
     const stmt = this.db.prepare("SELECT * FROM sessions WHERE session_id = ?");
-    const row = stmt.get(sessionId) as any;
+    const row = stmt.get(sessionId) as SqliteRow;
 
     if (!row) return null;
 
@@ -566,7 +673,7 @@ export class SqliteBackend extends StorageBackend {
       endedAt: row.ended_at ?? undefined,
       toolCallCount: row.tool_call_count,
       eventCount: row.event_count,
-      skillsUsed: row.skills_used_json ? JSON.parse(row.skills_used_json) : undefined,
+      skillsUsed: safeJsonParse(row.skills_used_json, undefined),
     };
   }
 
@@ -597,7 +704,7 @@ export class SqliteBackend extends StorageBackend {
     await this.initialize();
 
     const stmt = this.db.prepare("SELECT * FROM skill_baselines WHERE skill_name = ?");
-    const row = stmt.get(skillName) as any;
+    const row = stmt.get(skillName) as SqliteRow;
 
     if (!row) return null;
 
@@ -606,26 +713,101 @@ export class SqliteBackend extends StorageBackend {
       firstSeen: row.first_seen,
       lastSeen: row.last_seen,
       sessionCount: row.session_count,
-      toolUsage: row.tool_usage_json ? JSON.parse(row.tool_usage_json) : undefined,
-      pathPatterns: row.path_patterns_json ? JSON.parse(row.path_patterns_json) : undefined,
-      domainPatterns: row.domain_patterns_json ? JSON.parse(row.domain_patterns_json) : undefined,
-      commandPatterns: row.command_patterns_json ? JSON.parse(row.command_patterns_json) : undefined,
+      toolUsage: safeJsonParse(row.tool_usage_json, undefined),
+      pathPatterns: safeJsonParse(row.path_patterns_json, undefined),
+      domainPatterns: safeJsonParse(row.domain_patterns_json, undefined),
+      commandPatterns: safeJsonParse(row.command_patterns_json, undefined),
       avgCallsPerSession: row.avg_calls_per_session,
       stdDevCalls: row.std_dev_calls,
       maxCallsObserved: row.max_calls_observed,
     };
   }
 
+  async listBaselines(): Promise<SkillBaseline[]> {
+    await this.initialize();
+
+    const stmt = this.db.prepare("SELECT * FROM skill_baselines ORDER BY last_seen DESC");
+    const rows = stmt.all() as SqliteRow[];
+
+    return rows.map((row: SqliteRow) => ({
+      skillName: row.skill_name,
+      firstSeen: row.first_seen,
+      lastSeen: row.last_seen,
+      sessionCount: row.session_count,
+      toolUsage: safeJsonParse(row.tool_usage_json, undefined),
+      pathPatterns: safeJsonParse(row.path_patterns_json, undefined),
+      domainPatterns: safeJsonParse(row.domain_patterns_json, undefined),
+      commandPatterns: safeJsonParse(row.command_patterns_json, undefined),
+      avgCallsPerSession: row.avg_calls_per_session,
+      stdDevCalls: row.std_dev_calls,
+      maxCallsObserved: row.max_calls_observed,
+    }));
+  }
+
+  async addDismissal(pattern: DismissalPattern): Promise<void> {
+    await this.initialize();
+
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO dismissals (id, rule_name, tool_name, skill_name, reason, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      pattern.id,
+      pattern.ruleName ?? null,
+      pattern.toolName ?? null,
+      pattern.skillName ?? null,
+      pattern.reason,
+      pattern.createdAt,
+      pattern.expiresAt ?? null
+    );
+  }
+
+  async removeDismissal(id: string): Promise<boolean> {
+    await this.initialize();
+
+    const stmt = this.db.prepare("DELETE FROM dismissals WHERE id = ?");
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  async listDismissals(): Promise<DismissalPattern[]> {
+    await this.initialize();
+
+    const now = Date.now();
+    const stmt = this.db.prepare(
+      "SELECT * FROM dismissals WHERE expires_at IS NULL OR expires_at >= ? ORDER BY created_at DESC"
+    );
+    const rows = stmt.all(now) as SqliteRow[];
+
+    return rows.map((row: SqliteRow) => ({
+      id: row.id,
+      ruleName: row.rule_name ?? undefined,
+      toolName: row.tool_name ?? undefined,
+      skillName: row.skill_name ?? undefined,
+      reason: row.reason,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at ?? undefined,
+    }));
+  }
+
+  async clearDismissals(): Promise<void> {
+    await this.initialize();
+
+    this.db.exec("DELETE FROM dismissals");
+  }
+
   async clear(): Promise<void> {
     await this.initialize();
 
-    this.db.exec("DELETE FROM events; DELETE FROM sessions; DELETE FROM skill_baselines;");
+    this.db.exec("DELETE FROM events; DELETE FROM sessions; DELETE FROM skill_baselines; DELETE FROM dismissals;");
   }
 
   async close(): Promise<void> {
     if (this.db && this.initialized) {
       this.db.close();
       this.initialized = false;
+      this.initPromise = null; // allow re-initialization if needed
     }
   }
 }
@@ -649,8 +831,8 @@ export async function createStore(config: StoreConfig = {}): Promise<StorageBack
     await backend.initialize();
     return backend;
   } catch (error) {
-    console.warn(
-      `Failed to initialize SQLite backend, falling back to memory: ${error instanceof Error ? error.message : String(error)}`
+    process.stderr.write(
+      `[CARAPACE] Failed to initialize SQLite backend, falling back to memory: ${error instanceof Error ? error.message : String(error)}\n`
     );
     return new MemoryBackend(maxEvents);
   }

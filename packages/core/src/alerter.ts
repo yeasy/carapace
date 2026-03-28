@@ -8,8 +8,14 @@
  */
 
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+
+let PKG_VERSION = "unknown";
+try {
+  PKG_VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
+} catch { /* fallback to "unknown" if package.json is missing or malformed */ }
 import type { SecurityEvent, AlertPayload, AlertSink, Severity } from "./types.js";
 
 // ─── 严重级别排序（用于升级） ─────────────────────────────────────
@@ -57,13 +63,25 @@ export class WebhookSink implements AlertSink {
   private maxRetries: number;
 
   constructor(private url: string, maxRetries: number = 2) {
+    // Validate URL to prevent SSRF — only allow http/https
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        throw new Error(`WebhookSink only supports http/https URLs, got: ${parsed.protocol}`);
+      }
+    } catch (err) {
+      if (err instanceof TypeError) {
+        throw new Error(`WebhookSink: invalid URL "${url}"`);
+      }
+      throw err;
+    }
     this.maxRetries = maxRetries;
   }
 
   async send(payload: AlertPayload): Promise<void> {
     const body = JSON.stringify({
       source: "carapace",
-      version: "0.7.0",
+      version: PKG_VERSION,
       event: {
         id: payload.event.id,
         timestamp: new Date(payload.event.timestamp).toISOString(),
@@ -79,12 +97,15 @@ export class WebhookSink implements AlertSink {
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        await fetch(this.url, {
+        const resp = await fetch(this.url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body,
           signal: AbortSignal.timeout(5000),
         });
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
         return; // 发送成功，立即返回
       } catch (err) {
         if (attempt < this.maxRetries) {
@@ -104,16 +125,16 @@ export class WebhookSink implements AlertSink {
 
 export class LogFileSink implements AlertSink {
   name = "logfile";
-  private initialized = false;
+  private initPromise: Promise<string | undefined> | null = null;
 
   constructor(private filePath: string) {}
 
   async send(payload: AlertPayload): Promise<void> {
     try {
-      if (!this.initialized) {
-        await mkdir(dirname(this.filePath), { recursive: true });
-        this.initialized = true;
+      if (!this.initPromise) {
+        this.initPromise = mkdir(dirname(this.filePath), { recursive: true });
       }
+      await this.initPromise;
       await appendFile(this.filePath, JSON.stringify(payload.event) + "\n");
     } catch (err) {
       // 写入失败不阻塞，但记录到 stderr 便于排查
@@ -184,6 +205,10 @@ export class DismissalManager {
    * 添加驳回模式
    */
   addDismissal(pattern: DismissalPattern): void {
+    // Require at least one filter field to prevent wildcard dismissal that suppresses all alerts
+    if (!pattern.ruleName && !pattern.toolName && !pattern.skillName) {
+      throw new Error("DismissalPattern must specify at least one of: ruleName, toolName, skillName");
+    }
     this.patterns.push(pattern);
   }
 
@@ -201,6 +226,10 @@ export class DismissalManager {
    */
   isDismissed(event: SecurityEvent): boolean {
     const now = Date.now();
+    // Lazily clean up expired patterns when there are many
+    if (this.patterns.length > 50) {
+      this.cleanupExpired();
+    }
     return this.patterns.some((p) => {
       // 检查是否过期
       if (p.expiresAt && p.expiresAt < now) return false;
@@ -281,6 +310,11 @@ export class AlertEscalation {
   evaluate(event: SecurityEvent): { severity: Severity; escalated: boolean; count: number } {
     const key = this.computeKey(event);
     const now = event.timestamp || Date.now();
+
+    // Periodically clean up stale entries to prevent unbounded growth
+    if (this.entries.size > 200) {
+      this.cleanup(now);
+    }
 
     if (!this.entries.has(key)) {
       this.entries.set(key, { timestamps: [] });
@@ -371,7 +405,7 @@ export class AlertRouter {
 
   /**
    * 发送安全事件到所有已注册的 sink。
-   * 流程：驳回检查 → 去重检查 → 升级评估 → 分发
+   * 流程：驳回检查 → 升级评估（始终计数） → 去重检查 → 分发
    */
   async send(event: SecurityEvent): Promise<void> {
     // 1. 驳回检查
@@ -379,17 +413,7 @@ export class AlertRouter {
       return; // 已驳回，不告警
     }
 
-    // 2. 去重检查
-    const dedupKey = this.computeDedupKey(event);
-    const now = Date.now();
-    const lastSeen = this.dedup.get(dedupKey);
-    if (lastSeen && now - lastSeen < this.dedupWindowMs) {
-      return; // 抑制重复告警
-    }
-    this.dedup.set(dedupKey, now);
-    this.cleanupDedup(now);
-
-    // 3. 告警升级评估
+    // 2. 升级评估（必须在去重前执行，以便正确计数重复事件）
     let finalEvent = event;
     if (this.escalation) {
       const result = this.escalation.evaluate(event);
@@ -402,6 +426,16 @@ export class AlertRouter {
       }
     }
 
+    // 3. 去重检查（升级后的事件也受去重保护，但计数已完成）
+    const dedupKey = this.computeDedupKey(event);
+    const now = Date.now();
+    const lastSeen = this.dedup.get(dedupKey);
+    if (lastSeen && now - lastSeen < this.dedupWindowMs) {
+      return; // 抑制重复告警
+    }
+    this.dedup.set(dedupKey, now);
+    this.cleanupDedup(now);
+
     const payload: AlertPayload = {
       event: finalEvent,
       summary: `[${finalEvent.severity.toUpperCase()}] ${finalEvent.title}`,
@@ -413,7 +447,7 @@ export class AlertRouter {
   }
 
   private computeDedupKey(event: SecurityEvent): string {
-    const raw = `${event.ruleName}:${event.toolName}:${JSON.stringify(event.toolParams ?? {})}`;
+    const raw = `${event.ruleName}:${event.toolName}:${event.matchedPattern ?? ""}`;
     return createHash("sha256").update(raw).digest("hex").slice(0, 16);
   }
 

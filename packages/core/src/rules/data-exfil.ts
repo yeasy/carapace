@@ -8,6 +8,7 @@
  * - 敏感数据编码后外发（base64 编码凭证）
  */
 
+import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
 
 interface ExfilPattern {
@@ -63,20 +64,29 @@ const EXFIL_DESTINATIONS: RegExp[] = [
 
 // ── 从工具参数提取所有字符串 ──
 
+const MAX_WALK_DEPTH = 10;
+const MAX_STRING_LEN = 8192;
+const MAX_TOTAL_LENGTH = 100_000;
+const MAX_STRING_COUNT = 1000;
+
 function extractAllStrings(params: Record<string, unknown>): string[] {
   const strings: string[] = [];
+  let totalLength = 0;
 
-  function walk(val: unknown): void {
+  function walk(val: unknown, depth: number): void {
+    if (depth > MAX_WALK_DEPTH || strings.length >= MAX_STRING_COUNT || totalLength >= MAX_TOTAL_LENGTH) return;
     if (typeof val === "string" && val.length > 0) {
-      strings.push(val);
+      const s = val.length > MAX_STRING_LEN ? val.slice(0, MAX_STRING_LEN) : val;
+      strings.push(s);
+      totalLength += s.length;
     } else if (Array.isArray(val)) {
-      for (const item of val) walk(item);
+      for (const item of val) walk(item, depth + 1);
     } else if (val && typeof val === "object") {
-      for (const v of Object.values(val as Record<string, unknown>)) walk(v);
+      for (const v of Object.values(val as Record<string, unknown>)) walk(v, depth + 1);
     }
   }
 
-  walk(params);
+  walk(params, 0);
   return strings;
 }
 
@@ -93,43 +103,29 @@ export function createDataExfilRule(): SecurityRule {
 
       const combined = strings.join("\n");
 
-      // 检查外泄模式
+      // Find the highest-severity exfil pattern match
+      let bestMatch: { ep: ExfilPattern; snippet: string } | null = null;
+
       for (const ep of EXFIL_PATTERNS) {
         if (ep.pattern.test(combined)) {
-          const match = combined.match(ep.pattern);
-          const snippet = match ? match[0].slice(0, 100) : "";
-
-          return {
-            triggered: true,
-            shouldBlock: ep.severity === "critical",
-            event: {
-              category: "data_exfil",
-              severity: ep.severity,
-              title: ep.title,
-              description: `工具 "${ctx.toolName}" 中检测到数据外泄模式（${ep.category}类）`,
-              details: {
-                exfilCategory: ep.category,
-                matchedPattern: ep.pattern.source,
-                snippet,
-              },
-              toolName: ctx.toolName,
-              toolParams: ctx.toolParams,
-              skillName: ctx.skillName,
-              sessionId: ctx.sessionId,
-              agentId: ctx.agentId,
-              matchedPattern: ep.pattern.source,
-            },
-          };
+          if (
+            !bestMatch ||
+            SEVERITY_RANK[ep.severity] > SEVERITY_RANK[bestMatch.ep.severity]
+          ) {
+            const match = combined.match(ep.pattern);
+            bestMatch = { ep, snippet: match ? match[0].slice(0, 100) : "" };
+          }
+          if (ep.severity === "critical") break;
         }
       }
 
-      // 检查是否向高风险外泄目标发送数据
+      // 检查是否向高风险外泄目标发送数据 (always critical)
       for (const dest of EXFIL_DESTINATIONS) {
         if (dest.test(combined)) {
-          // 只在有数据发送动作时才告警（POST/PUT/上传）
           const hasSendAction = /(?:POST|PUT|PATCH|upload|send|--data|--form|-d\s|-F\s)/i.test(combined);
           if (hasSendAction) {
             const match = combined.match(dest);
+            // Exfil destinations are always critical, override pattern match
             return {
               triggered: true,
               shouldBlock: true,
@@ -154,7 +150,30 @@ export function createDataExfilRule(): SecurityRule {
         }
       }
 
-      return { triggered: false };
+      if (!bestMatch) return { triggered: false };
+
+      const { ep, snippet } = bestMatch;
+      return {
+        triggered: true,
+        shouldBlock: ep.severity === "critical",
+        event: {
+          category: "data_exfil",
+          severity: ep.severity,
+          title: ep.title,
+          description: `工具 "${ctx.toolName}" 中检测到数据外泄模式（${ep.category}类）`,
+          details: {
+            exfilCategory: ep.category,
+            matchedPattern: ep.pattern.source,
+            snippet,
+          },
+          toolName: ctx.toolName,
+          toolParams: ctx.toolParams,
+          skillName: ctx.skillName,
+          sessionId: ctx.sessionId,
+          agentId: ctx.agentId,
+          matchedPattern: ep.pattern.source,
+        },
+      };
     },
   };
 }

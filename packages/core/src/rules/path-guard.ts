@@ -6,7 +6,9 @@
  * 跨平台：覆盖 Windows、macOS、Linux 路径。
  */
 
+import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
+import { isRedosSafe } from "../utils/regex.js";
 
 interface SensitivePath {
   pattern: RegExp;
@@ -58,8 +60,6 @@ const SENSITIVE_PATHS: SensitivePath[] = [
 
 // ── 安全正则匹配（防止 ReDoS） ──
 
-const REGEX_TIMEOUT_MS = 50; // 单次正则匹配最大耗时
-
 function safeRegexTest(regex: RegExp, input: string): boolean {
   // 对于超长输入，截断到合理长度以避免 ReDoS
   const safeInput = input.length > 4096 ? input.slice(0, 4096) : input;
@@ -92,6 +92,10 @@ export function createPathGuardRule(additionalPatterns?: string[]): SecurityRule
   const userPatterns: SensitivePath[] = [];
   for (const p of additionalPatterns ?? []) {
     try {
+      if (!isRedosSafe(p)) {
+        process.stderr.write(`[carapace/path-guard] 拒绝可能导致 ReDoS 的 sensitivePathPattern: "${p}"\n`);
+        continue;
+      }
       userPatterns.push({
         pattern: new RegExp(p, "i"),
         severity: "high" as Severity,
@@ -100,7 +104,7 @@ export function createPathGuardRule(additionalPatterns?: string[]): SecurityRule
       });
     } catch (err) {
       // 跳过无效正则，避免运行时崩溃；输出警告帮助用户排查配置问题
-      console.warn(`[carapace/path-guard] 忽略无效的 sensitivePathPattern: "${p}" — ${err instanceof Error ? err.message : String(err)}`);
+      process.stderr.write(`[carapace/path-guard] 忽略无效的 sensitivePathPattern: "${p}" — ${err instanceof Error ? err.message : String(err)}\n`);
     }
   }
 
@@ -114,34 +118,48 @@ export function createPathGuardRule(additionalPatterns?: string[]): SecurityRule
       const paths = extractPaths(ctx.toolParams);
       if (paths.length === 0) return { triggered: false };
 
+      let bestMatch: { sp: SensitivePath; filePath: string } | null = null;
+
       for (const filePath of paths) {
         for (const sp of allPatterns) {
           if (safeRegexTest(sp.pattern, filePath)) {
-            return {
-              triggered: true,
-              shouldBlock: sp.severity === "critical",
-              event: {
-                category: "path_violation",
-                severity: sp.severity,
-                title: sp.title,
-                description: `工具 "${ctx.toolName}" 尝试访问敏感路径（${sp.category}类）`,
-                details: {
-                  path: filePath,
-                  matchedPattern: sp.pattern.source,
-                  pathCategory: sp.category,
-                },
-                toolName: ctx.toolName,
-                toolParams: ctx.toolParams,
-                skillName: ctx.skillName,
-                sessionId: ctx.sessionId,
-                agentId: ctx.agentId,
-                matchedPattern: sp.pattern.source,
-              },
-            };
+            if (
+              !bestMatch ||
+              SEVERITY_RANK[sp.severity] > SEVERITY_RANK[bestMatch.sp.severity]
+            ) {
+              bestMatch = { sp, filePath };
+            }
+            // Short-circuit: can't get higher than critical
+            if (sp.severity === "critical") break;
           }
         }
+        if (bestMatch?.sp.severity === "critical") break;
       }
-      return { triggered: false };
+
+      if (!bestMatch) return { triggered: false };
+
+      const { sp, filePath } = bestMatch;
+      return {
+        triggered: true,
+        shouldBlock: sp.severity === "critical",
+        event: {
+          category: "path_violation",
+          severity: sp.severity,
+          title: sp.title,
+          description: `工具 "${ctx.toolName}" 尝试访问敏感路径（${sp.category}类）`,
+          details: {
+            path: filePath,
+            matchedPattern: sp.pattern.source,
+            pathCategory: sp.category,
+          },
+          toolName: ctx.toolName,
+          toolParams: ctx.toolParams,
+          skillName: ctx.skillName,
+          sessionId: ctx.sessionId,
+          agentId: ctx.agentId,
+          matchedPattern: sp.pattern.source,
+        },
+      };
     },
   };
 }

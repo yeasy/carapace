@@ -33,6 +33,7 @@ export {
 export type { BaselineConfig, YamlRuleDefinition } from "./rules/index.js";
 export { createYamlRule, loadYamlRules, parseSimpleYaml } from "./rules/index.js";
 export { generateEventId } from "./utils/id.js";
+export { isRedosSafe } from "./utils/regex.js";
 export {
   StorageBackend,
   MemoryBackend,

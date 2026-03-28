@@ -121,13 +121,14 @@ describe("Rules with extremely long inputs", () => {
     const longCmd = "echo " + "x".repeat(10240);
     const result = execGuardRule.check(makeCtx("bash", { command: longCmd }));
     expect(result).toBeDefined();
-    expect(typeof result.triggered).toBe("boolean");
+    expect(result.triggered).toBe(false);
   });
 
   it("handles 100KB command string", () => {
     const longCmd = "ls " + "y".repeat(102400);
     const result = execGuardRule.check(makeCtx("bash", { command: longCmd }));
     expect(result).toBeDefined();
+    expect(result.triggered).toBe(false);
   });
 
   it("handles 1MB command string without hanging", () => {
@@ -163,6 +164,7 @@ describe("Rules with special characters and Unicode", () => {
       makeCtx("bash", { command: "echo '你好世界🔒'" })
     );
     expect(result).toBeDefined();
+    expect(result.triggered).toBe(false);
   });
 
   it("handles emoji in command", () => {
@@ -170,6 +172,7 @@ describe("Rules with special characters and Unicode", () => {
       makeCtx("bash", { command: "echo '🚀 🔥 ⚡'" })
     );
     expect(result).toBeDefined();
+    expect(result.triggered).toBe(false);
   });
 
   it("handles null bytes in command", () => {
@@ -177,6 +180,7 @@ describe("Rules with special characters and Unicode", () => {
       makeCtx("bash", { command: "echo\x00touch\x00/tmp/x" })
     );
     expect(result).toBeDefined();
+    expect(result.triggered).toBe(false);
   });
 
   it("handles control characters", () => {

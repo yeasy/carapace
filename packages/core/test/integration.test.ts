@@ -181,7 +181,7 @@ describe("Full Detection-to-Alert Pipeline", () => {
     expect((mockSink as any).calls).toHaveLength(1);
   });
 
-  it("should not deduplicate when toolParams differ", async () => {
+  it("should not deduplicate when matchedPattern differs", async () => {
     engine.addRule(
       createSimpleRule("detect_curl", (ctx) => ({
         triggered: ctx.toolName === "curl",
@@ -191,7 +191,7 @@ describe("Full Detection-to-Alert Pipeline", () => {
           title: "Curl usage detected",
           description: `Accessing: ${ctx.toolParams.url}`,
           details: { url: ctx.toolParams.url },
-          toolParams: ctx.toolParams, // Include params so dedup keys differ
+          matchedPattern: String(ctx.toolParams.url),
         },
       }))
     );
@@ -216,7 +216,7 @@ describe("Full Detection-to-Alert Pipeline", () => {
     await router.send(event1);
     await router.send(event2);
 
-    // Different params = different dedup keys = both sent
+    // Different matchedPattern = different dedup keys = both sent
     expect((mockSink as any).calls).toHaveLength(2);
   });
 

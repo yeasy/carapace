@@ -6,6 +6,7 @@
  */
 
 import { generateEventId } from "./utils/id.js";
+import { SEVERITY_RANK } from "./types.js";
 import type {
   SecurityRule,
   RuleContext,
@@ -13,14 +14,6 @@ import type {
   BlockDecision,
   Severity,
 } from "./types.js";
-
-const SEVERITY_ORDER: Record<Severity, number> = {
-  critical: 5,
-  high: 4,
-  medium: 3,
-  low: 2,
-  info: 1,
-};
 
 export interface EngineResult {
   triggered: boolean;
@@ -91,8 +84,8 @@ export class RuleEngine {
           shouldBlock = true;
           if (
             !blockReason ||
-            SEVERITY_ORDER[result.event.severity] >
-              SEVERITY_ORDER[highestBlockSeverity]
+            SEVERITY_RANK[result.event.severity] >
+              SEVERITY_RANK[highestBlockSeverity]
           ) {
             blockReason = result.event.title;
             highestBlockSeverity = result.event.severity;
@@ -100,13 +93,15 @@ export class RuleEngine {
         }
 
         if (
-          SEVERITY_ORDER[result.event.severity] >
-          SEVERITY_ORDER[highestSeverity]
+          SEVERITY_RANK[result.event.severity] >
+          SEVERITY_RANK[highestSeverity]
         ) {
           highestSeverity = result.event.severity;
         }
-      } catch {
-        // 规则执行出错不影响其他规则
+      } catch (err) {
+        process.stderr.write(
+          `[CARAPACE] rule "${rule.name}" threw: ${err instanceof Error ? err.message : String(err)}\n`
+        );
       }
     }
 

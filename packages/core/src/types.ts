@@ -6,6 +6,11 @@
 
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
 
+/** Numeric rank for severity comparison (higher = more severe). */
+export const SEVERITY_RANK: Record<Severity, number> = {
+  critical: 5, high: 4, medium: 3, low: 2, info: 1,
+};
+
 export type EventCategory =
   | "exec_danger"       // 危险 shell 命令
   | "path_violation"    // 敏感文件路径访问

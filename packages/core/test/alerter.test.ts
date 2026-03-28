@@ -9,6 +9,7 @@ import {
   AlertRouter,
   HookMessageSink,
   DismissalManager,
+  WebhookSink,
   type EscalationConfig,
   type DismissalPattern,
 } from "../src/alerter.js";
@@ -34,6 +35,7 @@ function createSecurityEvent(overrides: Partial<SecurityEvent> = {}): SecurityEv
 function createDismissalPattern(overrides: Partial<DismissalPattern> = {}): DismissalPattern {
   const defaults: DismissalPattern = {
     id: `dismissal-${Math.random().toString(36).slice(2)}`,
+    ruleName: "test-rule",
     reason: "Test dismissal",
     createdAt: Date.now(),
   };
@@ -558,7 +560,12 @@ describe("DismissalManager", () => {
   });
 
   it("should check if event is dismissed by toolName", () => {
-    const pattern = createDismissalPattern({ toolName: "tool1" });
+    const pattern: DismissalPattern = {
+      id: "dismiss-tool",
+      toolName: "tool1",
+      reason: "Test dismissal",
+      createdAt: Date.now(),
+    };
     manager.addDismissal(pattern);
 
     const event = createSecurityEvent({ ruleName: "any", toolName: "tool1" });
@@ -569,7 +576,12 @@ describe("DismissalManager", () => {
   });
 
   it("should check if event is dismissed by skillName", () => {
-    const pattern = createDismissalPattern({ skillName: "skill1" });
+    const pattern: DismissalPattern = {
+      id: "dismiss-skill",
+      skillName: "skill1",
+      reason: "Test dismissal",
+      createdAt: Date.now(),
+    };
     manager.addDismissal(pattern);
 
     const event = createSecurityEvent({ skillName: "skill1" });
@@ -696,6 +708,16 @@ describe("DismissalManager", () => {
     expect(manager.size).toBe(0);
   });
 
+  it("should reject wildcard dismissal with no filter fields", () => {
+    expect(() =>
+      manager.addDismissal({
+        id: "wildcard",
+        reason: "test",
+        createdAt: Date.now(),
+      })
+    ).toThrow("must specify at least one");
+  });
+
   it("should return copy of patterns in listDismissals", () => {
     const pattern = createDismissalPattern({ id: "id1" });
     manager.addDismissal(pattern);
@@ -705,6 +727,41 @@ describe("DismissalManager", () => {
 
     expect(list1).not.toBe(list2); // Different arrays
     expect(list1).toEqual(list2); // But same content
+  });
+
+  it("should lazily cleanup expired patterns when size exceeds 50", () => {
+    const now = Date.now();
+
+    // Add 51 expired patterns
+    for (let i = 0; i < 51; i++) {
+      manager.addDismissal(
+        createDismissalPattern({
+          id: `expired-${i}`,
+          ruleName: `expired-rule-${i}`,
+          expiresAt: now - 1000, // Expired 1 second ago
+        })
+      );
+    }
+
+    // Add 4 valid patterns
+    for (let i = 0; i < 4; i++) {
+      manager.addDismissal(
+        createDismissalPattern({
+          id: `valid-${i}`,
+          ruleName: `valid-rule-${i}`,
+          expiresAt: now + 60000, // Expires in 1 minute
+        })
+      );
+    }
+
+    expect(manager.size).toBe(55);
+
+    // isDismissed triggers lazy cleanup when size > 50
+    const event = createSecurityEvent({ ruleName: "valid-rule-0" });
+    const dismissed = manager.isDismissed(event);
+
+    expect(dismissed).toBe(true); // valid-rule-0 still matches
+    expect(manager.size).toBe(4); // All 51 expired patterns cleaned up
   });
 });
 
@@ -775,10 +832,10 @@ describe("AlertRouter", () => {
       toolParams: { iteration: 1 }, // Different toolParams to bypass dedup
     });
 
-    // Send 3 events with different toolParams (bypasses dedup, but same rule+tool for escalation)
+    // Send 3 events with different matchedPattern (bypasses dedup, but same rule+tool for escalation)
     await router.send(event);
-    await router.send({ ...event, id: "2", toolParams: { iteration: 2 } });
-    await router.send({ ...event, id: "3", toolParams: { iteration: 3 } });
+    await router.send({ ...event, id: "2", matchedPattern: "pattern2" });
+    await router.send({ ...event, id: "3", matchedPattern: "pattern3" });
 
     expect(mockSink.send).toHaveBeenCalledTimes(3);
 
@@ -825,10 +882,10 @@ describe("AlertRouter", () => {
     });
 
     // Send tool1 event (should go through escalation)
-    // Use different toolParams to bypass dedup, same rule+tool for escalation
+    // Use different matchedPattern to bypass dedup, same rule+tool for escalation
     await router.send(event1);
-    await router.send({ ...event1, id: "event1b", toolParams: { iteration: 2 } });
-    await router.send({ ...event1, id: "event1c", toolParams: { iteration: 3 } });
+    await router.send({ ...event1, id: "event1b", matchedPattern: "pattern2" });
+    await router.send({ ...event1, id: "event1c", matchedPattern: "pattern3" });
 
     // Send tool2 event (should be dismissed)
     await router.send(event2);
@@ -865,9 +922,9 @@ describe("AlertRouter", () => {
     });
 
     // Send 2 events to trigger tier1 at custom threshold
-    // Use different toolParams to bypass dedup
+    // Use different matchedPattern to bypass dedup
     await router.send(event);
-    await router.send({ ...event, id: "2", toolParams: { iteration: 2 } });
+    await router.send({ ...event, id: "2", matchedPattern: "pattern2" });
 
     expect(mockSink.send).toHaveBeenCalledTimes(2);
 
@@ -901,7 +958,7 @@ describe("AlertRouter", () => {
     expect(mockSink.send).toHaveBeenCalledTimes(1);
   });
 
-  it("should not deduplicate if toolParams differ", async () => {
+  it("should not deduplicate if matchedPattern differs", async () => {
     const mockSink = {
       name: "test",
       send: vi.fn(),
@@ -914,20 +971,122 @@ describe("AlertRouter", () => {
       severity: "high",
       ruleName: "rule1",
       toolName: "tool1",
-      toolParams: { param: "value1" },
+      matchedPattern: "pattern_a",
     });
 
     const event2 = createSecurityEvent({
       severity: "high",
       ruleName: "rule1",
       toolName: "tool1",
-      toolParams: { param: "value2" },
+      matchedPattern: "pattern_b",
     });
 
     await router.send(event1);
     await router.send(event2);
 
-    // Different params = different dedup key
+    // Different matchedPattern = different dedup key
     expect(mockSink.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("should stop sending to a sink after removeSink()", async () => {
+    const mockSink = {
+      name: "removable",
+      send: vi.fn(),
+    };
+
+    const router = new AlertRouter({ enableEscalation: false, enableDismissal: false });
+    router.addSink(mockSink);
+
+    const event1 = createSecurityEvent({
+      severity: "high",
+      ruleName: "rule1",
+      toolName: "tool1",
+      toolParams: { param: "first" },
+    });
+
+    await router.send(event1);
+    expect(mockSink.send).toHaveBeenCalledTimes(1);
+
+    // Remove the sink
+    router.removeSink("removable");
+
+    const event2 = createSecurityEvent({
+      severity: "high",
+      ruleName: "rule1",
+      toolName: "tool1",
+      toolParams: { param: "second" },
+    });
+
+    await router.send(event2);
+
+    // Should still be 1 — the sink was removed before the second send
+    expect(mockSink.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("should cleanup dedup map when size reaches 100", async () => {
+    const mockSink = {
+      name: "test",
+      send: vi.fn(),
+    };
+
+    const router = new AlertRouter({ enableEscalation: false, enableDismissal: false });
+    router.addSink(mockSink);
+
+    // Send 101 unique events to fill the dedup map past the threshold
+    for (let i = 0; i < 101; i++) {
+      const event = createSecurityEvent({
+        severity: "high",
+        ruleName: `rule-${i}`,
+        toolName: `tool-${i}`,
+        toolParams: { iteration: i },
+      });
+      await router.send(event);
+    }
+
+    // All 101 unique events should have been sent
+    expect(mockSink.send).toHaveBeenCalledTimes(101);
+
+    // The dedup map cleanup runs when size >= 100, but since all entries
+    // are recent (within the 5 min window), none are actually removed.
+    // Verify events still dedup correctly after cleanup ran.
+    const duplicateEvent = createSecurityEvent({
+      severity: "high",
+      ruleName: "rule-50",
+      toolName: "tool-50",
+      toolParams: { iteration: 50 },
+    });
+
+    await router.send(duplicateEvent);
+
+    // Should still be 101 — the duplicate is within the dedup window
+    expect(mockSink.send).toHaveBeenCalledTimes(101);
+  });
+});
+
+// ─── WebhookSink SSRF Protection ─────────────────────────────────────
+
+describe("WebhookSink", () => {
+  it("accepts valid http URL", () => {
+    expect(() => new WebhookSink("http://example.com/webhook")).not.toThrow();
+  });
+
+  it("accepts valid https URL", () => {
+    expect(() => new WebhookSink("https://example.com/webhook")).not.toThrow();
+  });
+
+  it("rejects non-http protocol (ftp)", () => {
+    expect(() => new WebhookSink("ftp://example.com/file")).toThrow(/only supports http\/https/);
+  });
+
+  it("rejects non-http protocol (file)", () => {
+    expect(() => new WebhookSink("file:///etc/passwd")).toThrow(/only supports http\/https/);
+  });
+
+  it("rejects invalid URL", () => {
+    expect(() => new WebhookSink("not-a-url")).toThrow(/invalid URL/);
+  });
+
+  it("rejects javascript protocol", () => {
+    expect(() => new WebhookSink("javascript:alert(1)")).toThrow(/only supports http\/https/);
   });
 });
