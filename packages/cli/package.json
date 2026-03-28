@@ -1,6 +1,6 @@
 {
   "name": "@carapace/cli",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Command-line interface for Carapace — AI agent runtime security monitoring.",
   "type": "module",
   "bin": {
@@ -20,7 +20,12 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": ["carapace", "security", "ai-agent", "cli"],
+  "keywords": [
+    "carapace",
+    "security",
+    "ai-agent",
+    "cli"
+  ],
   "author": "Albert Yang",
   "license": "MIT",
   "dependencies": {

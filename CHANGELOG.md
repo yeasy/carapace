@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-03-27
+
+### Added
+- **SQLite store**: persist `matchedPattern` and `toolParams` fields through storage round-trips.
+- **ReDoS validator**: `isRedosSafe()` utility for user-supplied regex patterns.
+- **SIEM SSRF tests**: 10 tests for Splunk, Elastic, Datadog, Syslog sink URL validation.
+- **`.dockerignore`** for faster Docker builds.
+- New tests: store round-trip, YAML malformed input, policy import validation, exec-guard flag variants, network-guard false positives (933 total).
+
+### Fixed
+- **ExecGuard**: `rm -fr /`, `rm -r -f /`, `rm --force --recursive /` now detected (flag reordering).
+- **NetworkGuard**: Mining pool regex reduced false positives (`pool.ntp.com`, `mining.engineering` no longer trigger).
+- **YAML rule loader**: malformed `match.params` and `match.any_param` no longer crash at runtime.
+- **Dashboard policy import**: validates JSON structure before iterating; skips entries without name.
+- **Dashboard ruleName parameter**: length-limited to 200 chars.
+- **EventStore/MemoryBackend getStats**: merged double `.reduce()` into single loop.
+- **SyslogSink**: UDP send now properly awaits callback to prevent socket leaks.
+- **CLI events**: `--severity` validated against known values; `--limit` rejects NaN/negative.
+- **CLI scan**: store resource leak fixed with try/finally.
+- **CLI parseArgs**: short flags now accept negative number values.
+- **LangChain adapter**: log alert send failures instead of silent catch; `stop()` closes active connections.
+- **Tailer**: read buffer capped at 10MB to prevent OOM.
+- **Dockerfile**: healthcheck fallback removed (was masking failures); `npm prune` stderr no longer suppressed.
+- **README**: aspirational features (role-based access, policy versioning, audit logging) marked as planned.
+
+### Changed
+- All package versions bumped to 0.8.0.
+
 ## [0.7.0] - 2026-03-14
 
 ### Added

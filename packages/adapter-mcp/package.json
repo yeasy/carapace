@@ -1,6 +1,6 @@
 {
   "name": "@carapace/adapter-mcp",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "MCP (Model Context Protocol) proxy adapter for Carapace runtime security monitor.",
   "type": "module",
   "main": "dist/index.js",
@@ -17,7 +17,13 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": ["carapace", "mcp", "security", "proxy", "model-context-protocol"],
+  "keywords": [
+    "carapace",
+    "mcp",
+    "security",
+    "proxy",
+    "model-context-protocol"
+  ],
   "author": "Albert Yang",
   "license": "MIT",
   "dependencies": {

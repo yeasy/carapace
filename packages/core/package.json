@@ -1,6 +1,6 @@
 {
   "name": "@carapace/core",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Core rule engine, event processing, and alerting for Carapace — AI agent runtime security.",
   "type": "module",
   "main": "dist/index.js",
@@ -21,7 +21,12 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": ["carapace", "security", "ai-agent", "runtime-monitor"],
+  "keywords": [
+    "carapace",
+    "security",
+    "ai-agent",
+    "runtime-monitor"
+  ],
   "author": "Albert Yang",
   "license": "MIT",
   "optionalDependencies": {

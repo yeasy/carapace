@@ -1,6 +1,6 @@
 {
   "name": "@carapace/dashboard",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Web dashboard for Carapace runtime security monitoring — real-time events, stats, and team policy management.",
   "type": "module",
   "main": "dist/index.js",
@@ -17,7 +17,13 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": ["carapace", "dashboard", "security", "monitoring", "siem"],
+  "keywords": [
+    "carapace",
+    "dashboard",
+    "security",
+    "monitoring",
+    "siem"
+  ],
   "author": "Albert Yang",
   "license": "MIT",
   "dependencies": {
