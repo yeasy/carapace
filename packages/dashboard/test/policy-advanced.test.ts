@@ -562,6 +562,25 @@ describe("Policy import/export", () => {
     expect(restored?.overrides?.forceBlock).toContain("rule-x");
     expect(manager2.getActivePolicyName()).toBe("original");
   });
+
+  it("importPolicies throws on invalid format (non-object)", () => {
+    expect(() => manager.importPolicies('"just a string"')).toThrow("Invalid import format");
+  });
+
+  it("importPolicies throws on missing policies array", () => {
+    expect(() => manager.importPolicies('{"foo": "bar"}')).toThrow("Invalid import format");
+  });
+
+  it("importPolicies skips entries without name", () => {
+    const json = JSON.stringify({
+      policies: [
+        { name: "valid", description: "ok" },
+        { description: "no name" },
+      ],
+    });
+    const count = manager.importPolicies(json);
+    expect(count).toBe(1);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════

@@ -29,6 +29,18 @@ export class SplunkSink implements AlertSink {
   private config: SplunkConfig;
 
   constructor(config: SplunkConfig) {
+    // Validate URL to prevent SSRF — only allow http/https
+    try {
+      const parsed = new URL(config.endpoint);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        throw new Error(`SplunkSink only supports http/https URLs, got: ${parsed.protocol}`);
+      }
+    } catch (err) {
+      if (err instanceof TypeError) {
+        throw new Error(`SplunkSink: invalid URL "${config.endpoint}"`);
+      }
+      throw err;
+    }
     this.config = config;
   }
 
@@ -97,12 +109,26 @@ export class ElasticSink implements AlertSink {
   private config: ElasticConfig;
 
   constructor(config: ElasticConfig) {
+    // Validate URL to prevent SSRF — only allow http/https
+    try {
+      const parsed = new URL(config.endpoint);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        throw new Error(`ElasticSink only supports http/https URLs, got: ${parsed.protocol}`);
+      }
+    } catch (err) {
+      if (err instanceof TypeError) {
+        throw new Error(`ElasticSink: invalid URL "${config.endpoint}"`);
+      }
+      throw err;
+    }
     this.config = config;
   }
 
   async send(payload: AlertPayload): Promise<void> {
     const index = this.config.index ?? "carapace-events";
-    const url = `${this.config.endpoint.replace(/\/$/, "")}/${index}/_doc`;
+    const base = new URL(this.config.endpoint);
+    base.pathname = base.pathname.replace(/\/$/, "") + `/${index}/_doc`;
+    const url = base.toString();
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -163,7 +189,20 @@ export class DatadogSink implements AlertSink {
   readonly name = "datadog";
   private config: DatadogConfig;
 
+  private static readonly VALID_SITES = new Set([
+    "datadoghq.com",
+    "datadoghq.eu",
+    "ddog-gov.com",
+    "ap1.datadoghq.com",
+    "us3.datadoghq.com",
+    "us5.datadoghq.com",
+  ]);
+
   constructor(config: DatadogConfig) {
+    const site = config.site ?? "datadoghq.com";
+    if (!DatadogSink.VALID_SITES.has(site)) {
+      throw new Error(`DatadogSink: unknown site "${site}". Valid sites: ${[...DatadogSink.VALID_SITES].join(", ")}`);
+    }
     this.config = config;
   }
 
@@ -248,6 +287,10 @@ export class SyslogSink implements AlertSink {
   private config: SyslogConfig;
 
   constructor(config: SyslogConfig) {
+    // Validate host to prevent injection
+    if (/[\/\?#@:]/.test(config.host)) {
+      throw new Error(`SyslogSink: invalid host "${config.host}"`);
+    }
     this.config = config;
   }
 
@@ -271,8 +314,17 @@ export class SyslogSink implements AlertSink {
         const { createSocket } = await import("node:dgram");
         const client = createSocket("udp4");
         const buf = Buffer.from(message);
-        client.send(buf, 0, buf.length, port, this.config.host, () => {
-          client.close();
+        await new Promise<void>((resolve) => {
+          client.on("error", (err) => {
+            process.stderr.write(`[carapace-syslog] UDP error: ${err}\n`);
+            try { client.close(); } catch { /* ignore */ }
+            resolve();
+          });
+          client.send(buf, 0, buf.length, port, this.config.host, (err) => {
+            if (err) process.stderr.write(`[carapace-syslog] UDP send error: ${err}\n`);
+            try { client.close(); } catch { /* ignore */ }
+            resolve();
+          });
         });
       } else {
         const { createConnection } = await import("node:net");

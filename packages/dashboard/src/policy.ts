@@ -135,12 +135,13 @@ export class PolicyManager {
    * 从 JSON 导入策略
    */
   importPolicies(json: string): number {
-    const data = JSON.parse(json) as {
-      policies: PolicyDefinition[];
-      activePolicy?: string;
-    };
+    const data = JSON.parse(json);
+    if (!data || typeof data !== "object" || !Array.isArray(data.policies)) {
+      throw new Error("Invalid import format: expected { policies: [...] }");
+    }
     let count = 0;
-    for (const policy of data.policies) {
+    for (const policy of data.policies as PolicyDefinition[]) {
+      if (!policy.name || typeof policy.name !== "string") continue;
       this.addPolicy(policy);
       count++;
     }

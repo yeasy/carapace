@@ -45,8 +45,9 @@ export class EventStore {
    */
   add(event: SecurityEvent): void {
     this.events.push(event);
-    // 超过上限时淘汰最旧的事件
-    if (this.events.length > this.maxEvents) {
+    // Batch eviction with 10% headroom (min 100) to avoid O(n) slice on every insert
+    const headroom = Math.max(Math.ceil(this.maxEvents * 0.1), 100);
+    if (this.events.length > this.maxEvents + headroom) {
       this.events = this.events.slice(-this.maxEvents);
     }
   }
@@ -99,6 +100,8 @@ export class EventStore {
     const byRule: Record<string, number> = {};
     let blockedCount = 0;
     let alertCount = 0;
+    let firstTs = Number.MAX_SAFE_INTEGER;
+    let lastTs = 0;
 
     for (const e of events) {
       bySeverity[e.severity] = (bySeverity[e.severity] ?? 0) + 1;
@@ -106,6 +109,8 @@ export class EventStore {
       if (e.ruleName) byRule[e.ruleName] = (byRule[e.ruleName] ?? 0) + 1;
       if (e.action === "blocked") blockedCount++;
       else alertCount++;
+      if (e.timestamp < firstTs) firstTs = e.timestamp;
+      if (e.timestamp > lastTs) lastTs = e.timestamp;
     }
 
     return {
@@ -117,10 +122,7 @@ export class EventStore {
       alertCount,
       timeRange:
         events.length > 0
-          ? {
-              first: events.reduce((min, e) => e.timestamp < min ? e.timestamp : min, events[0].timestamp),
-              last: events.reduce((max, e) => e.timestamp > max ? e.timestamp : max, events[0].timestamp),
-            }
+          ? { first: firstTs, last: lastTs }
           : null,
     };
   }

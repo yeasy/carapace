@@ -125,10 +125,19 @@ describe("EventStore", () => {
 
   it("最大事件数限制", () => {
     const store = new EventStore(5);
+    // With headroom batching, eviction triggers at maxEvents + headroom
+    // For small stores (headroom min=100), 10 items won't trigger eviction
     for (let i = 0; i < 10; i++) {
       store.add(makeEvent({ title: `event-${i}` }));
     }
-    expect(store.size).toBe(5);
+    expect(store.size).toBeLessThanOrEqual(10);
+
+    // Test with enough items to trigger eviction (maxEvents=5, headroom=100)
+    for (let i = 10; i < 200; i++) {
+      store.add(makeEvent({ title: `event-${i}` }));
+    }
+    expect(store.size).toBeLessThanOrEqual(105);
+    expect(store.size).toBeGreaterThanOrEqual(5);
   });
 
   it("clear 清空", () => {
@@ -324,41 +333,43 @@ describe("DashboardServer", () => {
   });
 
   it("HTTP API 可访问", async () => {
-    server = new DashboardServer({ port: 19877 });
+    server = new DashboardServer({ port: 0 });
     await server.start();
+    const port = server.getPort();
 
     // 添加测试事件
     server.getStore().add(makeEvent({ title: "api-test" }));
 
-    const healthRes = await fetch("http://127.0.0.1:19877/api/health");
+    const healthRes = await fetch(`http://127.0.0.1:${port}/api/health`);
     expect(healthRes.status).toBe(200);
     const health = await healthRes.json();
     expect(health.status).toBe("ok");
 
-    const statsRes = await fetch("http://127.0.0.1:19877/api/stats");
+    const statsRes = await fetch(`http://127.0.0.1:${port}/api/stats`);
     expect(statsRes.status).toBe(200);
     const stats = (await statsRes.json()) as { total: number };
     expect(stats.total).toBe(1);
 
-    const eventsRes = await fetch("http://127.0.0.1:19877/api/events");
+    const eventsRes = await fetch(`http://127.0.0.1:${port}/api/events`);
     expect(eventsRes.status).toBe(200);
     const events = (await eventsRes.json()) as any[];
     expect(events).toHaveLength(1);
     expect(events[0].title).toBe("api-test");
 
     // Dashboard HTML
-    const dashRes = await fetch("http://127.0.0.1:19877/");
+    const dashRes = await fetch(`http://127.0.0.1:${port}/`);
     expect(dashRes.status).toBe(200);
     const html = await dashRes.text();
     expect(html).toContain("Carapace Dashboard");
   });
 
   it("Policy API", async () => {
-    server = new DashboardServer({ port: 19878 });
+    server = new DashboardServer({ port: 0 });
     await server.start();
+    const port = server.getPort();
 
     // 添加策略
-    const addRes = await fetch("http://127.0.0.1:19878/api/policies", {
+    const addRes = await fetch(`http://127.0.0.1:${port}/api/policies`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -370,20 +381,63 @@ describe("DashboardServer", () => {
     expect(addRes.status).toBe(201);
 
     // 列出策略
-    const listRes = await fetch("http://127.0.0.1:19878/api/policies");
+    const listRes = await fetch(`http://127.0.0.1:${port}/api/policies`);
     const policies = (await listRes.json()) as any[];
     expect(policies).toHaveLength(1);
 
     // 设置活跃策略
     const activeRes = await fetch(
-      "http://127.0.0.1:19878/api/policies/active/test-policy",
+      `http://127.0.0.1:${port}/api/policies/active/test-policy`,
       { method: "PUT" }
     );
     expect(activeRes.status).toBe(200);
 
     // 获取活跃策略
-    const getActiveRes = await fetch("http://127.0.0.1:19878/api/policies/active");
+    const getActiveRes = await fetch(`http://127.0.0.1:${port}/api/policies/active`);
     const active = (await getActiveRes.json()) as { name: string };
     expect(active.name).toBe("test-policy");
+  });
+
+  it("拒绝缺少 name 字段的策略", async () => {
+    server = new DashboardServer({ port: 0 });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/policies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: "no name field" }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("name");
+  });
+
+  it("事件查询忽略无效 severity 值", async () => {
+    server = new DashboardServer({ port: 0 });
+    await server.start();
+    const port = server.getPort();
+
+    const sink = server.createSink();
+    await sink.send({ event: makeEvent({ severity: "high" }), timestamp: Date.now() });
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/events?severity=invalid`);
+    expect(res.status).toBe(200);
+    const events = (await res.json()) as unknown[];
+    expect(events).toHaveLength(1);
+  });
+
+  it("事件查询忽略负数 limit 和 offset", async () => {
+    server = new DashboardServer({ port: 0 });
+    await server.start();
+    const port = server.getPort();
+
+    const sink = server.createSink();
+    await sink.send({ event: makeEvent(), timestamp: Date.now() });
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/events?limit=-5&offset=-1`);
+    expect(res.status).toBe(200);
+    const events = (await res.json()) as unknown[];
+    expect(events).toHaveLength(1);
   });
 });

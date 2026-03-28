@@ -21,7 +21,7 @@ export interface DashboardConfig {
   port?: number;
   /** 绑定地址 (default: 127.0.0.1) */
   host?: string;
-  /** CORS 来源 (default: *) */
+  /** CORS 来源 (default: same-origin, set to "*" for development) */
   corsOrigin?: string;
   /** 最大存储事件数 (default: 10000) */
   maxEvents?: number;
@@ -33,6 +33,7 @@ export class DashboardServer {
   private config: DashboardConfig;
   private server: ReturnType<typeof createServer> | null = null;
   private sseClients: Set<ServerResponse> = new Set();
+  private sseHeartbeats: Map<ServerResponse, ReturnType<typeof setInterval>> = new Map();
 
   constructor(config: DashboardConfig = {}) {
     this.config = config;
@@ -96,13 +97,20 @@ export class DashboardServer {
   async start(): Promise<void> {
     const port = this.config.port ?? 9877;
     const host = this.config.host ?? "127.0.0.1";
-    const cors = this.config.corsOrigin ?? "*";
+    const cors = this.config.corsOrigin;
 
     this.server = createServer(
       (req: IncomingMessage, res: ServerResponse) => {
-        res.setHeader("Access-Control-Allow-Origin", cors);
-        res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        // Security headers
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("X-Frame-Options", "DENY");
+        res.setHeader("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'");
+
+        if (cors) {
+          res.setHeader("Access-Control-Allow-Origin", cors);
+          res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+          res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        }
 
         if (req.method === "OPTIONS") {
           res.writeHead(204);
@@ -123,9 +131,37 @@ export class DashboardServer {
   }
 
   /**
+   * 获取当前监听端口（服务器启动后可用，端口 0 时获取实际分配端口）
+   */
+  getPort(): number {
+    if (this.server) {
+      const addr = this.server.address();
+      if (addr && typeof addr === "object") {
+        return addr.port;
+      }
+    }
+    return this.config.port ?? 9877;
+  }
+
+  private cleanupSSEClient(res: ServerResponse): void {
+    const heartbeat = this.sseHeartbeats.get(res);
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      this.sseHeartbeats.delete(res);
+    }
+    this.sseClients.delete(res);
+  }
+
+  /**
    * 停止 HTTP 服务
    */
   async stop(): Promise<void> {
+    // Clear all heartbeat intervals before closing clients
+    for (const [client, heartbeat] of this.sseHeartbeats) {
+      clearInterval(heartbeat);
+      try { client.end(); } catch { /* ignore */ }
+    }
+    this.sseHeartbeats.clear();
     for (const client of this.sseClients) {
       try { client.end(); } catch { /* ignore */ }
     }
@@ -150,29 +186,33 @@ export class DashboardServer {
 
     // ── SSE endpoint ──
     if (req.method === "GET" && url === "/api/events/stream") {
+      // Limit concurrent SSE connections to prevent resource exhaustion
+      const MAX_SSE_CLIENTS = 50;
+      if (this.sseClients.size >= MAX_SSE_CLIENTS) {
+        this.json(res, { error: "Too many SSE connections" }, 429);
+        return;
+      }
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
       });
       this.sseClients.add(res);
-      req.on("close", () => this.sseClients.delete(res));
-      req.on("error", () => this.sseClients.delete(res));
       // 定期发送心跳，帮助检测死连接
       const heartbeat = setInterval(() => {
         try {
           if (res.destroyed) {
-            this.sseClients.delete(res);
-            clearInterval(heartbeat);
+            this.cleanupSSEClient(res);
             return;
           }
           res.write(":heartbeat\n\n");
         } catch {
-          this.sseClients.delete(res);
-          clearInterval(heartbeat);
+          this.cleanupSSEClient(res);
         }
       }, 30_000);
-      req.on("close", () => clearInterval(heartbeat));
+      this.sseHeartbeats.set(res, heartbeat);
+      req.on("close", () => this.cleanupSSEClient(res));
+      req.on("error", () => this.cleanupSSEClient(res));
       return;
     }
 
@@ -185,12 +225,20 @@ export class DashboardServer {
     if (req.method === "GET" && url.startsWith("/api/events")) {
       const params = new URL(url, "http://localhost").searchParams;
       const query: EventQuery = {};
-      if (params.get("category")) query.category = params.get("category") as any;
-      if (params.get("severity")) query.severity = params.get("severity") as any;
-      if (params.get("ruleName")) query.ruleName = params.get("ruleName")!;
-      if (params.get("since")) query.since = parseInt(params.get("since")!);
-      if (params.get("limit")) query.limit = parseInt(params.get("limit")!);
-      if (params.get("offset")) query.offset = parseInt(params.get("offset")!);
+      const VALID_CATEGORIES = new Set(["exec_danger", "path_violation", "network_suspect", "rate_anomaly", "baseline_drift", "prompt_injection", "data_exfil"]);
+      const VALID_SEVERITIES = new Set(["critical", "high", "medium", "low", "info"]);
+      const cat = params.get("category");
+      if (cat && VALID_CATEGORIES.has(cat)) query.category = cat as EventQuery["category"];
+      const sev = params.get("severity");
+      if (sev && VALID_SEVERITIES.has(sev)) query.severity = sev as EventQuery["severity"];
+      const ruleNameVal = params.get("ruleName");
+      if (ruleNameVal && ruleNameVal.length <= 200) query.ruleName = ruleNameVal;
+      const sinceVal = parseInt(params.get("since") ?? "");
+      if (!isNaN(sinceVal)) query.since = sinceVal;
+      const limitVal = parseInt(params.get("limit") ?? "");
+      if (!isNaN(limitVal) && limitVal > 0) query.limit = Math.min(limitVal, 10000);
+      const offsetVal = parseInt(params.get("offset") ?? "");
+      if (!isNaN(offsetVal) && offsetVal >= 0) query.offset = Math.min(offsetVal, 100000);
 
       const events = this.store.query(query);
       this.json(res, events);
@@ -199,9 +247,8 @@ export class DashboardServer {
 
     if (req.method === "GET" && url.startsWith("/api/stats")) {
       const params = new URL(url, "http://localhost").searchParams;
-      const since = params.get("since")
-        ? parseInt(params.get("since")!)
-        : undefined;
+      const sinceVal = parseInt(params.get("since") ?? "");
+      const since = isNaN(sinceVal) ? undefined : sinceVal;
       const stats = this.store.getStats(since);
       this.json(res, stats);
       return;
@@ -209,10 +256,10 @@ export class DashboardServer {
 
     if (req.method === "GET" && url.startsWith("/api/timeseries")) {
       const params = new URL(url, "http://localhost").searchParams;
-      const bucketMs = parseInt(params.get("bucket") ?? "60000");
-      const since = params.get("since")
-        ? parseInt(params.get("since")!)
-        : undefined;
+      const bucketVal = parseInt(params.get("bucket") ?? "60000");
+      const bucketMs = isNaN(bucketVal) || bucketVal < 1000 ? 60000 : Math.min(bucketVal, 86400000);
+      const sinceVal = parseInt(params.get("since") ?? "");
+      const since = isNaN(sinceVal) ? undefined : sinceVal;
       const ts = this.store.timeSeries(bucketMs, since);
       this.json(res, ts);
       return;
@@ -234,6 +281,10 @@ export class DashboardServer {
       this.readBody(req, (body) => {
         try {
           const policy = JSON.parse(body) as PolicyDefinition;
+          if (!policy.name || typeof policy.name !== "string") {
+            this.json(res, { error: "Missing required field: name" }, 400);
+            return;
+          }
           policy.createdAt = policy.createdAt ?? Date.now();
           policy.updatedAt = Date.now();
           this.policyManager.addPolicy(policy);
@@ -241,23 +292,24 @@ export class DashboardServer {
         } catch {
           this.json(res, { error: "Invalid policy JSON" }, 400);
         }
-      });
+      }, res);
       return;
     }
 
     if (req.method === "PUT" && url.startsWith("/api/policies/active/")) {
-      const name = url.split("/").pop()!;
+      const name = decodeURIComponent(url.split("/").pop()!);
       try {
         this.policyManager.setActivePolicy(name);
         this.json(res, { ok: true, activePolicy: name });
-      } catch (err: any) {
-        this.json(res, { error: err.message }, 404);
+      } catch (err) {
+        process.stderr.write(`[CARAPACE] policy error: ${err}\n`);
+        this.json(res, { error: "Policy not found" }, 404);
       }
       return;
     }
 
     if (req.method === "DELETE" && url.startsWith("/api/policies/")) {
-      const name = url.split("/").pop()!;
+      const name = decodeURIComponent(url.split("/").pop()!);
       const ok = this.policyManager.removePolicy(name);
       this.json(res, { ok }, ok ? 200 : 404);
       return;
@@ -281,7 +333,7 @@ export class DashboardServer {
         } catch {
           this.json(res, { error: "Invalid import JSON" }, 400);
         }
-      });
+      }, res);
       return;
     }
 
@@ -298,6 +350,7 @@ export class DashboardServer {
     const MAX_BODY = 1_048_576; // 1 MB
     let body = "";
     let exceeded = false;
+    let responded = false;
     req.on("data", (chunk: Buffer) => {
       body += chunk.toString();
       if (body.length > MAX_BODY) {
@@ -305,21 +358,18 @@ export class DashboardServer {
         req.destroy();
       }
     });
+    const send413 = () => {
+      if (responded || !res) return;
+      responded = true;
+      res.writeHead(413, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Request body too large" }));
+    };
     req.on("end", () => {
-      if (exceeded) {
-        if (res) {
-          res.writeHead(413, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "Request body too large" }));
-        }
-        return;
-      }
+      if (exceeded) { send413(); return; }
       cb(body);
     });
     req.on("error", () => {
-      if (exceeded && res) {
-        res.writeHead(413, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Request body too large" }));
-      }
+      if (exceeded) send413();
     });
   }
 }
@@ -398,7 +448,7 @@ async function loadEvents(){
   }catch{}
 }
 function card(label,value,cls){
-  return '<div class="card"><div class="label">'+label+'</div><div class="value '+cls+'">'+value+'</div></div>';
+  return '<div class="card"><div class="label">'+esc(label)+'</div><div class="value '+esc(cls)+'">'+esc(String(value))+'</div></div>';
 }
 function eventRow(e){
   const t=new Date(e.timestamp).toLocaleTimeString();
