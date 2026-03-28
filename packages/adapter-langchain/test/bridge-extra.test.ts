@@ -184,7 +184,7 @@ describe("CarapaceBridge - Extra Tests", () => {
     it("version 为 0.7.0", () => {
       bridge = createBridge();
       const status = bridge.getStatus();
-      expect(status.version).toBe("0.7.0");
+      expect(status.version).toBe("0.8.0");
     });
 
     it("status 为 ok", () => {
@@ -330,7 +330,7 @@ describe("CarapaceBridge - Extra Tests", () => {
 
       const data = (await response.json()) as any;
       expect(data.status).toBe("ok");
-      expect(data.version).toBe("0.7.0");
+      expect(data.version).toBe("0.8.0");
       expect(data.rules).toBeGreaterThanOrEqual(5);
       expect(data.stats).toBeDefined();
     });
