@@ -19,9 +19,16 @@ export function isRedosSafe(pattern: string): boolean {
   // Reject patterns longer than 512 chars (overly complex)
   if (pattern.length > 512) return false;
 
+  // Reject backreference patterns (\1, \2, etc.) which can cause catastrophic backtracking
+  if (/\\[1-9]/.test(pattern)) return false;
+
   // Detect nested quantifiers: (...)+ followed by +, *, {n,}
-  // e.g., (a+)+, (a*)+, (a+)*, (a{2,})+
-  if (/\([^)]*[+*][^)]*\)[+*{]/.test(pattern)) return false;
+  // e.g., (a+)+, (a*)+, (a+)*, (a{2,})+, (a{2,}){2,}
+  if (/\([^)]*(?:[+*]|\{\d+,\d*\})[^)]*\)[+*{]/.test(pattern)) return false;
+
+  // Detect nested groups with inner quantifiers: ((a+))+ or ((a+)(b+))+
+  // The outer group has a quantifier and contains an inner group with a quantifier
+  if (/\((?:[^()]*\([^()]*[+*][^()]*\))+[^()]*\)[+*{]/.test(pattern)) return false;
 
   // Detect (.+)+ or (.*)+  patterns (common ReDoS)
   if (/\(\.\*\)[+*]/.test(pattern)) return false;
@@ -31,9 +38,27 @@ export function isRedosSafe(pattern: string): boolean {
   // Simplified: group with | inside, followed by quantifier
   // This is a very rough heuristic
   if (/\([^)]*\|[^)]*\)[+*]{1,2}/.test(pattern)) {
-    // Further check: only flag if the alternation branches share common prefixes
-    // For simplicity, we flag any alternation with quantifier on the group
-    return false;
+    // Extract alternation groups with quantifiers and check for overlapping branches
+    const groupRe = /\(([^)]*\|[^)]*)\)[+*]{1,2}/g;
+    let m: RegExpExecArray | null;
+    while ((m = groupRe.exec(pattern)) !== null) {
+      const branches = m[1].split("|");
+      // Safe if all branches are literal strings (no regex metacharacters)
+      const allLiteral = branches.every((b) => /^[a-zA-Z0-9_-]+$/.test(b));
+      if (allLiteral) {
+        // Check for duplicate or prefix-overlapping branches which cause ReDoS
+        const unique = new Set(branches);
+        if (unique.size < branches.length) return false; // exact duplicates
+        for (let i = 0; i < branches.length; i++) {
+          for (let j = 0; j < branches.length; j++) {
+            if (i !== j && branches[j].startsWith(branches[i])) return false;
+          }
+        }
+        continue;
+      }
+      // Unsafe: branches contain metacharacters and could overlap
+      return false;
+    }
   }
 
   return true;

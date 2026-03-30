@@ -6,9 +6,11 @@
  * 跨平台：覆盖 Windows、macOS、Linux 路径。
  */
 
+import * as nodePath from "node:path";
 import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
 import { isRedosSafe } from "../utils/regex.js";
+import { redactSensitiveValues } from "../utils/redact.js";
 
 interface SensitivePath {
   pattern: RegExp;
@@ -61,10 +63,16 @@ const SENSITIVE_PATHS: SensitivePath[] = [
 // ── 安全正则匹配（防止 ReDoS） ──
 
 function safeRegexTest(regex: RegExp, input: string): boolean {
-  // 对于超长输入，截断到合理长度以避免 ReDoS
-  const safeInput = input.length > 4096 ? input.slice(0, 4096) : input;
+  // 对于超长输入，检查头尾两段以避免 ReDoS 同时防止尾部 bypass
+  if (input.length > 4096) {
+    try {
+      return regex.test(input.slice(0, 4096)) || regex.test(input.slice(-2048));
+    } catch {
+      return false;
+    }
+  }
   try {
-    return regex.test(safeInput);
+    return regex.test(input);
   } catch {
     return false;
   }
@@ -72,17 +80,66 @@ function safeRegexTest(regex: RegExp, input: string): boolean {
 
 // ── 路径提取 ──
 
+const PATH_KEYS = new Set([
+  "path", "file", "filepath", "file_path", "filename",
+  "src", "dest", "source", "destination", "target",
+  "input", "output", "command",
+  "dir", "directory", "folder", "location",
+  "read_file", "write_file", "from", "to",
+  "cwd", "working_directory", "base_path", "root",
+  "content", "url", "uri",
+]);
+
+const MAX_PATH_WALK_DEPTH = 5;
+const MAX_PATHS = 100;
+
 function extractPaths(params: Record<string, unknown>): string[] {
   const paths: string[] = [];
-  const keys = [
-    "path", "file", "filepath", "file_path", "filename",
-    "src", "dest", "source", "destination", "target",
-    "input", "output", "command",
-  ];
-  for (const key of keys) {
-    const val = params[key];
-    if (typeof val === "string" && val.length > 0) paths.push(val);
+
+  function addPath(val: string): void {
+    if (paths.length >= MAX_PATHS) return;
+    // Strip null bytes (used to truncate paths and bypass checks) before normalization
+    const cleaned = val.includes("\0") ? val.replace(/\0/g, "") : val;
+    // Iteratively decode URL-encoded paths to prevent double/triple encoding bypass
+    // (e.g., %252F.ssh%252Fid_rsa → %2F.ssh%2Fid_rsa → /.ssh/id_rsa)
+    let decoded = cleaned;
+    for (let i = 0; i < 5; i++) {
+      let next: string;
+      try { next = decodeURIComponent(decoded); } catch { break; }
+      if (next === decoded) break;
+      decoded = next;
+    }
+    try {
+      paths.push(nodePath.normalize(decoded));
+    } catch {
+      paths.push(decoded);
+    }
   }
+
+  function walk(obj: unknown, depth: number): void {
+    if (depth > MAX_PATH_WALK_DEPTH || paths.length >= MAX_PATHS) return;
+    if (typeof obj === "string" && obj.length > 0) {
+      addPath(obj);
+    } else if (Array.isArray(obj)) {
+      for (const item of obj) walk(item, depth + 1);
+    } else if (obj && typeof obj === "object") {
+      for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
+        if (typeof val === "string" && val.length > 0) {
+          if (PATH_KEYS.has(key.toLowerCase())) {
+            // Known path-like key — always inspect
+            addPath(val);
+          } else if (val.includes("/") || val.includes("\\")) {
+            // Unknown key but value looks like a file path — inspect it
+            addPath(val);
+          }
+        } else if (val && typeof val === "object") {
+          walk(val, depth + 1);
+        }
+      }
+    }
+  }
+
+  walk(params, 0);
   return paths;
 }
 
@@ -153,7 +210,7 @@ export function createPathGuardRule(additionalPatterns?: string[]): SecurityRule
             pathCategory: sp.category,
           },
           toolName: ctx.toolName,
-          toolParams: ctx.toolParams,
+          toolParams: redactSensitiveValues(ctx.toolParams),
           skillName: ctx.skillName,
           sessionId: ctx.sessionId,
           agentId: ctx.agentId,

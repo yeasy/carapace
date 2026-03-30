@@ -8,6 +8,7 @@
 import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
 import { isRedosSafe } from "../utils/regex.js";
+import { redactSensitiveValues } from "../utils/redact.js";
 
 interface DomainRule {
   pattern: RegExp;
@@ -19,13 +20,13 @@ interface DomainRule {
 const SUSPICIOUS_DOMAINS: DomainRule[] = [
   // 粘贴/剪贴板服务（常用于数据外泄）
   {
-    pattern: /\b(pastebin\.com|paste\.ee|hastebin\.com|dpaste\.org|ghostbin\.\w+)\b/i,
+    pattern: /\b(pastebin\.com|paste\.ee|hastebin\.com|dpaste\.org|ghostbin\.\w+|privatebin\.net|rentry\.co)\b/i,
     severity: "high",
     title: "数据发送到粘贴服务",
     description: "向粘贴/剪贴板服务发送数据——常用于数据外泄。",
   },
   {
-    pattern: /\b(transfer\.sh|file\.io|0x0\.st|tmpfiles\.org|gofile\.io)\b/i,
+    pattern: /\b(transfer\.sh|file\.io|0x0\.st|tmpfiles\.org|gofile\.io|temp\.sh|oshi\.at|catbox\.moe|fileditch\.com|anonfiles\.com|sendspace\.com|dropmefiles\.com)\b/i,
     severity: "high",
     title: "数据发送到文件共享服务",
     description: "向匿名文件共享服务上传数据。",
@@ -33,10 +34,10 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
 
   // Webhook/请求捕获服务
   {
-    pattern: /\b(webhook\.site|requestbin\.com|hookbin\.com|pipedream\.net|ngrok\.\w+)\b/i,
+    pattern: /\b(webhook\.site|requestbin\.com|hookbin\.com|pipedream\.net|ngrok\.\w+|ngrok-free\.app|bore\.pub|localtunnel\.me|serveo\.net|localhost\.run|trycloudflare\.com|beeceptor\.com|pinggy\.io)\b/i,
     severity: "high",
-    title: "数据发送到请求捕获服务",
-    description: "向 webhook/请求捕获服务发送数据——潜在外泄端点。",
+    title: "数据发送到请求捕获/隧道服务",
+    description: "向 webhook/请求捕获/隧道服务发送数据——潜在外泄端点。",
   },
 
   // Tor / 匿名化
@@ -47,12 +48,18 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "尝试访问 Tor .onion 地址。",
   },
 
-  // 裸 IP 地址（可能是 C2 通信）
+  // 裸 IP 地址（可能是 C2 通信）— IPv4 and IPv6
   {
     pattern: /https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?/i,
     severity: "medium",
     title: "直接 IP 地址连接",
     description: "连接到裸 IP 地址而非域名——可能是 C2 通信。",
+  },
+  {
+    pattern: /https?:\/\/\[[0-9a-fA-F:]+\]/i,
+    severity: "medium",
+    title: "IPv6 直接地址连接",
+    description: "连接到裸 IPv6 地址而非域名——可能是 C2 通信。",
   },
 
   // 加密货币挖矿池
@@ -62,23 +69,125 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     title: "加密货币挖矿端点",
     description: "连接到疑似加密货币挖矿池。",
   },
+
+  // DNS 外泄/带外交互服务
+  {
+    pattern: /\b(dnsbin\.zhack\.ca|ceye\.io|oob\.li|interact\.sh|oast\.\w+)\b/i,
+    severity: "high",
+    title: "DNS 外泄/交互服务",
+    description: "连接到 DNS 外泄或带外交互测试服务。",
+  },
+
+  // 云实例元数据端点（SSRF 目标）
+  {
+    pattern: /169\.254\.169\.254/,
+    severity: "critical",
+    title: "云实例元数据访问",
+    description: "访问云实例元数据服务 (169.254.169.254)——常见 SSRF 凭证窃取目标。",
+  },
+  {
+    pattern: /metadata\.google\.internal/i,
+    severity: "critical",
+    title: "GCP 元数据服务访问",
+    description: "访问 GCP 实例元数据服务——可获取服务账号凭证。",
+  },
+
+  // Cloud metadata — alternative IP encodings for 169.254.169.254
+  {
+    pattern: /\b2852039166\b/,
+    severity: "critical",
+    title: "云元数据访问（十进制 IP）",
+    description: "十进制编码访问云元数据端点 (169.254.169.254)。",
+  },
+  {
+    pattern: /0xa9[.]?fe[.]?a9[.]?fe|0xa9fea9fe/i,
+    severity: "critical",
+    title: "云元数据访问（十六进制 IP）",
+    description: "十六进制编码访问云元数据端点 (169.254.169.254)。",
+  },
+  {
+    pattern: /0251[.]0376[.]0251[.]0376/,
+    severity: "critical",
+    title: "云元数据访问（八进制 IP）",
+    description: "八进制编码访问云元数据端点 (169.254.169.254)。",
+  },
+  {
+    pattern: /\[::ffff:169\.254\.169\.254\]/i,
+    severity: "critical",
+    title: "云元数据访问（IPv6 映射）",
+    description: "IPv6 映射地址访问云元数据端点 (169.254.169.254)。",
+  },
+
+  // Alibaba Cloud metadata
+  {
+    pattern: /100\.100\.100\.200/,
+    severity: "critical",
+    title: "阿里云元数据访问",
+    description: "访问阿里云 ECS 元数据服务 (100.100.100.200)。",
+  },
 ];
 
 // ── URL 提取 ──
 
+const MAX_URL_LEN = 4096;
+
+const MAX_WALK_DEPTH = 10;
+const MAX_URL_COUNT = 200;
+const MAX_DECODE_PASSES = 5;
+
+/**
+ * Iteratively decode a percent-encoded string until it stabilises or the
+ * iteration budget is exhausted.  This prevents bypass via double- (or
+ * triple-, etc.) encoding such as `https%253A%252F%252Fevil.com`.
+ */
+function fullyDecodeURI(raw: string): string {
+  let decoded = raw;
+  for (let i = 0; i < MAX_DECODE_PASSES; i++) {
+    let next: string;
+    try {
+      next = decodeURIComponent(decoded);
+    } catch {
+      break; // malformed percent-encoding — stop decoding
+    }
+    if (next === decoded) break; // stable
+    decoded = next;
+  }
+  return decoded;
+}
+
 function extractUrls(params: Record<string, unknown>): string[] {
-  const urls: string[] = [];
-  const keys = ["url", "uri", "href", "endpoint", "target", "address", "host", "domain"];
+  const seen = new Set<string>();
+  // Primary: known URL parameter keys
+  const keys = ["url", "uri", "href", "endpoint", "target", "address", "host", "domain",
+    "webhook", "callback", "redirect", "base_url", "api_endpoint", "server", "remote"];
   for (const key of keys) {
     const val = params[key];
-    if (typeof val === "string" && val.length > 0) urls.push(val);
+    if (typeof val === "string" && val.length > 0) {
+      seen.add(val.length > MAX_URL_LEN ? val.slice(0, MAX_URL_LEN) : val);
+    }
   }
-  // 从 command 参数中提取 URL
-  if (typeof params.command === "string") {
-    const matches = params.command.match(/https?:\/\/[^\s"']+/gi);
-    if (matches) urls.push(...matches);
+
+  // Secondary: scan ALL string values recursively for embedded URLs
+  function walk(val: unknown, depth: number): void {
+    if (depth > MAX_WALK_DEPTH || seen.size >= MAX_URL_COUNT) return;
+    if (typeof val === "string" && val.length > 8) {
+      const capped = val.length > MAX_URL_LEN ? val.slice(0, MAX_URL_LEN) : val;
+      const matches = capped.match(/https?:\/\/[^\s"']+/gi);
+      if (matches) {
+        for (const m of matches) {
+          if (seen.size >= MAX_URL_COUNT) break;
+          seen.add(m);
+        }
+      }
+    } else if (Array.isArray(val)) {
+      for (const item of val) walk(item, depth + 1);
+    } else if (val && typeof val === "object") {
+      for (const v of Object.values(val as Record<string, unknown>)) walk(v, depth + 1);
+    }
   }
-  return urls;
+
+  walk(params, 0);
+  return Array.from(seen);
 }
 
 // ── 规则实现 ──
@@ -118,7 +227,11 @@ export function createNetworkGuardRule(blockedDomains?: string[]): SecurityRule 
 
       let bestMatch: { rule: DomainRule; url: string } | null = null;
 
-      for (const url of urls) {
+      for (const rawUrl of urls) {
+        // Fully decode percent-encoded URLs (including double/triple encoding)
+        // so patterns like \bpastebin\.com\b match even when the domain is
+        // encoded (e.g. pastebin%2Ecom or pastebin%252Ecom).
+        const url = fullyDecodeURI(rawUrl);
         for (const rule of allRules) {
           if (rule.pattern.test(url)) {
             if (
@@ -146,7 +259,7 @@ export function createNetworkGuardRule(blockedDomains?: string[]): SecurityRule 
           description: rule.description,
           details: { url, matchedPattern: rule.pattern.source },
           toolName: ctx.toolName,
-          toolParams: ctx.toolParams,
+          toolParams: redactSensitiveValues(ctx.toolParams),
           skillName: ctx.skillName,
           sessionId: ctx.sessionId,
           agentId: ctx.agentId,

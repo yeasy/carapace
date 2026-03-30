@@ -12,6 +12,7 @@
  */
 
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
+import { redactSensitiveValues } from "../utils/redact.js";
 
 interface SkillProfile {
   /** 该 skill 已见过的工具 -> 调用次数 */
@@ -20,6 +21,10 @@ interface SkillProfile {
   totalCalls: number;
   /** 是否已完成学习阶段 */
   learned: boolean;
+  /** Number of unique tools known when learning completed */
+  learnedToolCount: number;
+  /** Number of novel tools discovered after learning phase */
+  postLearningNovelCount: number;
 }
 
 export interface BaselineConfig {
@@ -33,6 +38,7 @@ export class BaselineTracker {
   private profiles = new Map<string, SkillProfile>();
   private learningThreshold: number;
   private maxNoveltyRatio: number;
+  private static readonly MAX_PROFILES = 1000;
 
   constructor(config?: BaselineConfig) {
     this.learningThreshold = config?.learningThreshold ?? 20;
@@ -45,10 +51,24 @@ export class BaselineTracker {
    */
   recordCall(skillName: string, toolName: string): { isNovel: boolean; profile: SkillProfile } {
     if (!this.profiles.has(skillName)) {
+      // Evict least-used profile if at capacity
+      if (this.profiles.size >= BaselineTracker.MAX_PROFILES) {
+        let minKey: string | null = null;
+        let minCalls = Infinity;
+        for (const [key, p] of this.profiles) {
+          if (p.totalCalls < minCalls) {
+            minCalls = p.totalCalls;
+            minKey = key;
+          }
+        }
+        if (minKey) this.profiles.delete(minKey);
+      }
       this.profiles.set(skillName, {
         toolCounts: new Map(),
         totalCalls: 0,
         learned: false,
+        learnedToolCount: 0,
+        postLearningNovelCount: 0,
       });
     }
 
@@ -61,6 +81,12 @@ export class BaselineTracker {
     // 检查是否已完成学习阶段
     if (!profile.learned && profile.totalCalls >= this.learningThreshold) {
       profile.learned = true;
+      profile.learnedToolCount = profile.toolCounts.size;
+    }
+
+    // Track novel tools discovered after learning phase
+    if (profile.learned && isNovel) {
+      profile.postLearningNovelCount++;
     }
 
     return { isNovel, profile };
@@ -133,11 +159,10 @@ export function createBaselineDriftRule(config?: BaselineConfig): {
 
       // 学习完成后，检测新工具调用
       if (isNovel) {
-        // 计算新工具比例
-        const totalUniqueTools = profile.toolCounts.size;
-        // 学习阶段完成时记录的工具数
-        const learnedToolCount = totalUniqueTools - 1; // 减去当前这个新工具
-        const noveltyRatio = 1 / (learnedToolCount || 1);
+        // Compute ratio of post-learning novel tools to baseline tool count.
+        // This escalates severity as more novel tools are discovered.
+        const baselineTools = profile.learnedToolCount || 1;
+        const noveltyRatio = profile.postLearningNovelCount / baselineTools;
 
         let severity: Severity = "medium";
         if (noveltyRatio > tracker.noveltyRatio) {
@@ -157,10 +182,10 @@ export function createBaselineDriftRule(config?: BaselineConfig): {
               novelTool: ctx.toolName,
               knownTools: [...profile.toolCounts.keys()].filter((t) => t !== ctx.toolName),
               totalCalls: profile.totalCalls,
-              uniqueTools: totalUniqueTools,
+              uniqueTools: profile.toolCounts.size,
             },
             toolName: ctx.toolName,
-            toolParams: ctx.toolParams,
+            toolParams: redactSensitiveValues(ctx.toolParams),
             skillName: ctx.skillName,
             sessionId: ctx.sessionId,
             agentId: ctx.agentId,

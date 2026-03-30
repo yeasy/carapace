@@ -10,6 +10,7 @@
 
 import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
+import { redactSensitiveValues } from "../utils/redact.js";
 
 interface ExfilPattern {
   pattern: RegExp;
@@ -24,17 +25,21 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   // API key / token 泄漏到请求参数
   { pattern: /(?:api[_-]?key|token|secret|password|passwd|credential|auth)\s*[=:]\s*\S{8,}/i, severity: "critical", title: "凭证出现在外发请求中", category: "credential_leak" },
   { pattern: /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/i, severity: "critical", title: "AWS Access Key 出现在请求中", category: "credential_leak" },
-  { pattern: /(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}/i, severity: "critical", title: "GitHub Token 出现在请求中", category: "credential_leak" },
-  { pattern: /sk-[a-zA-Z0-9]{32,}/i, severity: "critical", title: "OpenAI/Stripe API Key 出现在请求中", category: "credential_leak" },
+  { pattern: /(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{36,}/i, severity: "critical", title: "GitHub Token 出现在请求中", category: "credential_leak" },
+  { pattern: /\bsk-[a-zA-Z0-9_-]{32,}/i, severity: "critical", title: "OpenAI API Key 出现在请求中", category: "credential_leak" },
+  { pattern: /\bsk_(?:live|test)_[a-zA-Z0-9]{20,}/i, severity: "critical", title: "Stripe API Key 出现在请求中", category: "credential_leak" },
+  { pattern: /sk-ant-[a-zA-Z0-9_-]{20,}/i, severity: "critical", title: "Anthropic API Key 出现在请求中", category: "credential_leak" },
+  { pattern: /AIzaSy[a-zA-Z0-9_-]{33}/i, severity: "critical", title: "Google API Key 出现在请求中", category: "credential_leak" },
   { pattern: /-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----/i, severity: "critical", title: "私钥出现在请求中", category: "credential_leak" },
 
   // 大量 base64 编码数据外发（可能是文件/凭证编码后传输）
-  { pattern: /[A-Za-z0-9+/]{200,2000}={0,2}/i, severity: "medium", title: "大块 Base64 数据外发", category: "encoded_exfil" },
+  { pattern: /(?<=\s|^|["'`])[A-Za-z0-9+/]{200,4000}={0,2}(?=\s|$|["'`])/, severity: "medium", title: "大块 Base64 数据外发", category: "encoded_exfil" },
 
   // 将文件内容通过 curl/wget 发送到外部
   { pattern: /curl\s+.*-[dX]\s+.*@\//i, severity: "high", title: "通过 curl 上传本地文件", category: "file_upload" },
   { pattern: /curl\s+.*--data-binary\s+@/i, severity: "high", title: "通过 curl 二进制上传文件", category: "file_upload" },
   { pattern: /curl\s+.*--upload-file\s+/i, severity: "high", title: "通过 curl 上传文件", category: "file_upload" },
+  { pattern: /curl\s+.*-F\s+.*@\//i, severity: "high", title: "通过 curl multipart 上传本地文件", category: "file_upload" },
 
   // 将环境变量发送到外部
   { pattern: /\$\{?\w*(KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL)\w*\}?.*https?:\/\//i, severity: "critical", title: "环境变量凭证与 URL 组合外发", category: "env_leak" },
@@ -43,23 +48,28 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   // 管道组合：读取敏感文件并发送
   { pattern: /cat\s+.*\.(pem|key|env|credentials|secret).*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "读取敏感文件并通过网络发送", category: "pipe_exfil" },
   { pattern: /(curl|wget|nc)\s+.*<\s*.*\.(pem|key|env|credentials|secret)/i, severity: "critical", title: "将敏感文件重定向到网络工具", category: "pipe_exfil" },
+
+  // DNS 外泄：通过 dig/nslookup/host 将命令替换结果嵌入查询域名
+  { pattern: /(?:dig|nslookup|host)\s+.*\$\(.*\).*\.\S+/i, severity: "critical", title: "DNS 查询中嵌入命令替换（DNS 外泄）", category: "dns_exfil" },
+  { pattern: /(?:dig|nslookup|host)\s+.*`[^`]+`.*\.\S+/i, severity: "critical", title: "DNS 查询中嵌入命令替换（DNS 外泄）", category: "dns_exfil" },
 ];
 
 // ── 外泄目标域名（高风险文件共享/传输服务） ──
 
 const EXFIL_DESTINATIONS: RegExp[] = [
-  /transfer\.sh/i,
-  /file\.io/i,
-  /0x0\.st/i,
-  /paste\.ee/i,
-  /hastebin/i,
-  /requestbin/i,
-  /webhook\.site/i,
-  /hookbin/i,
-  /ngrok\.io/i,
-  /burpcollaborator/i,
-  /interact\.sh/i,
-  /pipedream/i,
+  /(?:^|[\s/.@])transfer\.sh(?:$|[\s/:?#])/i,
+  /(?:^|[\s/.@])file\.io(?:$|[\s/:?#])/i,
+  /(?:^|[\s/.@])0x0\.st(?:$|[\s/:?#])/i,
+  /(?:^|[\s/.@])paste\.ee(?:$|[\s/:?#])/i,
+  /\bhastebin\b/i,
+  /\brequestbin\b/i,
+  /(?:^|[\s/.@])webhook\.site(?:$|[\s/:?#])/i,
+  /\bhookbin\b/i,
+  /(?:^|[\s/.@])ngrok\.io(?:$|[\s/:?#])/i,
+  /(?:^|[\s/.@])ngrok-free\.app(?:$|[\s/:?#])/i,
+  /\bburpcollaborator\b/i,
+  /(?:^|[\s/.@])interact\.sh(?:$|[\s/:?#])/i,
+  /\bpipedream\.net\b/i,
 ];
 
 // ── 从工具参数提取所有字符串 ──
@@ -76,7 +86,14 @@ function extractAllStrings(params: Record<string, unknown>): string[] {
   function walk(val: unknown, depth: number): void {
     if (depth > MAX_WALK_DEPTH || strings.length >= MAX_STRING_COUNT || totalLength >= MAX_TOTAL_LENGTH) return;
     if (typeof val === "string" && val.length > 0) {
-      const s = val.length > MAX_STRING_LEN ? val.slice(0, MAX_STRING_LEN) : val;
+      let s: string;
+      if (val.length > MAX_STRING_LEN) {
+        // Sample head and tail to prevent bypass by placing payloads at end of long strings
+        const half = MAX_STRING_LEN >>> 1;
+        s = val.slice(0, half) + "\n" + val.slice(-half);
+      } else {
+        s = val;
+      }
       strings.push(s);
       totalLength += s.length;
     } else if (Array.isArray(val)) {
@@ -101,19 +118,25 @@ export function createDataExfilRule(): SecurityRule {
       const strings = extractAllStrings(ctx.toolParams);
       if (strings.length === 0) return { triggered: false };
 
-      const combined = strings.join("\n");
+      // Cap combined length to prevent computational amplification from regex matching
+      const MAX_COMBINED_LEN = 65_536;
+      let combined = strings.join("\n");
+      if (combined.length > MAX_COMBINED_LEN) {
+        const half = MAX_COMBINED_LEN >>> 1;
+        combined = combined.slice(0, half) + "\n" + combined.slice(-half);
+      }
 
       // Find the highest-severity exfil pattern match
       let bestMatch: { ep: ExfilPattern; snippet: string } | null = null;
 
       for (const ep of EXFIL_PATTERNS) {
-        if (ep.pattern.test(combined)) {
+        const match = ep.pattern.exec(combined);
+        if (match) {
           if (
             !bestMatch ||
             SEVERITY_RANK[ep.severity] > SEVERITY_RANK[bestMatch.ep.severity]
           ) {
-            const match = combined.match(ep.pattern);
-            bestMatch = { ep, snippet: match ? match[0].slice(0, 100) : "" };
+            bestMatch = { ep, snippet: match[0].slice(0, 100) };
           }
           if (ep.severity === "critical") break;
         }
@@ -121,10 +144,12 @@ export function createDataExfilRule(): SecurityRule {
 
       // 检查是否向高风险外泄目标发送数据 (always critical)
       for (const dest of EXFIL_DESTINATIONS) {
-        if (dest.test(combined)) {
-          const hasSendAction = /(?:POST|PUT|PATCH|upload|send|--data|--form|-d\s|-F\s)/i.test(combined);
-          if (hasSendAction) {
-            const match = combined.match(dest);
+        const match = dest.exec(combined);
+        if (match) {
+          const hasSendAction = /(?:POST|PUT|PATCH|upload|send|--data|--form|--upload-file|--post-file|--post-data|-d\s|-F\s|-T\s)/i.test(combined);
+          const hasCmdSubstitution = /\$\([^)]+\)|`[^`]+`|\$\{[^}]+\}/.test(combined);
+          const hasSensitiveParams = /\?\S*(?:data|secret|token|key|passwd|password|credential|file)=/i.test(combined);
+          if (hasSendAction || hasCmdSubstitution || hasSensitiveParams) {
             // Exfil destinations are always critical, override pattern match
             return {
               triggered: true,
@@ -139,7 +164,7 @@ export function createDataExfilRule(): SecurityRule {
                   destination: match ? match[0] : "unknown",
                 },
                 toolName: ctx.toolName,
-                toolParams: ctx.toolParams,
+                toolParams: redactSensitiveValues(ctx.toolParams),
                 skillName: ctx.skillName,
                 sessionId: ctx.sessionId,
                 agentId: ctx.agentId,
@@ -167,7 +192,7 @@ export function createDataExfilRule(): SecurityRule {
             snippet,
           },
           toolName: ctx.toolName,
-          toolParams: ctx.toolParams,
+          toolParams: redactSensitiveValues(ctx.toolParams),
           skillName: ctx.skillName,
           sessionId: ctx.sessionId,
           agentId: ctx.agentId,

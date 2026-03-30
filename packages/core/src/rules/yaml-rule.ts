@@ -33,6 +33,7 @@ import type {
   EventCategory,
 } from "../types.js";
 import { isRedosSafe } from "../utils/regex.js";
+import { redactSensitiveValues } from "../utils/redact.js";
 
 // ── YAML 规则定义结构 ──
 
@@ -57,9 +58,29 @@ export interface YamlRuleDefinition {
 
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
+/** Strip surrounding quotes only when they match (both double or both single) */
+function stripQuotes(s: string): string {
+  if (s.length >= 2 && ((s[0] === '"' && s[s.length - 1] === '"') || (s[0] === "'" && s[s.length - 1] === "'"))) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
+const MAX_YAML_INPUT = 1_048_576; // 1MB
+const MAX_YAML_LINES = 10_000;
+const MAX_YAML_DEPTH = 20;
+const MAX_KEY_LEN = 200;
+const MAX_VALUE_LEN = 10_000;
+
 export function parseSimpleYaml(text: string): Record<string, unknown> {
+  if (text.length > MAX_YAML_INPUT) {
+    throw new Error(`YAML input too large (${text.length} bytes, max ${MAX_YAML_INPUT})`);
+  }
   const result: Record<string, unknown> = {};
   const lines = text.split("\n");
+  if (lines.length > MAX_YAML_LINES) {
+    throw new Error(`YAML input too many lines (${lines.length}, max ${MAX_YAML_LINES})`);
+  }
 
   // Stack tracks parent objects with their indentation level and last key set
   const stack: { indent: number; obj: Record<string, unknown>; lastKey?: string }[] = [
@@ -79,7 +100,7 @@ export function parseSimpleYaml(text: string): Record<string, unknown> {
     const arrMatch = line.match(/^(\s*)-\s+(.*)/);
     if (arrMatch) {
       const indent = arrMatch[1].length;
-      const value = arrMatch[2].trim().replace(/^["']|["']$/g, "");
+      const value = stripQuotes(arrMatch[2].trim());
 
       // Pop to find the object that owns this array
       while (stack.length > 1 && currentParent().indent >= indent) {
@@ -104,6 +125,7 @@ export function parseSimpleYaml(text: string): Record<string, unknown> {
     const indent = match[1].length;
     const key = match[2];
     if (DANGEROUS_KEYS.has(key)) continue;
+    if (key.length > MAX_KEY_LEN) continue;
     let value: string | undefined = match[3].trim();
 
     // 弹出缩进层级
@@ -123,19 +145,24 @@ export function parseSimpleYaml(text: string): Record<string, unknown> {
         // Don't push a new stack level — array items will use parent.lastKey
       } else {
         // Sub-object
+        if (stack.length >= MAX_YAML_DEPTH) {
+          throw new Error(`YAML nesting too deep (max ${MAX_YAML_DEPTH})`);
+        }
         const child: Record<string, unknown> = {};
         parent.obj[key] = child;
         parent.lastKey = key;
         stack.push({ indent, obj: child });
       }
     } else {
-      // 移除引号
-      value = value.replace(/^["']|["']$/g, "");
+      // 移除匹配的引号
+      value = stripQuotes(value);
+      // Truncate excessively long values
+      if (value.length > MAX_VALUE_LEN) value = value.slice(0, MAX_VALUE_LEN);
       // 类型转换
       if (value === "true") parent.obj[key] = true;
       else if (value === "false") parent.obj[key] = false;
-      else if (/^-?\d+$/.test(value)) parent.obj[key] = parseInt(value, 10);
-      else if (/^-?\d+\.\d+$/.test(value)) parent.obj[key] = parseFloat(value);
+      else if (/^-?\d+$/.test(value) && value.length <= 15) parent.obj[key] = parseInt(value, 10);
+      else if (/^-?\d+\.\d+$/.test(value) && value.length <= 20) parent.obj[key] = parseFloat(value);
       else parent.obj[key] = value;
       parent.lastKey = key;
     }
@@ -172,6 +199,9 @@ export function createYamlRule(def: YamlRuleDefinition): SecurityRule {
     .map((p) => safeRegex(p))
     .filter(Boolean) as RegExp[];
 
+  // A rule with only toolName and no param patterns should trigger on toolName match alone
+  const hasParamPatterns = paramPatterns.size > 0 || anyParamPatterns.length > 0;
+
   return {
     name: def.name,
     description: def.description,
@@ -201,6 +231,11 @@ export function createYamlRule(def: YamlRuleDefinition): SecurityRule {
         }
       }
 
+      // If only toolName was specified (no param patterns), trigger on toolName match
+      if (toolNameRegex && !hasParamPatterns) {
+        return buildResult(def, ctx, "toolName", toolNameRegex.source);
+      }
+
       return { triggered: false };
     },
   };
@@ -219,9 +254,13 @@ export function loadYamlRules(yamlText: string): SecurityRule[] {
     try {
       const parsed = parseSimpleYaml(doc);
       const def = validateYamlRuleDef(parsed);
-      if (def) rules.push(createYamlRule(def));
-    } catch {
-      // 无效文档跳过
+      if (def) {
+        rules.push(createYamlRule(def));
+      } else {
+        process.stderr.write(`[carapace] YAML rule validation failed: rule definition is invalid or missing required fields\n`);
+      }
+    } catch (err) {
+      process.stderr.write(`[carapace] YAML rule parse error: ${err instanceof Error ? err.message : String(err)}\n`);
     }
   }
 
@@ -263,7 +302,7 @@ function buildResult(
         toolName: ctx.toolName,
       },
       toolName: ctx.toolName,
-      toolParams: ctx.toolParams,
+      toolParams: redactSensitiveValues(ctx.toolParams),
       skillName: ctx.skillName,
       sessionId: ctx.sessionId,
       agentId: ctx.agentId,
@@ -307,6 +346,14 @@ function matchAnyParam(
               return { paramKey: `${fullKey}[${i}]`, pattern: rx.source };
             }
           }
+        } else if (item && typeof item === "object" && !Array.isArray(item)) {
+          const result = matchAnyParam(
+            item as Record<string, unknown>,
+            patterns,
+            `${fullKey}[${i}]`,
+            depth + 1
+          );
+          if (result) return result;
         }
       }
     }

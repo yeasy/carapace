@@ -10,6 +10,7 @@
 
 import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
+import { redactSensitiveValues } from "../utils/redact.js";
 
 interface InjectionPattern {
   pattern: RegExp;
@@ -46,20 +47,53 @@ const INJECTION_PATTERNS: InjectionPattern[] = [
   { pattern: /\<\/?system\s*\>/i, severity: "high", title: "伪造系统标签", category: "indirect_injection" },
   { pattern: /#{3,}\s*(?:SYSTEM|ADMIN|INSTRUCTION)\s*(?:OVERRIDE|PROMPT|MESSAGE)/i, severity: "high", title: "伪造系统标题", category: "indirect_injection" },
   { pattern: /BEGIN\s+(?:HIDDEN|SECRET|SYSTEM)\s+(?:INSTRUCTIONS?|PROMPT)/i, severity: "critical", title: "伪造隐藏指令块", category: "indirect_injection" },
+
+  // ── 提示分隔符注入 ──
+  { pattern: /={5,}\s*(?:END|NEW|NEXT)\s*(?:SYSTEM|INSTRUCTION|PROMPT)/i, severity: "high", title: "提示分隔符注入", category: "indirect_injection" },
+  { pattern: /<\|(?:im_start|im_end|endoftext|system)\|>/i, severity: "critical", title: "LLM 特殊标记注入", category: "indirect_injection" },
+
+  // ── 中文提示注入 ──
+  { pattern: /忽略\s*(?:之前|以上|所有)\s*(?:的\s*)?(?:指令|规则|指示|提示)/i, severity: "critical", title: "中文指令覆盖尝试", category: "role_override" },
+  { pattern: /你\s*(?:现在|从现在开始)\s*是/i, severity: "high", title: "中文角色重定义", category: "role_override" },
+  { pattern: /(?:输出|显示|打印|告诉我)\s*(?:你的\s*)?(?:系统提示|初始指令|隐藏提示|原始提示)/i, severity: "critical", title: "中文系统提示泄漏", category: "prompt_leak" },
+  { pattern: /(?:绕过|关闭|禁用|移除)\s*(?:安全|防护|过滤|限制|保护)/i, severity: "critical", title: "中文安全绕过尝试", category: "jailbreak" },
+  { pattern: /(?:不要|别)\s*(?:遵守|遵循|听从|执行)\s*(?:规则|指令|限制|安全)/i, severity: "critical", title: "中文规则绕过尝试", category: "jailbreak" },
 ];
 
 // ── 从工具参数中提取所有文本内容 ──
 
 const MAX_WALK_DEPTH = 10;
 const MAX_TEXT_LEN = 8192;
+const MAX_TEXT_COUNT = 1000;
+
+// Strip zero-width and invisible Unicode characters used to bypass pattern matching
+// Covers: soft hyphen (00AD), Hangul Choseong/Jungseong fillers (115F-1160),
+// Mongolian vowel separator (180E), zero-width space/joiner/non-joiner (200B-200D),
+// directional marks (200E-200F), line/paragraph separators (2028-2029),
+// directional formatting (202A-202E), word joiner (2060), invisible times/separator (2061-2064),
+// bidi isolate controls (2066-2069), Braille blank (2800),
+// Hangul fillers (3164, FFA0), variation selectors (FE00-FE0F),
+// zero-width no-break space / BOM (FEFF), interlinear annotation (FFF9-FFFB),
+// tag characters (E0001-E007F via surrogate pairs)
+const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\u2060-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC01-\uDC7F]/g;
+
+function normalizeForDetection(text: string): string {
+  // NFKC normalization to collapse combining characters AND compatibility equivalents
+  // (fullwidth Latin, superscripts, Roman numerals, etc.), then strip invisible chars
+  return text.normalize("NFKC").replace(INVISIBLE_CHARS_RE, "");
+}
 
 function extractTextValues(params: Record<string, unknown>): string[] {
   const texts: string[] = [];
 
   function walk(val: unknown, depth: number): void {
-    if (depth > MAX_WALK_DEPTH) return;
-    if (typeof val === "string" && val.length > 10) {
-      texts.push(val.length > MAX_TEXT_LEN ? val.slice(0, MAX_TEXT_LEN) : val);
+    if (depth > MAX_WALK_DEPTH || texts.length >= MAX_TEXT_COUNT) return;
+    if (typeof val === "string" && val.length > 4) {
+      const trimmed = val.length > MAX_TEXT_LEN
+        ? val.slice(0, MAX_TEXT_LEN >>> 1) + "\n" + val.slice(-(MAX_TEXT_LEN >>> 1))
+        : val;
+      const normalized = normalizeForDetection(trimmed);
+      texts.push(normalized);
     } else if (Array.isArray(val)) {
       for (const item of val) walk(item, depth + 1);
     } else if (val && typeof val === "object") {
@@ -86,15 +120,15 @@ export function createPromptInjectionRule(): SecurityRule {
 
       for (const text of texts) {
         for (const ip of INJECTION_PATTERNS) {
-          if (ip.pattern.test(text)) {
+          const match = ip.pattern.exec(text);
+          if (match) {
             if (
               !bestMatch ||
               SEVERITY_RANK[ip.severity] > SEVERITY_RANK[bestMatch.ip.severity]
             ) {
-              const match = text.match(ip.pattern);
               bestMatch = {
                 ip,
-                snippet: match ? match[0].slice(0, 80) : text.slice(0, 80),
+                snippet: match[0].slice(0, 80),
               };
             }
             if (ip.severity === "critical") break;
@@ -120,7 +154,7 @@ export function createPromptInjectionRule(): SecurityRule {
             snippet,
           },
           toolName: ctx.toolName,
-          toolParams: ctx.toolParams,
+          toolParams: redactSensitiveValues(ctx.toolParams),
           skillName: ctx.skillName,
           sessionId: ctx.sessionId,
           agentId: ctx.agentId,
