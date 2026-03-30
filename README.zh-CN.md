@@ -412,7 +412,8 @@ cd carapace && npm install && npm run build
 - **v0.5** — Dashboard Web UI、SIEM 连接器、团队策略管理
 - **v0.6** — SQLite 持久化存储、CLI 工具、告警升级、HookMessage Sink、误报驳回、首次运行报告，所有功能完全开源
 - **v0.7** — Docker 支持、demo/dashboard/test-rule CLI 命令、GHCR 镜像发布、docker-compose、动态版本管理
-- **v0.8**（当前）— SIEM SSRF 加固、ReDoS 校验器、SQLite 存储改进、ExecGuard 标志重排检测、NetworkGuard 误报减少、CLI/Dashboard/适配器安全修复
+- **v0.8** — SIEM SSRF 加固、ReDoS 校验器、SQLite 存储改进、ExecGuard 标志重排检测、NetworkGuard 误报减少、CLI/Dashboard/适配器安全修复
+- **v0.9**（当前）— 安全绕过修复（双重编码、反斜杠续行、通配符驳回）、since:0 正确性修复、策略导入级联验证、stdin 监听器泄漏修复、1217 个测试
 
 ## 贡献
 

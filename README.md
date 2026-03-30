@@ -412,7 +412,8 @@ cd carapace && npm install && npm run build
 - **v0.5** — Dashboard Web UI, SIEM connectors, team policy management
 - **v0.6** — SQLite persistent storage, CLI tool, alert escalation, HookMessage sink, false positive dismissal, first-run reports, all features open source
 - **v0.7** — Docker support, demo/dashboard/test-rule CLI commands, GHCR image publishing, docker-compose, dynamic version management
-- **v0.8** (current) — SIEM SSRF hardening, ReDoS validator, SQLite store improvements, ExecGuard flag-reorder detection, NetworkGuard false-positive reduction, security fixes across CLI/dashboard/adapters
+- **v0.8** — SIEM SSRF hardening, ReDoS validator, SQLite store improvements, ExecGuard flag-reorder detection, NetworkGuard false-positive reduction, security fixes across CLI/dashboard/adapters
+- **v0.9** (current) — Security bypass fixes (double-encoding, backslash-continuation, wildcard dismissal), since:0 correctness fixes, policy import cascade validation, stdin listener leak fix, 1217 tests
 
 ## Contributing
 
