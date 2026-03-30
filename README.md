@@ -7,11 +7,11 @@
   </p>
   <p align="center">
     <a href="https://github.com/yeasy/carapace"><img src="https://img.shields.io/github/stars/yeasy/carapace?style=social" alt="GitHub stars"/></a>
-    <a href="https://www.npmjs.com/package/carapace"><img src="https://img.shields.io/npm/v/carapace?label=npm" alt="npm version"/></a>
+    <a href="https://www.npmjs.com/package/@carapace/core"><img src="https://img.shields.io/npm/v/@carapace%2Fcore?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-933%20passed-brightgreen" alt="tests"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-1217%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.9+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
   <p align="center">
@@ -33,7 +33,7 @@ AI agents can execute shell commands, read any file, and make network requests �
 |---------|---|---|
 | **Analysis Type** | Static code analysis | Runtime behavior monitoring |
 | **Threat Detection** | Audit reports only | Real-time blocking & alerts |
-| **Learning Phase** | N/A | 5-session warmup for behavior baseline |
+| **Learning Phase** | N/A | 20-call warmup per skill for behavior baseline |
 | **Framework Support** | Limited | MCP, LangChain, CrewAI, AutoGen, OpenClaw |
 | **Policy Management** | Manual review | Team policies with inheritance chain |
 | **Integration** | Point tools | SIEM-ready (Splunk, Elastic, Datadog) |
@@ -51,7 +51,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   rm -rf /            browser passwords    .onion domains
   encoded PowerShell  crypto wallets       raw IP connections
   eval / subprocess   /etc/shadow          mining pools
-  ...18 patterns      ...20+ patterns      ...6 categories
+  ...60 patterns      ...19 patterns       ...10 categories
 
   PromptInjection     DataExfil            BaselineDrift
   ───────────────     ─────────            ─────────────
@@ -61,7 +61,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   fake system tags    curl file upload     novelty ratio alert
   encoding bypass     pipe exfil chains
   hidden injections   env var leak
-  ...19 patterns      ...14+ patterns      configurable threshold
+  ...25 patterns      ...19 patterns       configurable threshold
 ```
 
 ## Key Features
@@ -70,12 +70,12 @@ AI agents can execute shell commands, read any file, and make network requests �
 mindmap
   root((🛡️ Carapace))
     7 Built-in Rules
-      ExecGuard (18 patterns)
-      PathGuard (20+ patterns)
-      NetworkGuard (6 categories)
+      ExecGuard (60 patterns)
+      PathGuard (19 patterns)
+      NetworkGuard (10 categories)
       RateLimiter
-      PromptInjection (19 patterns)
-      DataExfil (14+ patterns)
+      PromptInjection (25 patterns)
+      DataExfil (19 patterns)
       BaselineDrift (anomaly detection)
     Smart Alert Routing
       5-min dedup window
@@ -83,7 +83,7 @@ mindmap
       Dismissal & overrides
       Console / Webhook / JSONL
     Behavior Baseline Learning
-      5-session warmup
+      20-call warmup per skill
       Per-skill profiling
       Anomaly detection
       Novelty ratio alerts
@@ -313,7 +313,7 @@ sequenceDiagram
 
     Agent->>Adapter: tool_call(name, params)
     Adapter->>Engine: evaluate(RuleContext)
-    Engine->>Engine: Run all rules in parallel
+    Engine->>Engine: Run all rules sequentially
     alt No threats detected
         Engine-->>Adapter: []
         Adapter-->>Tool: Execute tool
@@ -353,7 +353,7 @@ carapace/
 │   │   │   ├── alerter.ts    # Alert router + sinks + escalation + dismissal
 │   │   │   ├── store.ts      # Storage backend (Memory + SQLite)
 │   │   │   └── types.ts      # Type definitions
-│   │   └── test/             # 471 tests (vitest)
+│   │   └── test/             # 747 tests (vitest)
 │   ├── adapter-openclaw/     # @carapace/adapter-openclaw — native plugin
 │   │   └── src/
 │   │       ├── index.ts      # Plugin entry, registers hooks, first-run reports
@@ -386,7 +386,7 @@ carapace/
 ```bash
 npm install              # install all dependencies
 npm run build            # build core → adapter (sequential)
-npm run test                     # run 933 tests across all packages
+npm run test                     # run 1217+ tests across all packages
 ```
 
 ## Installation
@@ -411,7 +411,8 @@ cd carapace && npm install && npm run build
 - **v0.4** — MCP proxy adapter, LangChain/CrewAI Python bridge, YAML custom rules
 - **v0.5** — Dashboard Web UI, SIEM connectors, team policy management
 - **v0.6** — SQLite persistent storage, CLI tool, alert escalation, HookMessage sink, false positive dismissal, first-run reports, all features open source
-- **v0.7** (current) — Docker support, demo/dashboard/test-rule CLI commands, GHCR image publishing, docker-compose, dynamic version management
+- **v0.7** — Docker support, demo/dashboard/test-rule CLI commands, GHCR image publishing, docker-compose, dynamic version management
+- **v0.8** (current) — SIEM SSRF hardening, ReDoS validator, SQLite store improvements, ExecGuard flag-reorder detection, NetworkGuard false-positive reduction, security fixes across CLI/dashboard/adapters
 
 ## Contributing
 
