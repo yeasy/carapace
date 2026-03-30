@@ -40,9 +40,11 @@ export class RuleEngine {
 
   /**
    * 设置受信 skill 列表。来自这些 skill 的工具调用将跳过规则评估。
+   * Skill names are normalized (trimmed, lowercased) on both registration and lookup
+   * to prevent case-sensitivity bypasses.
    */
   setTrustedSkills(skills: string[]): void {
-    this.trustedSkills = new Set(skills);
+    this.trustedSkills = new Set(skills.map((s) => s.trim().toLowerCase()));
   }
 
   getTrustedSkills(): ReadonlySet<string> {
@@ -54,14 +56,13 @@ export class RuleEngine {
    * 如果 ctx.skillName 在 trustedSkills 中，跳过评估。
    */
   evaluate(ctx: RuleContext): EngineResult {
-    // 受信 skill 跳过规则评估
-    if (ctx.skillName && this.trustedSkills.has(ctx.skillName)) {
+    // 受信 skill 跳过规则评估（normalized to prevent case-sensitivity bypass）
+    if (ctx.skillName && this.trustedSkills.has(ctx.skillName.trim().toLowerCase())) {
       return { triggered: false, shouldBlock: false, events: [] };
     }
 
     const events: SecurityEvent[] = [];
     let shouldBlock = false;
-    let highestSeverity: Severity = "info";
     let highestBlockSeverity: Severity = "info";
     let blockReason: string | undefined;
 
@@ -92,12 +93,6 @@ export class RuleEngine {
           }
         }
 
-        if (
-          SEVERITY_RANK[result.event.severity] >
-          SEVERITY_RANK[highestSeverity]
-        ) {
-          highestSeverity = result.event.severity;
-        }
       } catch (err) {
         process.stderr.write(
           `[CARAPACE] rule "${rule.name}" threw: ${err instanceof Error ? err.message : String(err)}\n`

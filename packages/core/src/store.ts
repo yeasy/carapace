@@ -135,10 +135,12 @@ export class MemoryBackend extends StorageBackend {
   private baselines: Map<string, SkillBaseline> = new Map();
   private dismissals: Map<string, DismissalPattern> = new Map();
   private maxEvents: number;
+  private maxSessions: number;
 
-  constructor(maxEvents = 10000) {
+  constructor(maxEvents = 10000, maxSessions = 10000) {
     super();
-    this.maxEvents = maxEvents;
+    this.maxEvents = Math.max(maxEvents, 1);
+    this.maxSessions = Math.max(maxSessions, 1);
   }
 
   async addEvent(event: SecurityEvent): Promise<void> {
@@ -155,26 +157,29 @@ export class MemoryBackend extends StorageBackend {
   }
 
   async queryEvents(query: EventQuery = {}): Promise<SecurityEvent[]> {
-    let result = this.events;
+    // Single-pass filter to avoid chained .filter() allocations
+    const hasFilters = query.category !== undefined || query.severity !== undefined || query.ruleName !== undefined || query.sessionId !== undefined || query.skillName !== undefined || query.since !== undefined || query.until !== undefined;
+    const result = hasFilters
+      ? this.events.filter((e) =>
+          (query.category === undefined || e.category === query.category) &&
+          (query.severity === undefined || e.severity === query.severity) &&
+          (query.ruleName === undefined || e.ruleName === query.ruleName) &&
+          (query.sessionId === undefined || e.sessionId === query.sessionId) &&
+          (query.skillName === undefined || e.skillName === query.skillName) &&
+          (query.since === undefined || e.timestamp >= query.since) &&
+          (query.until === undefined || e.timestamp <= query.until))
+      : this.events.slice();
 
-    if (query.category) result = result.filter((e) => e.category === query.category);
-    if (query.severity) result = result.filter((e) => e.severity === query.severity);
-    if (query.ruleName) result = result.filter((e) => e.ruleName === query.ruleName);
-    if (query.sessionId) result = result.filter((e) => e.sessionId === query.sessionId);
-    if (query.skillName) result = result.filter((e) => e.skillName === query.skillName);
-    if (query.since) result = result.filter((e) => e.timestamp >= query.since!);
-    if (query.until) result = result.filter((e) => e.timestamp <= query.until!);
-
-    // 按时间倒序
-    result = result.slice().sort((a, b) => b.timestamp - a.timestamp);
+    // 按时间倒序（events are appended chronologically, so reverse is O(n) vs sort O(n log n))
+    result.reverse();
 
     const offset = query.offset ?? 0;
-    const limit = query.limit ?? 100;
+    const limit = Math.min(query.limit ?? 100, 10000);
     return result.slice(offset, offset + limit);
   }
 
   async getStats(since?: number): Promise<EventStats> {
-    const events = since ? this.events.filter((e) => e.timestamp >= since) : this.events;
+    const events = since !== undefined ? this.events.filter((e) => e.timestamp >= since) : this.events;
 
     const bySeverity: Record<string, number> = {
       critical: 0,
@@ -218,7 +223,7 @@ export class MemoryBackend extends StorageBackend {
     bucketMs: number = 60_000,
     since?: number
   ): Promise<TimeSeriesBucket[]> {
-    const events = since ? this.events.filter((e) => e.timestamp >= since) : this.events;
+    const events = since !== undefined ? this.events.filter((e) => e.timestamp >= since) : this.events;
 
     if (events.length === 0) return [];
 
@@ -243,6 +248,18 @@ export class MemoryBackend extends StorageBackend {
 
   async addSession(session: Session): Promise<void> {
     this.sessions.set(session.sessionId, session);
+    // Batch eviction with headroom to amortize cost
+    const HEADROOM = 500;
+    if (this.sessions.size > this.maxSessions + HEADROOM) {
+      const toRemove = this.sessions.size - this.maxSessions;
+      // Collect keys first, then delete (avoid mutating Map during iteration)
+      const keysToRemove: string[] = [];
+      for (const key of this.sessions.keys()) {
+        if (keysToRemove.length >= toRemove) break;
+        keysToRemove.push(key);
+      }
+      for (const key of keysToRemove) this.sessions.delete(key);
+    }
   }
 
   async updateSession(sessionId: string, updates: Partial<Session>): Promise<void> {
@@ -257,6 +274,13 @@ export class MemoryBackend extends StorageBackend {
   }
 
   async saveBaseline(baseline: SkillBaseline): Promise<void> {
+    // Evict oldest baseline if at capacity (prevent unbounded growth)
+    const MAX_BASELINES = 1000;
+    if (!this.baselines.has(baseline.skillName) && this.baselines.size >= MAX_BASELINES) {
+      // Remove the first (oldest-inserted) entry
+      const firstKey = this.baselines.keys().next().value;
+      if (firstKey !== undefined) this.baselines.delete(firstKey);
+    }
     this.baselines.set(baseline.skillName, baseline);
   }
 
@@ -278,9 +302,15 @@ export class MemoryBackend extends StorageBackend {
 
   async listDismissals(): Promise<DismissalPattern[]> {
     const now = Date.now();
-    return [...this.dismissals.values()].filter(
-      (p) => !p.expiresAt || p.expiresAt >= now
-    );
+    // Collect expired IDs first, then delete (avoid mutating during iteration)
+    const expired: string[] = [];
+    for (const [id, p] of this.dismissals) {
+      if (p.expiresAt && p.expiresAt < now) {
+        expired.push(id);
+      }
+    }
+    for (const id of expired) this.dismissals.delete(id);
+    return [...this.dismissals.values()];
   }
 
   async clearDismissals(): Promise<void> {
@@ -305,14 +335,22 @@ export class SqliteBackend extends StorageBackend {
   private db!: SqliteDatabase;
   private initialized = false;
   private initPromise: Promise<void> | null = null;
+  private insertCount = 0;
+  private closed = false;
+  private maxEvents: number;
 
-  constructor(dbPath: string = ":memory:") {
+  constructor(dbPath: string = ":memory:", maxEvents: number = 100_000) {
     super();
     // 延迟初始化，在实际使用时再导入 better-sqlite3
     this.dbPath = dbPath;
+    this.maxEvents = maxEvents;
   }
 
   private dbPath: string;
+
+  private ensureOpen(): void {
+    if (this.closed) throw new Error("SqliteBackend is closed");
+  }
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
@@ -355,6 +393,7 @@ export class SqliteBackend extends StorageBackend {
 
         CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
         CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity);
+        CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
         CREATE INDEX IF NOT EXISTS idx_events_skill ON events(skill_name);
 
         CREATE TABLE IF NOT EXISTS skill_baselines (
@@ -394,6 +433,11 @@ export class SqliteBackend extends StorageBackend {
 
       this.initialized = true;
     } catch (error) {
+      // Close leaked db handle before retrying
+      if (this.db) {
+        try { this.db.close(); } catch { /* ignore close error */ }
+        this.db = null as unknown as import("better-sqlite3").Database;
+      }
       // Reset so next call can retry
       this.initPromise = null;
       throw new Error(
@@ -403,6 +447,7 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async addEvent(event: SecurityEvent): Promise<void> {
+    this.ensureOpen();
     await this.initialize();
 
     const stmt = this.db.prepare(`
@@ -427,9 +472,22 @@ export class SqliteBackend extends StorageBackend {
       JSON.stringify(event.details),
       event.toolParams ? JSON.stringify(event.toolParams) : null
     );
+
+    // Periodic eviction: every 1000 inserts, check if we exceed maxEvents
+    this.insertCount++;
+    if (this.insertCount % 1000 === 0) {
+      const countRow = this.db.prepare("SELECT COUNT(*) as cnt FROM events").get() as SqliteRow;
+      if (countRow.cnt > this.maxEvents) {
+        const excess = countRow.cnt - this.maxEvents;
+        this.db.prepare(
+          "DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY timestamp ASC LIMIT ?)"
+        ).run(excess);
+      }
+    }
   }
 
   async getEventById(id: string): Promise<SecurityEvent | null> {
+    this.ensureOpen();
     await this.initialize();
 
     const stmt = this.db.prepare("SELECT * FROM events WHERE id = ?");
@@ -456,36 +514,37 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async queryEvents(query: EventQuery = {}): Promise<SecurityEvent[]> {
+    this.ensureOpen();
     await this.initialize();
 
     let sql = "SELECT * FROM events WHERE 1=1";
     const params: unknown[] = [];
 
-    if (query.category) {
+    if (query.category !== undefined) {
       sql += " AND category = ?";
       params.push(query.category);
     }
-    if (query.severity) {
+    if (query.severity !== undefined) {
       sql += " AND severity = ?";
       params.push(query.severity);
     }
-    if (query.ruleName) {
+    if (query.ruleName !== undefined) {
       sql += " AND rule_name = ?";
       params.push(query.ruleName);
     }
-    if (query.sessionId) {
+    if (query.sessionId !== undefined) {
       sql += " AND session_id = ?";
       params.push(query.sessionId);
     }
-    if (query.skillName) {
+    if (query.skillName !== undefined) {
       sql += " AND skill_name = ?";
       params.push(query.skillName);
     }
-    if (query.since) {
+    if (query.since !== undefined) {
       sql += " AND timestamp >= ?";
       params.push(query.since);
     }
-    if (query.until) {
+    if (query.until !== undefined) {
       sql += " AND timestamp <= ?";
       params.push(query.until);
     }
@@ -493,7 +552,7 @@ export class SqliteBackend extends StorageBackend {
     sql += " ORDER BY timestamp DESC";
 
     const offset = query.offset ?? 0;
-    const limit = query.limit ?? 100;
+    const limit = Math.min(query.limit ?? 100, 10000);
     sql += " LIMIT ? OFFSET ?";
     params.push(limit, offset);
 
@@ -520,10 +579,11 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async getStats(since?: number): Promise<EventStats> {
+    this.ensureOpen();
     await this.initialize();
 
-    const whereClause = since ? " WHERE timestamp >= ?" : "";
-    const params: unknown[] = since ? [since] : [];
+    const whereClause = since !== undefined ? " WHERE timestamp >= ?" : "";
+    const params: unknown[] = since !== undefined ? [since] : [];
 
     // Use SQL aggregation instead of loading all rows into memory
     const totalRow = this.db.prepare(
@@ -554,7 +614,7 @@ export class SqliteBackend extends StorageBackend {
     }
 
     const byRule: Record<string, number> = {};
-    const ruleWhereClause = since
+    const ruleWhereClause = since !== undefined
       ? " WHERE timestamp >= ? AND rule_name IS NOT NULL"
       : " WHERE rule_name IS NOT NULL";
     const ruleRows = this.db.prepare(
@@ -582,10 +642,11 @@ export class SqliteBackend extends StorageBackend {
     bucketMs: number = 60_000,
     since?: number
   ): Promise<TimeSeriesBucket[]> {
+    this.ensureOpen();
     await this.initialize();
 
-    const whereClause = since ? " WHERE timestamp >= ?" : "";
-    const params: unknown[] = since ? [since] : [];
+    const whereClause = since !== undefined ? " WHERE timestamp >= ?" : "";
+    const params: unknown[] = since !== undefined ? [since] : [];
 
     // Use SQL aggregation to bucket timestamps
     const rows = this.db.prepare(
@@ -605,6 +666,7 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async addSession(session: Session): Promise<void> {
+    this.ensureOpen();
     await this.initialize();
 
     const stmt = this.db.prepare(`
@@ -624,6 +686,7 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async updateSession(sessionId: string, updates: Partial<Session>): Promise<void> {
+    this.ensureOpen();
     await this.initialize();
 
     const fields: string[] = [];
@@ -659,6 +722,7 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async getSession(sessionId: string): Promise<Session | null> {
+    this.ensureOpen();
     await this.initialize();
 
     const stmt = this.db.prepare("SELECT * FROM sessions WHERE session_id = ?");
@@ -678,6 +742,7 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async saveBaseline(baseline: SkillBaseline): Promise<void> {
+    this.ensureOpen();
     await this.initialize();
 
     const stmt = this.db.prepare(`
@@ -701,6 +766,7 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async getBaseline(skillName: string): Promise<SkillBaseline | null> {
+    this.ensureOpen();
     await this.initialize();
 
     const stmt = this.db.prepare("SELECT * FROM skill_baselines WHERE skill_name = ?");
@@ -724,6 +790,7 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async listBaselines(): Promise<SkillBaseline[]> {
+    this.ensureOpen();
     await this.initialize();
 
     const stmt = this.db.prepare("SELECT * FROM skill_baselines ORDER BY last_seen DESC");
@@ -745,6 +812,7 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async addDismissal(pattern: DismissalPattern): Promise<void> {
+    this.ensureOpen();
     await this.initialize();
 
     const stmt = this.db.prepare(`
@@ -764,6 +832,7 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async removeDismissal(id: string): Promise<boolean> {
+    this.ensureOpen();
     await this.initialize();
 
     const stmt = this.db.prepare("DELETE FROM dismissals WHERE id = ?");
@@ -772,6 +841,7 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async listDismissals(): Promise<DismissalPattern[]> {
+    this.ensureOpen();
     await this.initialize();
 
     const now = Date.now();
@@ -792,22 +862,27 @@ export class SqliteBackend extends StorageBackend {
   }
 
   async clearDismissals(): Promise<void> {
+    this.ensureOpen();
     await this.initialize();
 
     this.db.exec("DELETE FROM dismissals");
   }
 
   async clear(): Promise<void> {
+    this.ensureOpen();
     await this.initialize();
 
     this.db.exec("DELETE FROM events; DELETE FROM sessions; DELETE FROM skill_baselines; DELETE FROM dismissals;");
   }
 
   async close(): Promise<void> {
+    this.closed = true;
     if (this.db && this.initialized) {
       this.db.close();
+      this.db = null as unknown as SqliteDatabase; // prevent use-after-close
       this.initialized = false;
-      this.initPromise = null; // allow re-initialization if needed
+      this.initPromise = null;
+      this.insertCount = 0;
     }
   }
 }
@@ -827,7 +902,7 @@ export async function createStore(config: StoreConfig = {}): Promise<StorageBack
 
   // 优先使用 SQLite
   try {
-    const backend = new SqliteBackend(sqlitePath);
+    const backend = new SqliteBackend(sqlitePath, maxEvents);
     await backend.initialize();
     return backend;
   } catch (error) {

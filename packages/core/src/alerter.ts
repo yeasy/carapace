@@ -7,16 +7,18 @@
  * 支持误报驳回：已驳回的事件模式不再告警。
  */
 
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { appendFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+
+import { readFileSync, realpathSync, existsSync } from "node:fs";
+import { appendFile, mkdir, realpath } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, resolve } from "node:path";
 
 let PKG_VERSION = "unknown";
 try {
   PKG_VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
 } catch { /* fallback to "unknown" if package.json is missing or malformed */ }
 import type { SecurityEvent, AlertPayload, AlertSink, Severity } from "./types.js";
+import { validatePublicUrl } from "./utils/url-validator.js";
 
 // ─── 严重级别排序（用于升级） ─────────────────────────────────────
 
@@ -63,18 +65,8 @@ export class WebhookSink implements AlertSink {
   private maxRetries: number;
 
   constructor(private url: string, maxRetries: number = 2) {
-    // Validate URL to prevent SSRF — only allow http/https
-    try {
-      const parsed = new URL(url);
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        throw new Error(`WebhookSink only supports http/https URLs, got: ${parsed.protocol}`);
-      }
-    } catch (err) {
-      if (err instanceof TypeError) {
-        throw new Error(`WebhookSink: invalid URL "${url}"`);
-      }
-      throw err;
-    }
+    // Validate URL to prevent SSRF — block private/loopback addresses
+    validatePublicUrl(url, "WebhookSink");
     this.maxRetries = maxRetries;
   }
 
@@ -104,13 +96,16 @@ export class WebhookSink implements AlertSink {
           signal: AbortSignal.timeout(5000),
         });
         if (!resp.ok) {
+          // Consume response body to release connection back to the pool
+          await resp.text().catch(() => {});
           throw new Error(`HTTP ${resp.status}`);
         }
         return; // 发送成功，立即返回
       } catch (err) {
         if (attempt < this.maxRetries) {
           // 指数退避等待后重试
-          await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+          const base = Math.min(500 * 2 ** attempt, 10_000);
+          await new Promise((r) => setTimeout(r, base * (0.5 + Math.random() * 0.5)));
         } else {
           process.stderr.write(
             `[CARAPACE] webhook send failed after ${this.maxRetries + 1} attempts: ${err}\n`
@@ -123,19 +118,112 @@ export class WebhookSink implements AlertSink {
 
 // ─── LogFile Sink ────────────────────────────────────────────────
 
+/** Directories where log files must not be written (system-critical paths) */
+const BLOCKED_PREFIXES_UNIX = ["/etc/", "/usr/", "/bin/", "/sbin/", "/var/", "/proc/", "/sys/", "/dev/", "/run/", "/boot/", "/System/", "/Library/"];
+const BLOCKED_PREFIXES_WIN = ["c:\\windows\\", "c:\\program files\\", "c:\\program files (x86)\\", "c:\\programdata\\"];
+
+/** Resolve the temp dir so paths under it are allowed by assertNotBlocked.
+ *  On macOS, tmpdir() returns /var/folders/... but realpathSync gives /private/var/...
+ *  We store both canonical forms so assertNotBlocked accepts temp paths whether or not
+ *  the symlinks have been resolved. */
+const RESOLVED_TMPDIR = resolve(tmpdir()) + "/";
+let REAL_TMPDIR: string;
+try {
+  REAL_TMPDIR = realpathSync(tmpdir()) + "/";
+} catch {
+  REAL_TMPDIR = RESOLVED_TMPDIR;
+}
+
 export class LogFileSink implements AlertSink {
   name = "logfile";
   private initPromise: Promise<string | undefined> | null = null;
+  /** The real (symlink-resolved) path validated at construction time */
+  private validatedRealPath: string;
 
-  constructor(private filePath: string) {}
+  constructor(private filePath: string) {
+    const resolved = resolve(filePath);
+
+    // Follow symlinks in the nearest existing ancestor to prevent symlink-based path
+    // traversal. Walk up until we find an existing directory, resolve its real path,
+    // then re-attach the remaining segments. This handles cases where the immediate
+    // parent doesn't exist yet (e.g. new temp subdirectories on macOS where /var →
+    // /private/var).
+    let realResolved = resolved;
+    try {
+      let ancestor = dirname(resolved);
+      let suffix = resolved.slice(ancestor.length);
+      while (ancestor !== dirname(ancestor) && !existsSync(ancestor)) {
+        suffix = ancestor.slice(dirname(ancestor).length) + suffix;
+        ancestor = dirname(ancestor);
+      }
+      if (existsSync(ancestor)) {
+        const realAncestor = realpathSync(ancestor);
+        realResolved = realAncestor + suffix;
+      }
+    } catch { /* realpathSync failed — use path.resolve result */ }
+
+    // Reject system-critical directories (but allow the OS temp directory)
+    LogFileSink.assertNotBlocked(realResolved);
+
+    this.filePath = resolved;
+    this.validatedRealPath = realResolved;
+  }
+
+  /**
+   * Check that a resolved path does not fall under a blocked system prefix.
+   * Throws if the path targets a system-critical directory.
+   */
+  static assertNotBlocked(realResolved: string): void {
+    if (!realResolved.startsWith(RESOLVED_TMPDIR) && !realResolved.startsWith(REAL_TMPDIR)) {
+      const blockedPrefixes = process.platform === "win32" ? BLOCKED_PREFIXES_WIN : BLOCKED_PREFIXES_UNIX;
+      // On Windows, paths are case-insensitive — compare in lowercase
+      const comparePath = process.platform === "win32" ? realResolved.toLowerCase() : realResolved;
+      for (const prefix of blockedPrefixes) {
+        if (comparePath.startsWith(prefix)) {
+          throw new Error(`LogFileSink: refusing to write to system directory: ${realResolved}`);
+        }
+      }
+    }
+  }
 
   async send(payload: AlertPayload): Promise<void> {
     try {
       if (!this.initPromise) {
-        this.initPromise = mkdir(dirname(this.filePath), { recursive: true });
+        this.initPromise = mkdir(dirname(this.filePath), { recursive: true }).catch((err) => {
+          this.initPromise = null;
+          throw err;
+        });
       }
       await this.initPromise;
-      await appendFile(this.filePath, JSON.stringify(payload.event) + "\n");
+
+      // TOCTOU defense: re-resolve symlinks at write time and verify the real
+      // path still matches the prefix validated during construction.  An attacker
+      // could replace a directory with a symlink between construction and send().
+      let currentRealPath: string;
+      try {
+        const realParent = await realpath(dirname(this.filePath));
+        currentRealPath = resolve(realParent, basename(this.filePath));
+      } catch {
+        // Parent doesn't exist yet (mkdir may not have created it), fall back
+        currentRealPath = this.filePath;
+      }
+
+      // Verify the resolved path hasn't shifted to a different directory tree.
+      // Compare using the canonical (realpath-resolved) prefix to handle platforms
+      // where path components are symlinks (e.g. macOS /var → /private/var).
+      const validatedPrefix = dirname(this.validatedRealPath) + "/";
+      if (!currentRealPath.startsWith(validatedPrefix)) {
+        throw new Error(
+          `LogFileSink: path changed after construction (expected prefix ${validatedPrefix}, got ${currentRealPath}). Possible symlink attack.`
+        );
+      }
+
+      // Also verify the current real path is not under a blocked system directory
+      LogFileSink.assertNotBlocked(currentRealPath);
+
+      // Write to the resolved real path to close the TOCTOU window between
+      // validation and the actual file system operation.
+      await appendFile(currentRealPath, JSON.stringify(payload.event) + "\n");
     } catch (err) {
       // 写入失败不阻塞，但记录到 stderr 便于排查
       process.stderr.write(`[CARAPACE] logfile write failed: ${err}\n`);
@@ -200,6 +288,7 @@ export interface DismissalPattern {
 
 export class DismissalManager {
   private patterns: DismissalPattern[] = [];
+  private static readonly MAX_PATTERNS = 1000;
 
   /**
    * 添加驳回模式
@@ -208,6 +297,14 @@ export class DismissalManager {
     // Require at least one filter field to prevent wildcard dismissal that suppresses all alerts
     if (!pattern.ruleName && !pattern.toolName && !pattern.skillName) {
       throw new Error("DismissalPattern must specify at least one of: ruleName, toolName, skillName");
+    }
+    // Enforce upper bound to prevent unbounded growth
+    if (this.patterns.length >= DismissalManager.MAX_PATTERNS) {
+      // Clean up expired first, then reject if still at capacity
+      this.cleanupExpired();
+      if (this.patterns.length >= DismissalManager.MAX_PATTERNS) {
+        throw new Error(`DismissalManager: maximum of ${DismissalManager.MAX_PATTERNS} patterns reached`);
+      }
     }
     this.patterns.push(pattern);
   }
@@ -309,7 +406,7 @@ export class AlertEscalation {
    */
   evaluate(event: SecurityEvent): { severity: Severity; escalated: boolean; count: number } {
     const key = this.computeKey(event);
-    const now = event.timestamp || Date.now();
+    const now = event.timestamp ?? Date.now();
 
     // Periodically clean up stale entries to prevent unbounded growth
     if (this.entries.size > 200) {
@@ -347,12 +444,14 @@ export class AlertEscalation {
    */
   cleanup(now?: number): void {
     const ts = now ?? Date.now();
+    const toDelete: string[] = [];
     for (const [key, entry] of this.entries) {
       entry.timestamps = entry.timestamps.filter((t) => ts - t < this.windowMs);
       if (entry.timestamps.length === 0) {
-        this.entries.delete(key);
+        toDelete.push(key);
       }
     }
+    for (const key of toDelete) this.entries.delete(key);
   }
 
   get size(): number {
@@ -405,15 +504,10 @@ export class AlertRouter {
 
   /**
    * 发送安全事件到所有已注册的 sink。
-   * 流程：驳回检查 → 升级评估（始终计数） → 去重检查 → 分发
+   * 流程：升级评估（始终计数） → 驳回检查 → 去重检查 → 分发
    */
   async send(event: SecurityEvent): Promise<void> {
-    // 1. 驳回检查
-    if (this.dismissal?.isDismissed(event)) {
-      return; // 已驳回，不告警
-    }
-
-    // 2. 升级评估（必须在去重前执行，以便正确计数重复事件）
+    // 1. 升级评估（必须在驳回和去重前执行，以便正确计数所有事件）
     let finalEvent = event;
     if (this.escalation) {
       const result = this.escalation.evaluate(event);
@@ -426,8 +520,14 @@ export class AlertRouter {
       }
     }
 
+    // 2. 驳回检查（blocked 事件始终告警，确保运维人员可见）
+    // Use finalEvent consistently so escalated events are checked correctly
+    if (this.dismissal?.isDismissed(finalEvent) && finalEvent.action !== "blocked") {
+      return; // 已驳回，不告警
+    }
+
     // 3. 去重检查（升级后的事件也受去重保护，但计数已完成）
-    const dedupKey = this.computeDedupKey(event);
+    const dedupKey = this.computeDedupKey(finalEvent);
     const now = Date.now();
     const lastSeen = this.dedup.get(dedupKey);
     if (lastSeen && now - lastSeen < this.dedupWindowMs) {
@@ -447,16 +547,24 @@ export class AlertRouter {
   }
 
   private computeDedupKey(event: SecurityEvent): string {
-    const raw = `${event.ruleName}:${event.toolName}:${event.matchedPattern ?? ""}`;
-    return createHash("sha256").update(raw).digest("hex").slice(0, 16);
+    // Severity intentionally excluded: escalated events should still be deduped
+    // against their pre-escalation versions to prevent alert floods.
+    // Use \x00 as separator since it cannot appear in any field value
+    // (null bytes are stripped during input validation).
+    // Use "\x01" as sentinel for undefined to distinguish from empty string ""
+    const s = (v: string | undefined) => v === undefined ? "\x01" : v;
+    return `${s(event.sessionId)}\x00${s(event.ruleName)}\x00${s(event.toolName)}\x00${s(event.matchedPattern)}`;
   }
 
   private cleanupDedup(now: number): void {
     if (this.dedup.size < 100) return; // 不频繁清理
+    // Collect expired keys first, then delete (avoid mutating during iteration)
+    const expired: string[] = [];
     for (const [key, ts] of this.dedup) {
       if (now - ts > this.dedupWindowMs) {
-        this.dedup.delete(key);
+        expired.push(key);
       }
     }
+    for (const key of expired) this.dedup.delete(key);
   }
 }
