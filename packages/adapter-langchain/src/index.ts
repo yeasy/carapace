@@ -233,7 +233,7 @@ export class CarapaceBridge {
       status: "ok",
       version: PKG_VERSION,
       rules: this.engine.getRules().length,
-      trustedSkills: [...this.engine.getTrustedSkills()],
+      trustedSkills: [], // Redacted: trusted skill names are security-sensitive
       stats: { ...this.stats },
     };
   }
@@ -242,12 +242,17 @@ export class CarapaceBridge {
    * 启动 HTTP 服务
    */
   async start(): Promise<void> {
+    if (this.server) throw new Error("Bridge already running — call stop() first");
     const port = this.config.port ?? 9876;
     const host = this.config.host ?? "127.0.0.1";
     const corsOrigin = this.config.corsOrigin;
     const maxBodySize = this.config.maxBodySize ?? 1_048_576; // 1 MB
 
     this.server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      // Security headers
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("X-Frame-Options", "DENY");
+
       // CORS headers only when explicitly configured
       if (corsOrigin) {
         res.setHeader("Access-Control-Allow-Origin", corsOrigin);
@@ -262,16 +267,17 @@ export class CarapaceBridge {
       }
 
       const url = req.url ?? "/";
+      const urlPath = url.split("?")[0];
 
       // GET /status
-      if (req.method === "GET" && url === "/status") {
+      if (req.method === "GET" && urlPath === "/status") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(this.getStatus()));
         return;
       }
 
       // GET /health
-      if (req.method === "GET" && url === "/health") {
+      if (req.method === "GET" && urlPath === "/health") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ status: "ok" }));
         return;
@@ -279,15 +285,18 @@ export class CarapaceBridge {
 
       // ── 限制请求体大小的辅助函数 ──
       const readBody = (req: IncomingMessage, cb: (body: string) => void): void => {
-        let body = "";
+        const chunks: Buffer[] = [];
+        let totalSize = 0;
         let exceeded = false;
         let responded = false;
         req.on("data", (chunk: Buffer) => {
-          body += chunk.toString();
-          if (body.length > maxBodySize) {
+          totalSize += chunk.length;
+          if (totalSize > maxBodySize) {
             exceeded = true;
             req.destroy();
+            return;
           }
+          chunks.push(chunk);
         });
         const send413 = () => {
           if (responded) return;
@@ -297,24 +306,38 @@ export class CarapaceBridge {
         };
         req.on("end", () => {
           if (exceeded) { send413(); return; }
-          cb(body);
+          try {
+            const body = Buffer.concat(chunks).toString("utf-8");
+            cb(body);
+          } catch {
+            if (!responded) {
+              responded = true;
+              res.writeHead(500, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "Internal server error" }));
+            }
+          }
         });
         req.on("error", () => {
-          if (exceeded) send413();
+          if (exceeded) { send413(); return; }
+          if (!responded) {
+            responded = true;
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Request error" }));
+          }
         });
       };
 
       // POST /check
-      if (req.method === "POST" && url === "/check") {
+      if (req.method === "POST" && urlPath === "/check") {
         readBody(req, (body) => {
           try {
             const checkReq = JSON.parse(body) as CheckRequest;
 
-            if (!checkReq.toolName || !checkReq.toolParams) {
+            if (!checkReq.toolName || typeof checkReq.toolName !== "string" || !checkReq.toolParams || typeof checkReq.toolParams !== "object" || Array.isArray(checkReq.toolParams)) {
               res.writeHead(400, { "Content-Type": "application/json" });
               res.end(
                 JSON.stringify({
-                  error: "Missing required fields: toolName, toolParams",
+                  error: "Missing or invalid required fields: toolName (string), toolParams (object)",
                 })
               );
               return;
@@ -332,7 +355,7 @@ export class CarapaceBridge {
       }
 
       // POST /check/batch
-      if (req.method === "POST" && url === "/check/batch") {
+      if (req.method === "POST" && urlPath === "/check/batch") {
         readBody(req, (body) => {
           try {
             const checks = JSON.parse(body) as CheckRequest[];
@@ -350,7 +373,7 @@ export class CarapaceBridge {
 
             // Validate each item has required fields
             for (let i = 0; i < checks.length; i++) {
-              if (!checks[i].toolName || !checks[i].toolParams) {
+              if (!checks[i] || typeof checks[i] !== "object" || !checks[i].toolName || !checks[i].toolParams || typeof checks[i].toolParams !== "object" || Array.isArray(checks[i].toolParams)) {
                 res.writeHead(400, { "Content-Type": "application/json" });
                 res.end(JSON.stringify({
                   error: `Item ${i}: missing required fields toolName, toolParams`,
@@ -375,8 +398,24 @@ export class CarapaceBridge {
       res.end(JSON.stringify({ error: "Not found" }));
     });
 
-    return new Promise((resolve) => {
+    // Set timeouts to prevent slow-loris style attacks
+    this.server.requestTimeout = 30_000;
+    this.server.headersTimeout = 10_000;
+    this.server.keepAliveTimeout = 5_000;
+
+    return new Promise((resolve, reject) => {
+      const onError = (err: Error) => {
+        const srv = this.server;
+        this.server = null;
+        srv?.close();
+        reject(err);
+      };
+      this.server!.on("error", onError);
       this.server!.listen(port, host, () => {
+        this.server!.removeListener("error", onError);
+        this.server!.on("error", (err: Error) => {
+          this.log(`HTTP server error: ${err.message}`);
+        });
         this.log(`HTTP bridge 已启动: http://${host}:${port}`);
         this.log(
           `已加载 ${this.engine.getRules().length} 条规则, ` +
@@ -407,6 +446,7 @@ export class CarapaceBridge {
     return new Promise((resolve) => {
       if (this.server) {
         this.server.close(() => {
+          this.server = null;
           this.log("HTTP bridge 已停止");
           resolve();
         });

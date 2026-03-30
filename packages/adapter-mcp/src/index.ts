@@ -43,6 +43,7 @@ import {
 } from "@carapace/core";
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 
 // ── JSON-RPC 类型 ──
 
@@ -97,6 +98,7 @@ export class McpProxy {
   private alertRouter: AlertRouter;
   private config: McpProxyConfig;
   private childProcess: ChildProcess | null = null;
+  private stdinListeners: { event: string; handler: (...args: unknown[]) => void }[] = [];
   private sessionId: string;
   private stats = {
     totalRequests: 0,
@@ -107,7 +109,7 @@ export class McpProxy {
 
   constructor(config: McpProxyConfig = {}) {
     this.config = config;
-    this.sessionId = `mcp-${Date.now()}`;
+    this.sessionId = `mcp-${crypto.randomUUID()}`;
     this.engine = new RuleEngine();
     this.alertRouter = new AlertRouter();
 
@@ -170,6 +172,18 @@ export class McpProxy {
    * 仅对 tools/call 方法进行安全检测，其他消息原样放行。
    */
   interceptRequest(request: JsonRpcRequest): InterceptResult {
+    if (typeof request.method !== "string") {
+      return {
+        allowed: false,
+        events: [],
+        errorResponse: {
+          jsonrpc: "2.0",
+          id: request.id ?? undefined,
+          error: { code: -32600, message: "Invalid request: method must be a string" },
+        },
+      };
+    }
+
     this.stats.totalRequests++;
 
     // 仅拦截 tools/call
@@ -216,7 +230,7 @@ export class McpProxy {
           jsonrpc: "2.0",
           id: request.id,
           error: {
-            code: -32600,
+            code: -32001,
             message: `🛡️ Carapace: ${decision.blockReason}`,
             data: {
               blocked: true,
@@ -239,9 +253,15 @@ export class McpProxy {
    */
   interceptResponse(
     toolName: string,
-    result: unknown
+    result: unknown,
+    skillName?: string
   ): SecurityEvent[] {
     if (!result || typeof result !== "string" || result.length < 50) {
+      return [];
+    }
+
+    // 受信 skill 跳过规则评估（normalized to match engine behavior）
+    if (skillName && this.engine.getTrustedSkills().has(skillName.trim().toLowerCase())) {
       return [];
     }
 
@@ -249,6 +269,7 @@ export class McpProxy {
       toolName,
       toolParams: { _result: result },
       sessionId: this.sessionId,
+      skillName,
       timestamp: Date.now(),
     };
 
@@ -287,38 +308,98 @@ export class McpProxy {
     args: string[] = [],
     options?: { env?: Record<string, string> }
   ): Promise<void> {
-    this.log(`启动 stdio 代理: ${command} ${args.join(" ")}`);
+    // Validate command to prevent command injection
+    if (/[\x00\n\r|;&`$(){}]/.test(command) || command.includes("..")) {
+      throw new Error(`McpProxy: unsafe command rejected: contains shell metacharacters or path traversal`);
+    }
+    for (const arg of args) {
+      if (/\x00/.test(arg)) {
+        throw new Error(`McpProxy: unsafe argument rejected: contains null byte`);
+      }
+    }
+
+    // Sanitize log output to prevent terminal escape sequence injection
+    const sanitize = (s: string) => s.replace(/[\x00-\x1f\x7f]/g, "");
+    this.log(`启动 stdio 代理: ${sanitize(command)} ${args.map(sanitize).join(" ")}`);
+
+    // Sanitize env overrides: block security-sensitive variables that could
+    // enable code injection in child processes (e.g., LD_PRELOAD, NODE_OPTIONS)
+    const BLOCKED_ENV_KEYS = new Set([
+      "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES",
+      "NODE_OPTIONS", "NODE_DEBUG", "ELECTRON_RUN_AS_NODE",
+      "BASH_ENV", "ENV", "ZDOTDIR",
+      "PYTHONSTARTUP", "PYTHONPATH",
+      "PERL5OPT", "PERL5LIB",
+      "RUBYOPT", "RUBYLIB",
+      "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS",  // Java agent injection
+      "GCONV_PATH", "GETCONF_DIR",           // glibc code execution
+      "HOSTALIASES",                          // DNS resolution override
+      "DOTNET_STARTUP_HOOKS",                 // .NET code injection
+      "GOFLAGS",                              // Go build flag injection
+    ]);
+    const safeEnv: Record<string, string> = {};
+    for (const [k, v] of Object.entries(options?.env ?? {})) {
+      if (!BLOCKED_ENV_KEYS.has(k.toUpperCase())) {
+        safeEnv[k] = v;
+      }
+    }
 
     this.childProcess = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, ...(options?.env ?? {}) },
+      env: { ...process.env, ...safeEnv },
     });
 
     const child = this.childProcess;
 
     // 读取 stdin（来自 LLM client）并拦截
     let stdinBuffer = "";
+    const stdinDecoder = new StringDecoder("utf-8"); // handle multi-byte char boundaries
     const MAX_STDIN_BUFFER = 10 * 1024 * 1024; // 10MB 上限，防止内存耗尽
 
     // 处理 stdin EOF（client 断开连接时优雅关闭子进程）
-    process.stdin.on("end", () => {
+    const onEnd = () => {
       this.log("stdin EOF，正在关闭子进程...");
+      stdinBuffer += stdinDecoder.end();
+      // Flush any remaining complete message in the buffer before closing
+      if (stdinBuffer.trim()) {
+        try {
+          const request = JSON.parse(stdinBuffer) as JsonRpcRequest;
+          const intercept = this.interceptRequest(request);
+          if (!intercept.allowed && intercept.errorResponse) {
+            process.stdout.write(JSON.stringify(intercept.errorResponse) + "\n");
+          } else {
+            if (child.stdin?.writable) { child.stdin.write(stdinBuffer + "\n"); }
+          }
+        } catch {
+          // Non-JSON remainder on EOF — drop it to prevent forwarding unvalidated data.
+          // An attacker could craft a partial JSON line followed by EOF to inject
+          // arbitrary content into the child process stdin without security checks.
+          this.log("dropping non-JSON remainder on stdin EOF");
+        }
+        stdinBuffer = "";
+      }
       child.stdin?.end();
-    });
-
-    process.stdin.on("error", (err) => {
+    };
+    const onError = (err: Error) => {
       this.log(`stdin 错误: ${err.message}`);
       child.stdin?.end();
-    });
-
-    process.stdin.on("data", (chunk: Buffer) => {
-      stdinBuffer += chunk.toString();
+    };
+    const onData = (chunk: Buffer) => {
+      stdinBuffer += stdinDecoder.write(chunk);
 
       // 防止缓冲区无限增长导致内存耗尽
       if (stdinBuffer.length > MAX_STDIN_BUFFER) {
         this.log(`stdin 缓冲区超过 ${MAX_STDIN_BUFFER} 字节限制，断开连接`);
+        // Clear buffer before removing listeners to prevent stale data processing in onEnd
+        stdinBuffer = "";
+        // Remove stdin listeners before killing to prevent further callbacks
+        for (const { event, handler } of this.stdinListeners) {
+          process.stdin.removeListener(event, handler);
+        }
+        this.stdinListeners = [];
         child.stdin?.end();
-        process.exit(1);
+        child.kill("SIGTERM");
+        return;
       }
 
       // JSON-RPC 消息以换行分隔（兼容 \r\n 和 \n）
@@ -327,7 +408,7 @@ export class McpProxy {
 
       for (const line of lines) {
         if (!line.trim()) {
-          child.stdin?.write("\n");
+          if (child.stdin?.writable) { child.stdin.write("\n"); }
           continue;
         }
 
@@ -342,14 +423,23 @@ export class McpProxy {
             );
           } else {
             // 放行：转发到实际 MCP server
-            child.stdin?.write(line + "\n");
+            if (child.stdin?.writable) { child.stdin.write(line + "\n"); }
           }
         } catch {
           // 非 JSON 行原样转发
-          child.stdin?.write(line + "\n");
+          if (child.stdin?.writable) { child.stdin.write(line + "\n"); }
         }
       }
-    });
+    };
+
+    process.stdin.on("end", onEnd);
+    process.stdin.on("error", onError as (...args: unknown[]) => void);
+    process.stdin.on("data", onData as (...args: unknown[]) => void);
+    this.stdinListeners = [
+      { event: "end", handler: onEnd },
+      { event: "error", handler: onError as (...args: unknown[]) => void },
+      { event: "data", handler: onData as (...args: unknown[]) => void },
+    ];
 
     // 读取 child stdout（来自 MCP server）并转发到 stdout
     if (child.stdout) {
@@ -370,7 +460,15 @@ export class McpProxy {
 
     // 等待子进程退出
     return new Promise((resolve, reject) => {
+      let settled = false;
       child.on("close", (code) => {
+        if (settled) return;
+        settled = true;
+        // Clean up stdin listeners on normal exit to prevent leaks
+        for (const { event, handler } of this.stdinListeners) {
+          process.stdin.removeListener(event, handler);
+        }
+        this.stdinListeners = [];
         this.log(`子进程退出, code=${code}`);
         this.log(
           `统计: 总请求=${this.stats.totalRequests}, ` +
@@ -382,7 +480,16 @@ export class McpProxy {
         else reject(new Error(`MCP server exited with code ${code}`));
       });
 
-      child.on("error", reject);
+      child.on("error", (err) => {
+        if (settled) return;
+        settled = true;
+        // Clean up stdin listeners on spawn error to prevent leaks
+        for (const { event, handler } of this.stdinListeners) {
+          process.stdin.removeListener(event, handler);
+        }
+        this.stdinListeners = [];
+        reject(err);
+      });
     });
   }
 
@@ -390,8 +497,25 @@ export class McpProxy {
    * 停止代理
    */
   stop(): void {
+    // Remove stdin listeners to prevent leaks on restart
+    for (const { event, handler } of this.stdinListeners) {
+      process.stdin.removeListener(event, handler);
+    }
+    this.stdinListeners = [];
+
     if (this.childProcess) {
-      this.childProcess.kill("SIGTERM");
+      const cp = this.childProcess;
+      let exited = false;
+      cp.once("close", () => { exited = true; });
+      cp.kill("SIGTERM");
+      // Escalate to SIGKILL if child doesn't exit within 5 seconds
+      const killTimer = setTimeout(() => {
+        if (!exited) {
+          try { cp.kill("SIGKILL"); } catch { /* ignore */ }
+        }
+      }, 5000);
+      cp.once("close", () => clearTimeout(killTimer));
+      killTimer.unref();
       this.childProcess = null;
     }
   }

@@ -80,7 +80,7 @@ describe("MCP adapter malformed messages", () => {
     expect(() => proxy.interceptRequest(req)).not.toThrow();
   });
 
-  it("handles null method", () => {
+  it("rejects null method as invalid request", () => {
     const req = {
       jsonrpc: "2.0",
       id: "1",
@@ -89,7 +89,8 @@ describe("MCP adapter malformed messages", () => {
     } as any;
 
     const result = proxy.interceptRequest(req);
-    expect(result.allowed).toBe(true);
+    expect(result.allowed).toBe(false);
+    expect(result.errorResponse).toBeDefined();
   });
 
   it("handles empty string method", () => {

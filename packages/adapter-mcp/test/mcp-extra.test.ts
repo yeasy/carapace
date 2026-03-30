@@ -255,6 +255,28 @@ match:
       );
       expect(result).toBeDefined();
     });
+
+    it("trusted skill bypasses interceptResponse rule evaluation", () => {
+      const proxy = createMcpProxy({
+        trustedSkills: ["my-trusted-skill"],
+        logTarget: "none",
+      });
+      // This contains a sensitive pattern that would normally trigger data-exfil
+      const sensitiveResult =
+        "Found credential: AKIAIOSFODNN7EXAMPLE in output with some extra padding text to exceed fifty characters minimum threshold";
+
+      // Without skill name — should trigger
+      const eventsNoSkill = proxy.interceptResponse("bash", sensitiveResult);
+
+      // With trusted skill name — should be skipped
+      const eventsTrusted = proxy.interceptResponse("bash", sensitiveResult, "my-trusted-skill");
+      expect(eventsTrusted).toEqual([]);
+
+      // With non-trusted skill name — should still trigger
+      const eventsUntrusted = proxy.interceptResponse("bash", sensitiveResult, "untrusted-skill");
+      // eventsNoSkill and eventsUntrusted should behave the same (both may trigger)
+      expect(eventsUntrusted.length).toBe(eventsNoSkill.length);
+    });
   });
 
   // ── getStats 返回副本 ──
@@ -485,7 +507,7 @@ match:
       expect(err.jsonrpc).toBe("2.0");
       expect(err.id).toBe(42);
       expect(err.error).toBeDefined();
-      expect(err.error!.code).toBe(-32600);
+      expect(err.error!.code).toBe(-32001);
       expect(err.error!.message).toContain("Carapace");
       expect(err.error!.data).toBeDefined();
       expect((err.error!.data as any).blocked).toBe(true);

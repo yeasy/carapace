@@ -3,7 +3,10 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { CarapaceBridge, createBridge } from "../src/index.js";
+
+const PKG_VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
 
 describe("CarapaceBridge", () => {
   let bridge: CarapaceBridge | null = null;
@@ -95,7 +98,7 @@ describe("CarapaceBridge", () => {
 
     const status = bridge.getStatus();
     expect(status.status).toBe("ok");
-    expect(status.version).toBe("0.8.0");
+    expect(status.version).toBe(PKG_VERSION);
     expect(status.rules).toBeGreaterThanOrEqual(5);
     expect(status.stats.totalChecks).toBe(2);
     expect(status.stats.totalAlerts).toBeGreaterThan(0);

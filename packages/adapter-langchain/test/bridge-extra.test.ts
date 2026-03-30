@@ -4,7 +4,10 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { CarapaceBridge, createBridge } from "../src/index.js";
+
+const PKG_VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
 
 describe("CarapaceBridge - Extra Tests", () => {
   let bridge: CarapaceBridge | null = null;
@@ -184,7 +187,7 @@ describe("CarapaceBridge - Extra Tests", () => {
     it("version 为 0.7.0", () => {
       bridge = createBridge();
       const status = bridge.getStatus();
-      expect(status.version).toBe("0.8.0");
+      expect(status.version).toBe(PKG_VERSION);
     });
 
     it("status 为 ok", () => {
@@ -200,12 +203,12 @@ describe("CarapaceBridge - Extra Tests", () => {
       expect(status.rules).toBeGreaterThanOrEqual(5);
     });
 
-    it("trustedSkills 为数组", () => {
+    it("trustedSkills is redacted (empty array) for security", () => {
       bridge = createBridge({ trustedSkills: ["skill1", "skill2"] });
       const status = bridge.getStatus();
       expect(Array.isArray(status.trustedSkills)).toBe(true);
-      expect(status.trustedSkills).toContain("skill1");
-      expect(status.trustedSkills).toContain("skill2");
+      // trustedSkills are redacted from status response to prevent info disclosure
+      expect(status.trustedSkills).toHaveLength(0);
     });
 
     it("stats 对象包含所有字段", () => {
@@ -330,7 +333,7 @@ describe("CarapaceBridge - Extra Tests", () => {
 
       const data = (await response.json()) as any;
       expect(data.status).toBe("ok");
-      expect(data.version).toBe("0.8.0");
+      expect(data.version).toBe(PKG_VERSION);
       expect(data.rules).toBeGreaterThanOrEqual(5);
       expect(data.stats).toBeDefined();
     });
@@ -918,6 +921,58 @@ describe("CarapaceBridge - Extra Tests", () => {
 
       // 取决于实现，可能接受或拒绝
       expect([200, 400]).toContain(response.status);
+    });
+  });
+
+  // ── /check toolName type validation ──
+
+  describe("HTTP POST /check rejects non-string toolName", () => {
+    it("rejects numeric toolName with 400", async () => {
+      bridge = createBridge({ port: 0 });
+      await bridge.start();
+      const port = bridge.getPort();
+
+      const response = await fetch(`http://127.0.0.1:${port}/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toolName: 123, toolParams: {} }),
+      });
+
+      expect(response.status).toBe(400);
+      const data = (await response.json()) as any;
+      expect(data.error).toContain("toolName");
+    });
+
+    it("rejects null toolName with 400", async () => {
+      bridge = createBridge({ port: 0 });
+      await bridge.start();
+      const port = bridge.getPort();
+
+      const response = await fetch(`http://127.0.0.1:${port}/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toolName: null, toolParams: {} }),
+      });
+
+      expect(response.status).toBe(400);
+      const data = (await response.json()) as any;
+      expect(data.error).toContain("toolName");
+    });
+
+    it("rejects array toolName with 400", async () => {
+      bridge = createBridge({ port: 0 });
+      await bridge.start();
+      const port = bridge.getPort();
+
+      const response = await fetch(`http://127.0.0.1:${port}/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toolName: ["bash"], toolParams: {} }),
+      });
+
+      expect(response.status).toBe(400);
+      const data = (await response.json()) as any;
+      expect(data.error).toContain("toolName");
     });
   });
 });

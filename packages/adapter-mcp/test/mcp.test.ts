@@ -67,7 +67,7 @@ describe("McpProxy", () => {
     expect(result.blockReason).toBeTruthy();
     expect(result.errorResponse).toBeDefined();
     expect(result.errorResponse!.id).toBe(42);
-    expect(result.errorResponse!.error?.code).toBe(-32600);
+    expect(result.errorResponse!.error?.code).toBe(-32001);
   });
 
   it("blockOnCritical=false 不阻断但产生告警", () => {
