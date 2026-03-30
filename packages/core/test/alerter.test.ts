@@ -10,10 +10,14 @@ import {
   HookMessageSink,
   DismissalManager,
   WebhookSink,
+  LogFileSink,
   type EscalationConfig,
   type DismissalPattern,
 } from "../src/alerter.js";
-import type { SecurityEvent } from "../src/types.js";
+import type { SecurityEvent, AlertPayload } from "../src/types.js";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, unlinkSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve, dirname } from "node:path";
 
 // ─── Test Helpers ────────────────────────────────────────────────────
 
@@ -988,6 +992,58 @@ describe("AlertRouter", () => {
     expect(mockSink.send).toHaveBeenCalledTimes(2);
   });
 
+  it("should not collide dedup keys when field values contain separator chars", async () => {
+    const mockSink = { name: "mock", send: vi.fn() };
+    const router = new AlertRouter({ enableEscalation: false, enableDismissal: false });
+    router.addSink(mockSink);
+
+    // Two events where naive colon-based concatenation would collide:
+    // "a:b" + "c" vs "a" + "b:c"
+    const event1 = createSecurityEvent({
+      severity: "high",
+      sessionId: "a:b",
+      ruleName: "c",
+      toolName: "tool1",
+    });
+    const event2 = createSecurityEvent({
+      severity: "high",
+      sessionId: "a",
+      ruleName: "b:c",
+      toolName: "tool1",
+    });
+
+    await router.send(event1);
+    await router.send(event2);
+
+    // Should NOT be deduped — different field distributions
+    expect(mockSink.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("should distinguish undefined vs empty-string fields in dedup key", async () => {
+    const mockSink = { name: "mock", send: vi.fn() };
+    const router = new AlertRouter({ enableEscalation: false, enableDismissal: false });
+    router.addSink(mockSink);
+
+    const event1 = createSecurityEvent({
+      severity: "high",
+      sessionId: undefined,
+      ruleName: "rule1",
+      toolName: "tool1",
+    });
+    const event2 = createSecurityEvent({
+      severity: "high",
+      sessionId: "",
+      ruleName: "rule1",
+      toolName: "tool1",
+    });
+
+    await router.send(event1);
+    await router.send(event2);
+
+    // Should NOT be deduped — undefined and empty string are semantically different
+    expect(mockSink.send).toHaveBeenCalledTimes(2);
+  });
+
   it("should stop sending to a sink after removeSink()", async () => {
     const mockSink = {
       name: "removable",
@@ -1088,5 +1144,219 @@ describe("WebhookSink", () => {
 
   it("rejects javascript protocol", () => {
     expect(() => new WebhookSink("javascript:alert(1)")).toThrow(/only supports http\/https/);
+  });
+});
+
+// ─── LogFileSink TOCTOU Protection Tests ─────────────────────────────
+
+describe("LogFileSink", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "carapace-logfile-test-"));
+  });
+
+  function makePayload(overrides: Partial<SecurityEvent> = {}): AlertPayload {
+    const event = createSecurityEvent(overrides);
+    return {
+      event,
+      summary: `[${event.severity.toUpperCase()}] ${event.title}`,
+      actionTaken: event.action,
+    };
+  }
+
+  it("should write to a valid log file path", async () => {
+    const logPath = join(tmpDir, "alerts.log");
+    const sink = new LogFileSink(logPath);
+
+    await sink.send(makePayload({ title: "Test alert", description: "Test description" }));
+
+    const content = readFileSync(logPath, "utf-8");
+    expect(content).toContain("Test alert");
+    expect(content).toContain("Test description");
+  });
+
+  it("assertNotBlocked rejects blocked system directories", () => {
+    expect(() => LogFileSink.assertNotBlocked("/etc/alert.log")).toThrow(
+      /refusing to write to system directory/
+    );
+    expect(() => LogFileSink.assertNotBlocked("/usr/local/alert.log")).toThrow(
+      /refusing to write to system directory/
+    );
+    expect(() => LogFileSink.assertNotBlocked("/bin/alert.log")).toThrow(
+      /refusing to write to system directory/
+    );
+    expect(() => LogFileSink.assertNotBlocked("/sbin/alert.log")).toThrow(
+      /refusing to write to system directory/
+    );
+  });
+
+  it("assertNotBlocked allows paths in temp dir and user home", () => {
+    expect(() =>
+      LogFileSink.assertNotBlocked(join(tmpdir(), "test/alert.log"))
+    ).not.toThrow();
+    expect(() =>
+      LogFileSink.assertNotBlocked("/home/user/logs/alert.log")
+    ).not.toThrow();
+  });
+
+  it("send() allows writes when real path is stable", async () => {
+    const logPath = join(tmpDir, "valid-alerts.log");
+    const sink = new LogFileSink(logPath);
+
+    await sink.send(makePayload({ title: "Valid write", description: "Should succeed" }));
+
+    const content = readFileSync(logPath, "utf-8");
+    expect(content).toContain("Valid write");
+  });
+
+  it("send() blocks writes when symlink is swapped to a different directory (TOCTOU defense)", async () => {
+    // Setup: create two real directories - one valid, one that will be the attack target
+    const validDir = join(tmpDir, "valid-logs");
+    const attackTargetDir = join(tmpDir, "attack-target");
+    const symlinkDir = join(tmpDir, "logdir");
+
+    mkdirSync(validDir);
+    mkdirSync(attackTargetDir);
+
+    // Create symlink pointing to valid directory
+    symlinkSync(validDir, symlinkDir);
+
+    // Construct LogFileSink while symlink points to valid directory
+    const logPath = join(symlinkDir, "alerts.log");
+    const sink = new LogFileSink(logPath);
+
+    // Simulate attack: swap symlink to point to the attack target directory
+    unlinkSync(symlinkDir);
+    symlinkSync(attackTargetDir, symlinkDir);
+
+    // Spy on stderr to capture the error
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await sink.send(makePayload({ title: "TOCTOU attack", description: "Should be blocked" }));
+
+    // The write should have been blocked because the resolved path changed
+    const stderrOutput = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderrOutput).toContain("path changed after construction");
+
+    // The log file should NOT have been written in the attack target
+    const attackFilePath = join(attackTargetDir, "alerts.log");
+    expect(existsSync(attackFilePath)).toBe(false);
+
+    stderrSpy.mockRestore();
+  });
+
+  it("send() blocks writes when symlink is swapped to a blocked system path", async () => {
+    // Setup: create a valid directory and a symlink pointing to it
+    const validDir = join(tmpDir, "valid-logs");
+    const symlinkDir = join(tmpDir, "logdir");
+
+    mkdirSync(validDir);
+    symlinkSync(validDir, symlinkDir);
+
+    // Construct LogFileSink while symlink points to valid directory
+    const logPath = join(symlinkDir, "alerts.log");
+    const sink = new LogFileSink(logPath);
+
+    // Simulate attack: swap symlink to point to /usr (a blocked system directory)
+    unlinkSync(symlinkDir);
+    symlinkSync("/usr", symlinkDir);
+
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await sink.send(makePayload({ title: "System path attack", description: "Should be blocked" }));
+
+    const stderrOutput = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    // Should detect either the prefix change or the blocked system directory
+    const blocked =
+      stderrOutput.includes("path changed after construction") ||
+      stderrOutput.includes("refusing to write to system directory");
+    expect(blocked).toBe(true);
+
+    stderrSpy.mockRestore();
+  });
+
+  it("send() continues to work after symlink swap is detected (no crash loop)", async () => {
+    const validDir = join(tmpDir, "valid-logs");
+    const attackDir = join(tmpDir, "attack-target");
+    const symlinkDir = join(tmpDir, "logdir");
+
+    mkdirSync(validDir);
+    mkdirSync(attackDir);
+    symlinkSync(validDir, symlinkDir);
+
+    const logPath = join(symlinkDir, "alerts.log");
+    const sink = new LogFileSink(logPath);
+
+    // Swap symlink
+    unlinkSync(symlinkDir);
+    symlinkSync(attackDir, symlinkDir);
+
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    // First send is blocked
+    await sink.send(makePayload({ title: "Attack 1" }));
+    expect(stderrSpy).toHaveBeenCalled();
+
+    // Restore original symlink
+    unlinkSync(symlinkDir);
+    symlinkSync(validDir, symlinkDir);
+
+    stderrSpy.mockClear();
+
+    // Second send should succeed (path is valid again)
+    await sink.send(makePayload({ title: "Legit write" }));
+
+    // stderr should not have any TOCTOU errors for this send
+    const stderrOutput = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderrOutput).not.toContain("path changed after construction");
+    expect(stderrOutput).not.toContain("refusing to write to system directory");
+
+    // The file should exist in the valid directory
+    const content = readFileSync(join(validDir, "alerts.log"), "utf-8");
+    expect(content).toContain("Legit write");
+
+    stderrSpy.mockRestore();
+  });
+
+  it("constructor rejects path whose real parent resolves to blocked directory", () => {
+    // Create a symlink in tmpDir that points to /usr
+    const symlinkToUsr = join(tmpDir, "usr-link");
+    symlinkSync("/usr", symlinkToUsr);
+
+    expect(() => new LogFileSink(join(symlinkToUsr, "alert.log"))).toThrow(
+      /refusing to write to system directory/
+    );
+  });
+});
+
+// ─── DismissalManager empty-string field edge cases ─────────────────
+
+describe("DismissalManager — empty-string field edge cases", () => {
+  it("rejects dismissal with empty-string ruleName as wildcard", () => {
+    const manager = new DismissalManager();
+    // Empty string is falsy, so it is treated as "not set" and rejected as a wildcard
+    expect(() =>
+      manager.addDismissal({
+        id: "d1",
+        ruleName: "",
+        reason: "test",
+        createdAt: Date.now(),
+      })
+    ).toThrow("must specify at least one");
+  });
+
+  it("rejects dismissal with only empty-string fields as wildcard", () => {
+    const manager = new DismissalManager();
+    expect(() =>
+      manager.addDismissal({
+        id: "d2",
+        ruleName: "",
+        toolName: "",
+        skillName: "",
+        reason: "test",
+        createdAt: Date.now(),
+      })
+    ).toThrow("must specify at least one");
   });
 });

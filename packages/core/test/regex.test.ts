@@ -82,21 +82,43 @@ describe("isRedosSafe", () => {
     });
   });
 
-  describe("dangerous patterns (overlapping alternations)", () => {
-    it("should reject (a|b)+", () => {
-      expect(isRedosSafe("(a|b)+")).toBe(false);
+  describe("safe patterns (literal-only alternations with quantifiers)", () => {
+    it("should accept (a|b)+ as literal-only alternation", () => {
+      expect(isRedosSafe("(a|b)+")).toBe(true);
     });
 
-    it("should reject (a|b)*", () => {
-      expect(isRedosSafe("(a|b)*")).toBe(false);
+    it("should accept (a|b)* as literal-only alternation", () => {
+      expect(isRedosSafe("(a|b)*")).toBe(true);
     });
 
-    it("should reject (foo|bar)+", () => {
-      expect(isRedosSafe("(foo|bar)+")).toBe(false);
+    it("should accept (foo|bar)+ as literal-only alternation", () => {
+      expect(isRedosSafe("(foo|bar)+")).toBe(true);
     });
 
-    it("should reject (x|y|z)*", () => {
-      expect(isRedosSafe("(x|y|z)*")).toBe(false);
+    it("should accept (x|y|z)* as literal-only alternation", () => {
+      expect(isRedosSafe("(x|y|z)*")).toBe(true);
+    });
+  });
+
+  describe("overlapping literal alternation detection", () => {
+    it("should reject (a|a)+ — duplicate branches cause ReDoS", () => {
+      expect(isRedosSafe("(a|a)+")).toBe(false);
+    });
+
+    it("should reject (ab|ab)+ — duplicate literal branches", () => {
+      expect(isRedosSafe("(ab|ab)+")).toBe(false);
+    });
+
+    it("should reject (a|ab)+ — prefix-overlapping branches", () => {
+      expect(isRedosSafe("(a|ab)+")).toBe(false);
+    });
+
+    it("should reject (foo|foobar)+ — prefix-overlapping branches", () => {
+      expect(isRedosSafe("(foo|foobar)+")).toBe(false);
+    });
+
+    it("should accept (abc|def)+ — non-overlapping distinct branches", () => {
+      expect(isRedosSafe("(abc|def)+")).toBe(true);
     });
   });
 
@@ -114,6 +136,24 @@ describe("isRedosSafe", () => {
     it("should accept patterns shorter than 512 characters", () => {
       const pattern = "a".repeat(100);
       expect(isRedosSafe(pattern)).toBe(true);
+    });
+  });
+
+  describe("backreference detection", () => {
+    it("should reject backreference pattern (a)\\1+", () => {
+      expect(isRedosSafe("(a)\\1+")).toBe(false);
+    });
+
+    it("should reject backreference pattern (.*)\\1", () => {
+      expect(isRedosSafe("(.*)\\1")).toBe(false);
+    });
+
+    it("should reject multi-digit backreference \\2", () => {
+      expect(isRedosSafe("(a)(b)\\2")).toBe(false);
+    });
+
+    it("should accept \\0 which is not a backreference", () => {
+      expect(isRedosSafe("\\0")).toBe(true);
     });
   });
 });
