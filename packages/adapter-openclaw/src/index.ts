@@ -8,6 +8,13 @@
  * 配置：~/.openclaw/config.json → plugins.entries.carapace.config
  */
 
+import { readFileSync } from "node:fs";
+
+let PKG_VERSION = "unknown";
+try {
+  PKG_VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
+} catch { /* fallback to "unknown" */ }
+
 import {
   RuleEngine,
   AlertRouter,
@@ -24,6 +31,7 @@ import {
   generateEventId,
   type CarapaceConfig,
   type RuleContext,
+  type BaselineTracker,
 } from "@carapace/core";
 
 // ── OpenClaw 插件 API 类型（仅声明我们用到的部分） ──
@@ -38,11 +46,9 @@ interface OpenClawPluginApi {
     error(msg: string, ...args: unknown[]): void;
     debug(msg: string, ...args: unknown[]): void;
   };
-  on(
-    hookName: string,
-    handler: (event: any, ctx: any) => any,
-    opts?: { priority?: number }
-  ): void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  on(hookName: string, handler: (...args: any[]) => any, opts?: { priority?: number }): void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   registerCli?(registrar: any, opts?: { commands?: string[] }): void;
 }
 
@@ -93,7 +99,7 @@ const plugin = {
     }
 
     // 行为基线（可选）
-    let baselineTracker: InstanceType<typeof import("@carapace/core").BaselineTracker> | null = null;
+    let baselineTracker: BaselineTracker | null = null;
     if (config.enableBaseline) {
       const { rule, tracker } = createBaselineDriftRule();
       engine.addRule(rule);
@@ -128,20 +134,33 @@ const plugin = {
 
     // ── 会话计数器 ──
     const sessionStats = new Map<string, SessionStats>();
+    const firstRunData = new Map<string, FirstRunReport>();
 
     // ── TTL 清理：每 5 分钟清理超过 1 小时未活动的会话数据 ──
     const SESSION_TTL_MS = 60 * 60 * 1000; // 1 小时
     const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 分钟
+    const FIRST_RUN_DATA_MAX = 10_000; // cap on unique skills tracked
     const cleanupTimer = setInterval(() => {
       const now = Date.now();
+      // Collect expired keys first, then delete (avoid mutating Map during iteration)
+      const expiredSessions: string[] = [];
       for (const [sessionId, stats] of sessionStats) {
         if (now - stats.lastActivity > SESSION_TTL_MS) {
           if (debug) {
             api.logger.info(`[carapace] TTL 清理过期会话: ${sessionId}`);
           }
-          sessionStats.delete(sessionId);
+          expiredSessions.push(sessionId);
         }
       }
+      for (const id of expiredSessions) sessionStats.delete(id);
+      // Clean up stale firstRunData entries to prevent unbounded growth
+      const expiredKeys: string[] = [];
+      for (const [key, report] of firstRunData) {
+        if (now - report.startedAt > SESSION_TTL_MS) {
+          expiredKeys.push(key);
+        }
+      }
+      for (const key of expiredKeys) firstRunData.delete(key);
     }, CLEANUP_INTERVAL_MS);
     // 避免 timer 阻止进程退出
     if (cleanupTimer.unref) cleanupTimer.unref();
@@ -169,18 +188,30 @@ const plugin = {
           config.blockOnCritical ?? false
         );
 
-        // 更新会话计数器
-        const stats = sessionStats.get(sessionId);
-        if (stats) {
-          stats.toolCalls++;
-          stats.lastActivity = Date.now();
-          if (events.length > 0) stats.alertsFired += events.length;
-          if (decision.block) stats.blockedCalls++;
+        // 更新会话计数器（初始化如果 session_start 未触发）
+        if (!sessionStats.has(sessionId)) {
+          const now = Date.now();
+          sessionStats.set(sessionId, {
+            toolCalls: 0, blockedCalls: 0, alertsFired: 0,
+            startTime: now, lastActivity: now,
+          });
+        }
+        const stats = sessionStats.get(sessionId)!;
+        stats.toolCalls++;
+        stats.lastActivity = Date.now();
+        if (events.length > 0) stats.alertsFired += events.length;
+        if (decision.block) stats.blockedCalls++;
+
+        // 更新首次运行报告的事件计数
+        if (events.length > 0 && event.skillName) {
+          const compositeKey = `${event.skillName}:${sessionId}`;
+          const report = firstRunData.get(compositeKey);
+          if (report) report.eventCount += events.length;
         }
 
         // 发送所有触发的事件到告警渠道
         for (const evt of events) {
-          alertRouter.send(evt).catch(() => {/* 告警失败不阻塞工具调用 */});
+          alertRouter.send(evt).catch((err: unknown) => { process.stderr.write(`[carapace-openclaw] alert send failed: ${err}\n`); });
         }
 
         if (decision.block) {
@@ -230,9 +261,9 @@ const plugin = {
             skillName: event.skillName,
             timestamp: Date.now(),
           };
-          // 仅对结果运行 data-exfil 规则
+          // 仅对结果运行 data-exfil 规则（受信 skill 跳过）
           const dataExfilRule = engine.getRules().find((r) => r.name === "data-exfil");
-          if (dataExfilRule) {
+          if (dataExfilRule && !(event.skillName && engine.getTrustedSkills().has(event.skillName.trim().toLowerCase()))) {
             try {
               const check = dataExfilRule.check(resultCtx);
               if (check.triggered && check.event) {
@@ -244,7 +275,7 @@ const plugin = {
                   ruleName: "data-exfil",
                   title: `[响应] ${check.event.title}`,
                 };
-                alertRouter.send(fullEvent).catch(() => {/* 不阻塞 */});
+                alertRouter.send(fullEvent).catch((err: unknown) => { process.stderr.write(`[carapace-openclaw] alert send failed: ${err}\n`); });
               }
             } catch {
               // 响应检测不应影响主流程
@@ -261,15 +292,17 @@ const plugin = {
       if (debug) {
         api.logger.info(`[carapace] 会话开始: ${sessionId}`);
       }
-      // 初始化会话级计数器
-      const now = Date.now();
-      sessionStats.set(sessionId, {
-        toolCalls: 0,
-        blockedCalls: 0,
-        alertsFired: 0,
-        startTime: now,
-        lastActivity: now,
-      });
+      // Initialize session stats only if not already created by an earlier before_tool_call
+      if (!sessionStats.has(sessionId)) {
+        const now = Date.now();
+        sessionStats.set(sessionId, {
+          toolCalls: 0,
+          blockedCalls: 0,
+          alertsFired: 0,
+          startTime: now,
+          lastActivity: now,
+        });
+      }
     });
 
     api.on("session_end", async (_event: unknown, ctx: { sessionId?: string }) => {
@@ -298,7 +331,7 @@ const plugin = {
     api.on("gateway_start", async () => {
       const ruleCount = engine.getRules().length;
       api.logger.info(
-        `[carapace] 🛡️ Carapace Security Monitor v0.6.0 已启动 (${ruleCount} 条规则, ` +
+        `[carapace] 🛡️ Carapace Security Monitor v${PKG_VERSION} 已启动 (${ruleCount} 条规则, ` +
           `阻断=${config.blockOnCritical ? "开启" : "关闭"}` +
           (baselineTracker ? ", 基线=开启" : "") + ")"
       );
@@ -328,7 +361,6 @@ const plugin = {
 
     // ── 8. 首次运行报告生成器 ──
     // 追踪每个 skill 的首次会话，记录其所有工具调用、路径和域名
-    const firstRunData = new Map<string, FirstRunReport>();
 
     api.on(
       "after_tool_call",
@@ -344,15 +376,30 @@ const plugin = {
         const skillName = event.skillName;
         if (!skillName) return;
 
-        // 仅在该 skill 从未被观测过，且基线处于学习阶段时收集首次运行数据
-        if (baselineTracker && !baselineTracker.isLearning(skillName)) {
-          return; // 已学习完成，不再收集
+        // 仅在基线启用且该 skill 处于学习阶段时收集首次运行数据
+        if (!baselineTracker || !baselineTracker.isLearning(skillName)) {
+          return; // 基线未启用或已学习完成，不再收集
         }
 
-        if (!firstRunData.has(skillName)) {
-          firstRunData.set(skillName, {
+        const sessionId = ctx.sessionId ?? "__default__";
+        const compositeKey = `${skillName}:${sessionId}`;
+
+        if (!firstRunData.has(compositeKey)) {
+          // Evict oldest entries when cap is reached
+          if (firstRunData.size >= FIRST_RUN_DATA_MAX) {
+            let oldestKey: string | undefined;
+            let oldestTime = Infinity;
+            for (const [key, val] of firstRunData) {
+              if (val.startedAt < oldestTime) {
+                oldestTime = val.startedAt;
+                oldestKey = key;
+              }
+            }
+            if (oldestKey) firstRunData.delete(oldestKey);
+          }
+          firstRunData.set(compositeKey, {
             skillName,
-            sessionId: ctx.sessionId ?? "__default__",
+            sessionId,
             startedAt: Date.now(),
             toolsUsed: new Set<string>(),
             filesAccessed: new Set<string>(),
@@ -362,14 +409,14 @@ const plugin = {
           });
         }
 
-        const report = firstRunData.get(skillName)!;
-        report.toolsUsed.add(event.toolName);
+        const report = firstRunData.get(compositeKey)!;
+        if (report.toolsUsed.size < 500) report.toolsUsed.add(event.toolName);
 
         // 提取文件路径
         const params = event.params;
         const pathLike = params.path ?? params.file ?? params.filePath ?? params.filename;
         if (typeof pathLike === "string") {
-          report.filesAccessed.add(pathLike);
+          if (report.filesAccessed.size < 500) report.filesAccessed.add(pathLike);
         }
 
         // 提取域名
@@ -377,7 +424,7 @@ const plugin = {
         if (typeof urlLike === "string") {
           try {
             const url = new URL(urlLike.startsWith("http") ? urlLike : `https://${urlLike}`);
-            report.domainsContacted.add(url.hostname);
+            if (report.domainsContacted.size < 200) report.domainsContacted.add(url.hostname);
           } catch {
             // 非 URL 格式，忽略
           }
@@ -385,8 +432,8 @@ const plugin = {
 
         // 提取命令
         const cmdLike = params.command ?? params.cmd;
-        if (typeof cmdLike === "string") {
-          report.commandsExecuted.push(cmdLike);
+        if (typeof cmdLike === "string" && report.commandsExecuted.length < 1000) {
+          report.commandsExecuted.push(cmdLike.length > 1024 ? cmdLike.slice(0, 1024) : cmdLike);
         }
       },
       { priority: 10 } // 低优先级，在安全检查之后
@@ -396,14 +443,16 @@ const plugin = {
     api.on("session_end", async (_event: unknown, ctx: { sessionId?: string }) => {
       const sessionId = ctx.sessionId ?? "__default__";
 
-      for (const [skillName, report] of firstRunData) {
+      // Collect keys to delete before iterating to avoid modifying Map during iteration
+      const keysToDelete: string[] = [];
+      for (const [compositeKey, report] of firstRunData) {
         if (report.sessionId !== sessionId) continue;
 
         // 生成首次运行报告
         const duration = Math.round((Date.now() - report.startedAt) / 1000);
         api.logger.info(
           `\n${"─".repeat(60)}\n` +
-            `[carapace] 📋 首次运行报告: ${skillName}\n` +
+            `[carapace] 📋 首次运行报告: ${report.skillName}\n` +
             `${"─".repeat(60)}\n` +
             `  会话: ${sessionId}\n` +
             `  时长: ${duration}s\n` +
@@ -415,8 +464,9 @@ const plugin = {
             `${"─".repeat(60)}\n`
         );
 
-        firstRunData.delete(skillName);
+        keysToDelete.push(compositeKey);
       }
+      for (const key of keysToDelete) firstRunData.delete(key);
     });
 
     if (debug) api.logger.info("[carapace] 初始化完成");
