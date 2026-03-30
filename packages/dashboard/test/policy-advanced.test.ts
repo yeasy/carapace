@@ -15,6 +15,7 @@ import {
   POLICY_TEMPLATES,
   type PolicyDefinition,
   type ResolvedPolicy,
+  type ImportResult,
 } from "../src/policy.js";
 
 // ─── Test Helpers ────────────────────────────────────────────
@@ -293,6 +294,19 @@ describe("Policy conflict resolution", () => {
     expect(resolved.trustedSkills).toContain("team-skill");
   });
 
+  it("mergeChain filters non-string entries from trustedSkills", () => {
+    // Simulate a policy with non-string trustedSkills that bypassed import validation
+    const policy = createPolicy("bad-trusted", {
+      config: {
+        trustedSkills: ["valid-skill", 123 as unknown as string, null as unknown as string],
+      },
+    });
+    manager.addPolicy(policy);
+
+    const resolved = manager.resolvePolicy("bad-trusted");
+    expect(resolved.trustedSkills).toEqual(["valid-skill"]);
+  });
+
   it("removes duplicates after merging", () => {
     const parent = createPolicy("parent", {
       config: {
@@ -507,7 +521,7 @@ describe("Policy import/export", () => {
     expect(data.policies[1].name).toBe("policy-2");
   });
 
-  it("imports policies correctly", () => {
+  it("imports policies correctly and returns ImportResult", () => {
     const policy1 = createPolicy("import-1");
     const policy2 = createPolicy("import-2");
 
@@ -515,15 +529,16 @@ describe("Policy import/export", () => {
       policies: [policy1, policy2],
     });
 
-    const count = manager.importPolicies(json);
+    const result = manager.importPolicies(json);
 
-    expect(count).toBe(2);
+    expect(result.imported).toBe(2);
+    expect(result.skipped).toBe(0);
     expect(manager.size).toBe(2);
     expect(manager.getPolicy("import-1")).toBeDefined();
     expect(manager.getPolicy("import-2")).toBeDefined();
   });
 
-  it("imports policies and restores active policy", () => {
+  it("does NOT auto-activate imported activePolicy", () => {
     const policy = createPolicy("imported");
 
     const json = JSON.stringify({
@@ -531,9 +546,11 @@ describe("Policy import/export", () => {
       activePolicy: "imported",
     });
 
-    manager.importPolicies(json);
+    const result = manager.importPolicies(json);
 
-    expect(manager.getActivePolicyName()).toBe("imported");
+    // activePolicy is returned in the result but not auto-applied
+    expect(result.activePolicy).toBe("imported");
+    expect(manager.getActivePolicyName()).toBeNull();
   });
 
   it("round-trip export/import preserves policy data", () => {
@@ -554,12 +571,17 @@ describe("Policy import/export", () => {
     const exported = manager.exportPolicies();
 
     const manager2 = new PolicyManager();
-    manager2.importPolicies(exported);
+    const result = manager2.importPolicies(exported);
 
     const restored = manager2.getPolicy("original");
     expect(restored?.config.blockOnCritical).toBe(true);
     expect(restored?.config.maxToolCallsPerMinute).toBe(42);
     expect(restored?.overrides?.forceBlock).toContain("rule-x");
+    // activePolicy is reported but not auto-applied
+    expect(result.activePolicy).toBe("original");
+    expect(manager2.getActivePolicyName()).toBeNull();
+    // caller can explicitly activate if desired
+    manager2.setActivePolicy("original");
     expect(manager2.getActivePolicyName()).toBe("original");
   });
 
@@ -578,8 +600,88 @@ describe("Policy import/export", () => {
         { description: "no name" },
       ],
     });
-    const count = manager.importPolicies(json);
-    expect(count).toBe(1);
+    const result = manager.importPolicies(json);
+    expect(result.imported).toBe(1);
+    expect(result.skipped).toBe(1);
+  });
+
+  it("importPolicies skips policy with non-boolean blockOnCritical", () => {
+    const json = JSON.stringify({
+      policies: [
+        { name: "bad-block", config: { blockOnCritical: "yes" } },
+        { name: "good", config: { blockOnCritical: true } },
+      ],
+    });
+    const result = manager.importPolicies(json);
+    expect(result.imported).toBe(1);
+    expect(result.skipped).toBe(1);
+    expect(manager.getPolicy("bad-block")).toBeUndefined();
+    expect(manager.getPolicy("good")).toBeDefined();
+  });
+
+  it("importPolicies skips policy with non-array trustedSkills", () => {
+    const json = JSON.stringify({
+      policies: [
+        { name: "bad-skills", config: { trustedSkills: "not-an-array" } },
+      ],
+    });
+    const result = manager.importPolicies(json);
+    expect(result.imported).toBe(0);
+    expect(result.skipped).toBe(1);
+  });
+
+  it("importPolicies skips policy with non-string entries in trustedSkills", () => {
+    const json = JSON.stringify({
+      policies: [
+        { name: "bad-skills2", config: { trustedSkills: ["ok", 123, null] } },
+      ],
+    });
+    const result = manager.importPolicies(json);
+    expect(result.imported).toBe(0);
+    expect(result.skipped).toBe(1);
+  });
+
+  it("importPolicies skips policy with non-string entries in override arrays", () => {
+    const json = JSON.stringify({
+      policies: [
+        { name: "bad-fb", config: {}, overrides: { forceBlock: [1, 2] } },
+        { name: "bad-dr", config: {}, overrides: { disabledRules: [true] } },
+        { name: "bad-ats", config: {}, overrides: { additionalTrustedSkills: [{}] } },
+        { name: "good-override", config: {}, overrides: { forceBlock: ["rule-1"] } },
+      ],
+    });
+    const result = manager.importPolicies(json);
+    expect(result.imported).toBe(1);
+    expect(result.skipped).toBe(3);
+    expect(manager.getPolicy("good-override")).toBeDefined();
+  });
+
+  it("importPolicies accepts valid config with all optional fields", () => {
+    const json = JSON.stringify({
+      policies: [
+        {
+          name: "full-valid",
+          config: {
+            blockOnCritical: false,
+            trustedSkills: ["s1", "s2"],
+          },
+          overrides: {
+            forceBlock: ["r1"],
+            disabledRules: ["r2"],
+            additionalTrustedSkills: ["s3"],
+          },
+        },
+      ],
+    });
+    const result = manager.importPolicies(json);
+    expect(result.imported).toBe(1);
+    expect(result.skipped).toBe(0);
+  });
+
+  it("importPolicies returns null activePolicy when not provided", () => {
+    const json = JSON.stringify({ policies: [] });
+    const result = manager.importPolicies(json);
+    expect(result.activePolicy).toBeNull();
   });
 });
 
@@ -632,20 +734,23 @@ describe("Policy edge cases", () => {
     manager = new PolicyManager();
   });
 
-  it("handles policy with very long name", () => {
+  it("rejects policy with very long name", () => {
     const longName = "x".repeat(1000);
     const policy = createPolicy(longName);
-    manager.addPolicy(policy);
-
-    expect(manager.getPolicy(longName)).toBeDefined();
+    expect(() => manager.addPolicy(policy)).toThrow("Invalid policy name");
   });
 
-  it("handles policy with special characters in name", () => {
+  it("rejects policy with special characters in name", () => {
     const specialName = "policy-with-$pecial_ch@rs!";
     const policy = createPolicy(specialName);
-    manager.addPolicy(policy);
+    expect(() => manager.addPolicy(policy)).toThrow("Invalid policy name");
+  });
 
-    expect(manager.getPolicy(specialName)).toBeDefined();
+  it("accepts policy with valid name characters", () => {
+    const validName = "my-policy_v2.0";
+    const policy = createPolicy(validName);
+    manager.addPolicy(policy);
+    expect(manager.getPolicy(validName)).toBeDefined();
   });
 
   it("handles policy with NaN timestamps", () => {
@@ -665,11 +770,12 @@ describe("Policy edge cases", () => {
     expect(retrieved?.updatedAt).toBeGreaterThan(0);
   });
 
-  it("handles large inheritance chains", () => {
+  it("handles inheritance chains up to depth limit", () => {
     let current = "level-0";
     const policies = [createPolicy(current)];
 
-    for (let i = 1; i < 20; i++) {
+    // Build chain of 9 levels (within max depth of 10)
+    for (let i = 1; i < 10; i++) {
       const next = `level-${i}`;
       policies.push(
         createPolicy(next, { extends: current })
@@ -679,7 +785,141 @@ describe("Policy edge cases", () => {
 
     policies.forEach((p) => manager.addPolicy(p));
 
-    const resolved = manager.resolvePolicy("level-19");
-    expect(resolved.name).toBe("level-19");
+    const resolved = manager.resolvePolicy("level-9");
+    expect(resolved.name).toBe("level-9");
+  });
+
+  it("rejects inheritance chains exceeding depth limit", () => {
+    let current = "deep-0";
+    const policies = [createPolicy(current)];
+
+    for (let i = 1; i <= 11; i++) {
+      const next = `deep-${i}`;
+      policies.push(
+        createPolicy(next, { extends: current })
+      );
+      current = next;
+    }
+
+    policies.forEach((p) => manager.addPolicy(p));
+
+    expect(() => manager.resolvePolicy("deep-11")).toThrow("too deep");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Policy Import Prototype Pollution Prevention
+// ═══════════════════════════════════════════════════════════
+
+describe("Policy import sanitizes prototype pollution keys", () => {
+  let manager: PolicyManager;
+
+  beforeEach(() => {
+    manager = new PolicyManager();
+  });
+
+  it("strips __proto__ key from imported policy config", () => {
+    const json = JSON.stringify({
+      policies: [
+        {
+          name: "proto-test",
+          description: "policy with __proto__ in config",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          config: {
+            blockOnCritical: true,
+            "__proto__": { "polluted": true },
+          },
+        },
+      ],
+    });
+
+    const result = manager.importPolicies(json);
+    expect(result.imported).toBe(1);
+
+    const policy = manager.getPolicy("proto-test");
+    expect(policy).toBeDefined();
+
+    // The __proto__ key must be stripped from config by sanitizeObject
+    const config = policy!.config as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(config, "__proto__")).toBe(false);
+
+    // The legitimate key must survive
+    expect(config["blockOnCritical"]).toBe(true);
+
+    // Verify the global Object prototype was not polluted
+    expect((Object.prototype as Record<string, unknown>)["polluted"]).toBeUndefined();
+  });
+
+  it("strips nested constructor key from imported policy config", () => {
+    const json = JSON.stringify({
+      policies: [
+        {
+          name: "nested-proto-test",
+          description: "policy with nested constructor key",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          config: {
+            blockOnCritical: false,
+          },
+          overrides: {
+            forceBlock: ["rule-1"],
+            "constructor": { "polluted": true },
+          },
+        },
+      ],
+    });
+
+    const result = manager.importPolicies(json);
+    expect(result.imported).toBe(1);
+
+    const policy = manager.getPolicy("nested-proto-test");
+    expect(policy).toBeDefined();
+
+    // The constructor key must be stripped from overrides by sanitizeObject
+    const overrides = policy!.overrides as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(overrides, "constructor")).toBe(false);
+
+    // Legitimate override keys must survive
+    expect(overrides["forceBlock"]).toEqual(["rule-1"]);
+  });
+});
+
+// ─── Import extends cascade removal ─────────────────────────────
+
+describe("Policy import — extends cascade removal", () => {
+  it("removes policies that extend a removed policy (cascade)", () => {
+    const pm = new PolicyManager();
+    // Import a batch where C extends B extends A, but A extends "nonexistent"
+    const importJson = JSON.stringify({
+      policies: [
+        createPolicy("A", { extends: "nonexistent", config: { blockOnCritical: true } }),
+        createPolicy("B", { extends: "A", config: { blockOnCritical: false } }),
+        createPolicy("C", { extends: "B", config: { debug: true } }),
+      ],
+    });
+
+    const result = pm.importPolicies(importJson);
+    // All 3 should be removed: A has broken extends, B extends A (removed), C extends B (removed)
+    expect(result.imported).toBe(0);
+    expect(result.skipped).toBe(3);
+    expect(pm.size).toBe(0);
+  });
+
+  it("keeps policies that extend valid pre-existing policies", () => {
+    const pm = new PolicyManager();
+    // Add a valid base policy first
+    pm.addPolicy(createPolicy("base", { config: { blockOnCritical: true } }));
+
+    // Import a policy that extends the pre-existing "base"
+    const importJson = JSON.stringify({
+      policies: [
+        createPolicy("child", { extends: "base", config: { debug: true } }),
+      ],
+    });
+
+    const result = pm.importPolicies(importJson);
+    expect(result.imported).toBe(1);
+    expect(pm.size).toBe(2);
   });
 });

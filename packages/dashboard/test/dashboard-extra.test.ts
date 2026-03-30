@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { generateEventId, type SecurityEvent, type AlertPayload } from "@carapace/core";
+import { DashboardServer } from "../src/server.js";
 import { EventStore } from "../src/event-store.js";
 import { PolicyManager, POLICY_TEMPLATES, type PolicyDefinition } from "../src/policy.js";
 import { SplunkSink, ElasticSink, DatadogSink } from "../src/siem.js";
@@ -252,9 +253,10 @@ describe("PolicyManager extras", () => {
       ],
     });
 
-    pm.importPolicies(json);
-    // activePolicy should not be set since "non-existent" doesn't exist
+    const result = pm.importPolicies(json);
+    // activePolicy is never auto-applied; returned in result for caller to handle
     expect(pm.getActivePolicyName()).toBeNull();
+    expect(result.activePolicy).toBe("non-existent");
     expect(pm.size).toBe(1);
   });
 
@@ -279,9 +281,11 @@ describe("PolicyManager extras", () => {
 
     const json = pm.exportPolicies();
     const pm2 = new PolicyManager();
-    pm2.importPolicies(json);
+    const result2 = pm2.importPolicies(json);
 
-    expect(pm2.getActivePolicyName()).toBe("round-trip");
+    // importPolicies no longer auto-activates; caller must do so explicitly
+    expect(result2.activePolicy).toBe("round-trip");
+    expect(pm2.getActivePolicyName()).toBeNull();
     const p = pm2.getPolicy("round-trip")!;
     expect(p.config.blockOnCritical).toBe(true);
     expect(p.overrides?.forceBlock).toContain("exec-guard");
@@ -416,5 +420,96 @@ describe("SIEM Sinks extras", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body[0].ddtags).toContain("env:test");
     expect(body[0].service).toBe("my-service");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// DashboardServer HTTP error paths
+// ═══════════════════════════════════════════════════════════
+
+describe("DashboardServer HTTP error paths", () => {
+  let server: DashboardServer | null = null;
+
+  afterEach(async () => {
+    if (server) {
+      await server.stop();
+      server = null;
+    }
+  });
+
+  it("POST /api/policies with invalid JSON returns 400", async () => {
+    server = new DashboardServer({ port: 0 });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/policies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "not valid json {{{",
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBeDefined();
+  });
+
+  it("DELETE /api/policies with path traversal returns 400", async () => {
+    server = new DashboardServer({ port: 0 });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/policies/foo/bar`, {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBeDefined();
+  });
+
+  it("DELETE /api/policies/nonexistent returns 404", async () => {
+    server = new DashboardServer({ port: 0 });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/policies/nonexistent-policy`, {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(false);
+  });
+
+  it("PUT /api/policies/active with empty name returns 400", async () => {
+    server = new DashboardServer({ port: 0 });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/policies/active/`, {
+      method: "PUT",
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBeDefined();
+  });
+
+  it("GET on unknown route returns 404", async () => {
+    server = new DashboardServer({ port: 0 });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/nonexistent`);
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("Not found");
+  });
+
+  it("security headers present", async () => {
+    server = new DashboardServer({ port: 0 });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/health`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("x-frame-options")).toBe("DENY");
   });
 });

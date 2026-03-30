@@ -253,9 +253,11 @@ describe("PolicyManager", () => {
     expect(json).toContain("export-test");
 
     const pm2 = new PolicyManager();
-    const count = pm2.importPolicies(json);
-    expect(count).toBe(1);
-    expect(pm2.getActivePolicyName()).toBe("export-test");
+    const result = pm2.importPolicies(json);
+    expect(result.imported).toBe(1);
+    // importPolicies no longer auto-activates; caller must do so explicitly
+    expect(pm2.getActivePolicyName()).toBeNull();
+    expect(result.activePolicy).toBe("export-test");
     expect(pm2.getPolicy("export-test")!.config.blockOnCritical).toBe(true);
   });
 

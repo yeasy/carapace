@@ -10,6 +10,7 @@
  */
 
 import type { SecurityEvent, AlertSink, AlertPayload } from "@carapace/core";
+import { validatePublicUrl } from "@carapace/core";
 
 // ── Splunk HEC ──
 
@@ -29,18 +30,7 @@ export class SplunkSink implements AlertSink {
   private config: SplunkConfig;
 
   constructor(config: SplunkConfig) {
-    // Validate URL to prevent SSRF — only allow http/https
-    try {
-      const parsed = new URL(config.endpoint);
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        throw new Error(`SplunkSink only supports http/https URLs, got: ${parsed.protocol}`);
-      }
-    } catch (err) {
-      if (err instanceof TypeError) {
-        throw new Error(`SplunkSink: invalid URL "${config.endpoint}"`);
-      }
-      throw err;
-    }
+    validatePublicUrl(config.endpoint, "SplunkSink");
     this.config = config;
   }
 
@@ -59,10 +49,12 @@ export class SplunkSink implements AlertSink {
           "Content-Type": "application/json",
         },
         body,
+        signal: AbortSignal.timeout(5000),
       });
       if (!response.ok) {
+        const body = await response.text();
         process.stderr.write(
-          `[carapace-splunk] HTTP ${response.status}: ${await response.text()}\n`
+          `[carapace-splunk] HTTP ${response.status}: ${body.slice(0, 1024)}\n`
         );
       }
     } catch (err) {
@@ -109,23 +101,17 @@ export class ElasticSink implements AlertSink {
   private config: ElasticConfig;
 
   constructor(config: ElasticConfig) {
-    // Validate URL to prevent SSRF — only allow http/https
-    try {
-      const parsed = new URL(config.endpoint);
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        throw new Error(`ElasticSink only supports http/https URLs, got: ${parsed.protocol}`);
-      }
-    } catch (err) {
-      if (err instanceof TypeError) {
-        throw new Error(`ElasticSink: invalid URL "${config.endpoint}"`);
-      }
-      throw err;
-    }
+    validatePublicUrl(config.endpoint, "ElasticSink");
     this.config = config;
   }
 
   async send(payload: AlertPayload): Promise<void> {
     const index = this.config.index ?? "carapace-events";
+    // Validate index name to prevent path traversal in Elasticsearch URL
+    if (!/^[a-z0-9][a-z0-9._-]*$/.test(index) || index.includes("..")) {
+      process.stderr.write(`[carapace-elastic] Invalid index name: ${index.replace(/[\x00-\x1f\x7f]/g, "")}\n`);
+      return;
+    }
     const base = new URL(this.config.endpoint);
     base.pathname = base.pathname.replace(/\/$/, "") + `/${index}/_doc`;
     const url = base.toString();
@@ -160,10 +146,11 @@ export class ElasticSink implements AlertSink {
     });
 
     try {
-      const response = await fetch(url, { method: "POST", headers, body });
+      const response = await fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(5000) });
       if (!response.ok) {
+        const errBody = await response.text();
         process.stderr.write(
-          `[carapace-elastic] HTTP ${response.status}: ${await response.text()}\n`
+          `[carapace-elastic] HTTP ${response.status}: ${errBody.slice(0, 1024)}\n`
         );
       }
     } catch (err) {
@@ -240,10 +227,12 @@ export class DatadogSink implements AlertSink {
           "Content-Type": "application/json",
         },
         body,
+        signal: AbortSignal.timeout(5000),
       });
       if (!response.ok) {
+        const errBody = await response.text();
         process.stderr.write(
-          `[carapace-datadog] HTTP ${response.status}: ${await response.text()}\n`
+          `[carapace-datadog] HTTP ${response.status}: ${errBody.slice(0, 1024)}\n`
         );
       }
     } catch (err) {
@@ -285,12 +274,23 @@ export interface SyslogConfig {
 export class SyslogSink implements AlertSink {
   readonly name = "syslog";
   private config: SyslogConfig;
+  // Reuse UDP socket across send() calls to avoid per-message socket creation overhead
+  private udpSocket: { socket: unknown; close: () => void } | null = null;
+  // Serialize UDP send operations to prevent race conditions on socket reuse
+  private udpSendQueue: Promise<void> = Promise.resolve();
 
   constructor(config: SyslogConfig) {
     // Validate host to prevent injection
     if (/[\/\?#@:]/.test(config.host)) {
       throw new Error(`SyslogSink: invalid host "${config.host}"`);
     }
+    // Validate facility range per RFC 5424 (0-23)
+    if (config.facility !== undefined && (config.facility < 0 || config.facility > 23 || !Number.isInteger(config.facility))) {
+      throw new Error(`SyslogSink: facility must be an integer 0-23, got ${config.facility}`);
+    }
+    // Note: syslog servers are typically on private networks, so we do NOT
+    // block private/loopback IPs here (unlike HTTP webhook sinks where SSRF
+    // is a concern). Syslog config is operator-provided and trusted.
     this.config = config;
   }
 
@@ -301,43 +301,77 @@ export class SyslogSink implements AlertSink {
     const appName = this.config.appName ?? "carapace";
     const timestamp = new Date(payload.event.timestamp).toISOString();
 
+    // Sanitize fields to prevent syslog injection (strip newlines and control chars)
+    const sanitize = (s: string | undefined) => (s ?? "").replace(/[\x00-\x1f\x7f]/g, "");
     const message =
-      `<${priority}>1 ${timestamp} carapace-agent ${appName} - - - ` +
-      `[${payload.event.category}] ${payload.event.action.toUpperCase()}: ${payload.event.title}` +
-      ` | rule=${payload.event.ruleName} tool=${payload.event.toolName} severity=${payload.event.severity}`;
+      `<${priority}>1 ${timestamp} carapace-agent ${sanitize(appName)} - - - ` +
+      `[${sanitize(payload.event.category)}] ${sanitize(payload.event.action).toUpperCase()}: ${sanitize(payload.event.title)}` +
+      ` | rule=${sanitize(payload.event.ruleName)} tool=${sanitize(payload.event.toolName)} severity=${sanitize(payload.event.severity)}`;
 
     const protocol = this.config.protocol ?? "udp";
     const port = this.config.port ?? 514;
 
     try {
       if (protocol === "udp") {
-        const { createSocket } = await import("node:dgram");
-        const client = createSocket("udp4");
-        const buf = Buffer.from(message);
-        await new Promise<void>((resolve) => {
-          client.on("error", (err) => {
-            process.stderr.write(`[carapace-syslog] UDP error: ${err}\n`);
-            try { client.close(); } catch { /* ignore */ }
-            resolve();
-          });
-          client.send(buf, 0, buf.length, port, this.config.host, (err) => {
-            if (err) process.stderr.write(`[carapace-syslog] UDP send error: ${err}\n`);
-            try { client.close(); } catch { /* ignore */ }
-            resolve();
+        // Serialize UDP sends to prevent race conditions on socket reuse
+        this.udpSendQueue = this.udpSendQueue.then(async () => {
+          const { createSocket } = await import("node:dgram");
+          // Reuse UDP socket — connectionless protocol is safe to share
+          if (!this.udpSocket) {
+            const sock = createSocket("udp4");
+            sock.unref(); // Don't block process exit
+            sock.on("error", (err: Error) => {
+              process.stderr.write(`[carapace-syslog] UDP error: ${err}\n`);
+              this.udpSocket = null;
+              try { sock.close(); } catch { /* ignore */ }
+            });
+            this.udpSocket = { socket: sock, close: () => { try { sock.close(); } catch { /* ignore */ } } };
+          }
+          const sock = this.udpSocket.socket as import("node:dgram").Socket;
+          const buf = Buffer.from(message);
+          await new Promise<void>((resolve) => {
+            sock.send(buf, 0, buf.length, port, this.config.host, (err) => {
+              if (err) {
+                process.stderr.write(`[carapace-syslog] UDP send error: ${err}\n`);
+                // Socket may be broken — discard it so next send creates a fresh one
+                this.udpSocket?.close();
+                this.udpSocket = null;
+              }
+              resolve();
+            });
           });
         });
+        await this.udpSendQueue;
       } else {
         const { createConnection } = await import("node:net");
-        const client = createConnection(port, this.config.host, () => {
-          client.write(message + "\n");
-          client.end();
-        });
-        client.on("error", (err) => {
-          process.stderr.write(`[carapace-syslog] TCP error: ${err}\n`);
+        await new Promise<void>((resolve) => {
+          const client = createConnection(port, this.config.host, () => {
+            client.write(message + "\n");
+            client.end();
+          });
+          client.setTimeout(5000);
+          client.on("timeout", () => { client.end(); });
+          client.on("close", () => resolve());
+          client.on("error", (err) => {
+            process.stderr.write(`[carapace-syslog] TCP error: ${err}\n`);
+            client.destroy();
+            resolve(); // fire-and-forget semantics
+          });
         });
       }
     } catch (err) {
       process.stderr.write(`[carapace-syslog] Error: ${err}\n`);
+    }
+  }
+
+  /**
+   * Close the cached UDP socket (if any) to prevent resource leaks.
+   * Should be called when removing this sink from the AlertRouter.
+   */
+  close(): void {
+    if (this.udpSocket) {
+      this.udpSocket.close();
+      this.udpSocket = null;
     }
   }
 

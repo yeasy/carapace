@@ -63,21 +63,24 @@ export class EventStore {
    * 查询事件
    */
   query(q: EventQuery = {}): SecurityEvent[] {
-    let result = this.events;
+    // Single-pass filter to avoid chained .filter() allocations
+    const hasFilters = q.category !== undefined || q.severity !== undefined || q.ruleName !== undefined || q.sessionId !== undefined || q.skillName !== undefined || q.since !== undefined || q.until !== undefined;
+    const result = hasFilters
+      ? this.events.filter((e) =>
+          (q.category === undefined || e.category === q.category) &&
+          (q.severity === undefined || e.severity === q.severity) &&
+          (q.ruleName === undefined || e.ruleName === q.ruleName) &&
+          (q.sessionId === undefined || e.sessionId === q.sessionId) &&
+          (q.skillName === undefined || e.skillName === q.skillName) &&
+          (q.since === undefined || e.timestamp >= q.since) &&
+          (q.until === undefined || e.timestamp <= q.until))
+      : this.events.slice();
 
-    if (q.category) result = result.filter((e) => e.category === q.category);
-    if (q.severity) result = result.filter((e) => e.severity === q.severity);
-    if (q.ruleName) result = result.filter((e) => e.ruleName === q.ruleName);
-    if (q.sessionId) result = result.filter((e) => e.sessionId === q.sessionId);
-    if (q.skillName) result = result.filter((e) => e.skillName === q.skillName);
-    if (q.since) result = result.filter((e) => e.timestamp >= q.since!);
-    if (q.until) result = result.filter((e) => e.timestamp <= q.until!);
-
-    // 按时间倒序
-    result = result.slice().sort((a, b) => b.timestamp - a.timestamp);
+    // 按时间倒序（events are appended chronologically, so reverse is O(n) vs sort O(n log n))
+    result.reverse();
 
     const offset = q.offset ?? 0;
-    const limit = q.limit ?? 100;
+    const limit = Math.min(q.limit ?? 100, 10000);
     return result.slice(offset, offset + limit);
   }
 
@@ -85,7 +88,7 @@ export class EventStore {
    * 统计信息
    */
   getStats(since?: number): EventStats {
-    const events = since
+    const events = since !== undefined
       ? this.events.filter((e) => e.timestamp >= since)
       : this.events;
 
@@ -131,7 +134,7 @@ export class EventStore {
    * 时间序列聚合（按分钟/小时/天分桶）
    */
   timeSeries(bucketMs: number = 60_000, since?: number): TimeSeriesBucket[] {
-    const events = since
+    const events = since !== undefined
       ? this.events.filter((e) => e.timestamp >= since)
       : this.events;
 

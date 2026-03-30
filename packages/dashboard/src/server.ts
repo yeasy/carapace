@@ -82,19 +82,27 @@ export class DashboardServer {
       ruleName: event.ruleName,
       toolName: event.toolName,
     });
+    // Collect failed clients first to avoid modifying the Set during iteration
+    const failed: ServerResponse[] = [];
     for (const client of this.sseClients) {
       try {
-        client.write(`data: ${data}\n\n`);
+        const ok = client.write(`data: ${data}\n\n`);
+        if (!ok) {
+          // Buffer full — slow client, disconnect to prevent memory growth
+          failed.push(client);
+        }
       } catch {
-        this.sseClients.delete(client);
+        failed.push(client);
       }
     }
+    for (const client of failed) this.cleanupSSEClient(client);
   }
 
   /**
    * 启动 HTTP 服务
    */
   async start(): Promise<void> {
+    if (this.server) throw new Error("Server already started — call stop() first");
     const port = this.config.port ?? 9877;
     const host = this.config.host ?? "127.0.0.1";
     const cors = this.config.corsOrigin;
@@ -123,8 +131,19 @@ export class DashboardServer {
       }
     );
 
-    return new Promise((resolve) => {
+    // Set HTTP timeouts to prevent slow-loris style attacks
+    this.server.requestTimeout = 30_000;
+    this.server.headersTimeout = 10_000;
+    this.server.keepAliveTimeout = 5_000;
+
+    return new Promise((resolve, reject) => {
+      const onError = (err: Error) => reject(err);
+      this.server!.on("error", onError);
       this.server!.listen(port, host, () => {
+        this.server!.removeListener("error", onError);
+        this.server!.on("error", (err: Error) => {
+          process.stderr.write(`[carapace/dashboard] server error: ${err.message}\n`);
+        });
         resolve();
       });
     });
@@ -150,42 +169,48 @@ export class DashboardServer {
       this.sseHeartbeats.delete(res);
     }
     this.sseClients.delete(res);
+    try { if (!res.writableEnded) res.end(); } catch { /* already closed */ }
   }
 
   /**
    * 停止 HTTP 服务
    */
   async stop(): Promise<void> {
-    // Clear all heartbeat intervals before closing clients
-    for (const [client, heartbeat] of this.sseHeartbeats) {
-      clearInterval(heartbeat);
-      try { client.end(); } catch { /* ignore */ }
-    }
-    this.sseHeartbeats.clear();
-    for (const client of this.sseClients) {
-      try { client.end(); } catch { /* ignore */ }
+    // Close SSE connections
+    for (const res of this.sseClients) {
+      try { res.end(); } catch { /* already closed */ }
     }
     this.sseClients.clear();
 
-    return new Promise((resolve) => {
-      if (this.server) {
-        this.server.close(() => resolve());
-      } else {
-        resolve();
-      }
+    // Explicitly clear all heartbeat intervals
+    for (const heartbeat of this.sseHeartbeats.values()) {
+      clearInterval(heartbeat);
+    }
+    this.sseHeartbeats.clear();
+
+    if (!this.server) return;
+    const srv = this.server;
+    this.server = null;
+    if (!srv.listening) return;
+
+    return new Promise<void>((resolve) => {
+      srv.close(() => resolve());
+      srv.closeAllConnections?.();
     });
   }
 
   private route(req: IncomingMessage, res: ServerResponse, url: string): void {
+    const urlPath = url.split("?")[0];
+
     // ── Dashboard UI ──
-    if (req.method === "GET" && (url === "/" || url === "/dashboard")) {
+    if (req.method === "GET" && (urlPath === "/" || urlPath === "/dashboard")) {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(DASHBOARD_HTML);
       return;
     }
 
     // ── SSE endpoint ──
-    if (req.method === "GET" && url === "/api/events/stream") {
+    if (req.method === "GET" && urlPath === "/api/events/stream") {
       // Limit concurrent SSE connections to prevent resource exhaustion
       const MAX_SSE_CLIENTS = 50;
       if (this.sseClients.size >= MAX_SSE_CLIENTS) {
@@ -217,12 +242,12 @@ export class DashboardServer {
     }
 
     // ── API Routes ──
-    if (req.method === "GET" && url === "/api/health") {
+    if (req.method === "GET" && urlPath === "/api/health") {
       this.json(res, { status: "ok" });
       return;
     }
 
-    if (req.method === "GET" && url.startsWith("/api/events")) {
+    if (req.method === "GET" && urlPath === "/api/events") {
       const params = new URL(url, "http://localhost").searchParams;
       const query: EventQuery = {};
       const VALID_CATEGORIES = new Set(["exec_danger", "path_violation", "network_suspect", "rate_anomaly", "baseline_drift", "prompt_injection", "data_exfil"]);
@@ -233,11 +258,15 @@ export class DashboardServer {
       if (sev && VALID_SEVERITIES.has(sev)) query.severity = sev as EventQuery["severity"];
       const ruleNameVal = params.get("ruleName");
       if (ruleNameVal && ruleNameVal.length <= 200) query.ruleName = ruleNameVal;
-      const sinceVal = parseInt(params.get("since") ?? "");
+      const sessionIdVal = params.get("sessionId");
+      if (sessionIdVal && sessionIdVal.length <= 200) query.sessionId = sessionIdVal;
+      const skillNameVal = params.get("skillName");
+      if (skillNameVal && skillNameVal.length <= 200) query.skillName = skillNameVal;
+      const sinceVal = parseInt(params.get("since") ?? "", 10);
       if (!isNaN(sinceVal)) query.since = sinceVal;
-      const limitVal = parseInt(params.get("limit") ?? "");
+      const limitVal = parseInt(params.get("limit") ?? "", 10);
       if (!isNaN(limitVal) && limitVal > 0) query.limit = Math.min(limitVal, 10000);
-      const offsetVal = parseInt(params.get("offset") ?? "");
+      const offsetVal = parseInt(params.get("offset") ?? "", 10);
       if (!isNaN(offsetVal) && offsetVal >= 0) query.offset = Math.min(offsetVal, 100000);
 
       const events = this.store.query(query);
@@ -245,20 +274,20 @@ export class DashboardServer {
       return;
     }
 
-    if (req.method === "GET" && url.startsWith("/api/stats")) {
+    if (req.method === "GET" && urlPath === "/api/stats") {
       const params = new URL(url, "http://localhost").searchParams;
-      const sinceVal = parseInt(params.get("since") ?? "");
+      const sinceVal = parseInt(params.get("since") ?? "", 10);
       const since = isNaN(sinceVal) ? undefined : sinceVal;
       const stats = this.store.getStats(since);
       this.json(res, stats);
       return;
     }
 
-    if (req.method === "GET" && url.startsWith("/api/timeseries")) {
+    if (req.method === "GET" && urlPath === "/api/timeseries") {
       const params = new URL(url, "http://localhost").searchParams;
-      const bucketVal = parseInt(params.get("bucket") ?? "60000");
+      const bucketVal = parseInt(params.get("bucket") ?? "60000", 10);
       const bucketMs = isNaN(bucketVal) || bucketVal < 1000 ? 60000 : Math.min(bucketVal, 86400000);
-      const sinceVal = parseInt(params.get("since") ?? "");
+      const sinceVal = parseInt(params.get("since") ?? "", 10);
       const since = isNaN(sinceVal) ? undefined : sinceVal;
       const ts = this.store.timeSeries(bucketMs, since);
       this.json(res, ts);
@@ -266,18 +295,18 @@ export class DashboardServer {
     }
 
     // ── Policy API ──
-    if (req.method === "GET" && url === "/api/policies") {
+    if (req.method === "GET" && urlPath === "/api/policies") {
       this.json(res, this.policyManager.listPolicies());
       return;
     }
 
-    if (req.method === "GET" && url === "/api/policies/active") {
+    if (req.method === "GET" && urlPath === "/api/policies/active") {
       const active = this.policyManager.resolveActivePolicy();
       this.json(res, active ?? { name: null });
       return;
     }
 
-    if (req.method === "POST" && url === "/api/policies") {
+    if (req.method === "POST" && urlPath === "/api/policies") {
       this.readBody(req, (body) => {
         try {
           const policy = JSON.parse(body) as PolicyDefinition;
@@ -287,7 +316,12 @@ export class DashboardServer {
           }
           policy.createdAt = policy.createdAt ?? Date.now();
           policy.updatedAt = Date.now();
-          this.policyManager.addPolicy(policy);
+          try {
+            this.policyManager.addPolicy(policy);
+          } catch (addErr) {
+            this.json(res, { error: addErr instanceof Error ? addErr.message : "Invalid policy" }, 400);
+            return;
+          }
           this.json(res, { ok: true, name: policy.name }, 201);
         } catch {
           this.json(res, { error: "Invalid policy JSON" }, 400);
@@ -296,26 +330,34 @@ export class DashboardServer {
       return;
     }
 
-    if (req.method === "PUT" && url.startsWith("/api/policies/active/")) {
-      const name = decodeURIComponent(url.split("/").pop()!);
+    if (req.method === "PUT" && urlPath.startsWith("/api/policies/active/")) {
+      const rawName = urlPath.slice("/api/policies/active/".length);
+      if (!rawName) { this.json(res, { error: "Missing policy name" }, 400); return; }
+      const name = decodeURIComponent(rawName);
       try {
         this.policyManager.setActivePolicy(name);
         this.json(res, { ok: true, activePolicy: name });
       } catch (err) {
-        process.stderr.write(`[CARAPACE] policy error: ${err}\n`);
+        process.stderr.write(`[CARAPACE] policy error: ${err instanceof Error ? err.message : String(err)}\n`);
         this.json(res, { error: "Policy not found" }, 404);
       }
       return;
     }
 
-    if (req.method === "DELETE" && url.startsWith("/api/policies/")) {
-      const name = decodeURIComponent(url.split("/").pop()!);
+    if (req.method === "DELETE" && urlPath.startsWith("/api/policies/")) {
+      const rawName = urlPath.slice("/api/policies/".length);
+      // Reject sub-paths (e.g., /api/policies/active/foo) and reserved endpoints
+      if (!rawName || rawName.includes("/") || rawName === "export" || rawName === "import" || rawName === "active") {
+        this.json(res, { error: "Missing or invalid policy name" }, 400);
+        return;
+      }
+      const name = decodeURIComponent(rawName);
       const ok = this.policyManager.removePolicy(name);
       this.json(res, { ok }, ok ? 200 : 404);
       return;
     }
 
-    if (req.method === "POST" && url === "/api/policies/export") {
+    if (req.method === "POST" && urlPath === "/api/policies/export") {
       const exported = this.policyManager.exportPolicies();
       res.writeHead(200, {
         "Content-Type": "application/json",
@@ -325,11 +367,11 @@ export class DashboardServer {
       return;
     }
 
-    if (req.method === "POST" && url === "/api/policies/import") {
+    if (req.method === "POST" && urlPath === "/api/policies/import") {
       this.readBody(req, (body) => {
         try {
-          const count = this.policyManager.importPolicies(body);
-          this.json(res, { ok: true, imported: count });
+          const result = this.policyManager.importPolicies(body);
+          this.json(res, { ok: true, ...result });
         } catch {
           this.json(res, { error: "Invalid import JSON" }, 400);
         }
@@ -348,15 +390,19 @@ export class DashboardServer {
 
   private readBody(req: IncomingMessage, cb: (body: string) => void, res?: ServerResponse): void {
     const MAX_BODY = 1_048_576; // 1 MB
-    let body = "";
+    const chunks: Buffer[] = [];
+    let totalSize = 0;
     let exceeded = false;
     let responded = false;
     req.on("data", (chunk: Buffer) => {
-      body += chunk.toString();
-      if (body.length > MAX_BODY) {
+      totalSize += chunk.length;
+      if (totalSize > MAX_BODY) {
         exceeded = true;
         req.destroy();
+        send413();
+        return;
       }
+      chunks.push(chunk);
     });
     const send413 = () => {
       if (responded || !res) return;
@@ -366,10 +412,24 @@ export class DashboardServer {
     };
     req.on("end", () => {
       if (exceeded) { send413(); return; }
-      cb(body);
+      try {
+        const body = Buffer.concat(chunks).toString("utf-8");
+        cb(body);
+      } catch {
+        if (res && !responded) {
+          responded = true;
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Internal server error" }));
+        }
+      }
     });
     req.on("error", () => {
-      if (exceeded) send413();
+      if (exceeded) { send413(); return; }
+      if (!responded && res) {
+        responded = true;
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Request error" }));
+      }
     });
   }
 }
@@ -436,7 +496,7 @@ async function loadStats(){
       card('Critical',s.bySeverity.critical,'critical')+
       card('High',s.bySeverity.high,'high')+
       card('Blocked',s.blockedCount,s.blockedCount>0?'critical':'ok');
-  }catch{}
+  }catch(e){console.error('Failed to load stats:',e)}
 }
 async function loadEvents(){
   try{
@@ -445,28 +505,38 @@ async function loadEvents(){
     const el=document.getElementById('events');
     if(!events.length){el.innerHTML='<div class="empty">No events yet</div>';return}
     el.innerHTML=events.map(e=>eventRow(e)).join('');
-  }catch{}
+  }catch(e){console.error('Failed to load events:',e)}
 }
 function card(label,value,cls){
-  return '<div class="card"><div class="label">'+esc(label)+'</div><div class="value '+esc(cls)+'">'+esc(String(value))+'</div></div>';
+  var validCls=['critical','high','medium','ok','blocked','rules','sessions','events'];
+  var safeCls=validCls.indexOf(cls)>=0?cls:'';
+  return '<div class="card"><div class="label">'+esc(label)+'</div><div class="value '+safeCls+'">'+esc(String(value))+'</div></div>';
 }
+function sevClass(s){var valid=['info','low','medium','high','critical'];return valid.indexOf(s)>=0?s:'info'}
+function actClass(s){var valid=['alert','blocked','log'];return valid.indexOf(s)>=0?s:'alert'}
 function eventRow(e){
   const t=new Date(e.timestamp).toLocaleTimeString();
-  return '<div class="event"><div class="sev '+esc(e.severity)+'"></div><div class="meta"><div class="title">'+esc(e.title)+'</div><div class="sub">'+esc(t)+' · '+esc(e.ruleName||'')+' · '+esc(e.toolName||'')+'</div></div><span class="action '+esc(e.action)+'">'+esc(e.action||'').toUpperCase()+'</span></div>';
+  return '<div class="event"><div class="sev '+sevClass(e.severity)+'"></div><div class="meta"><div class="title">'+esc(e.title)+'</div><div class="sub">'+esc(t)+' · '+esc(e.ruleName||'')+' · '+esc(e.toolName||'')+'</div></div><span class="action '+actClass(e.action)+'">'+esc(e.action||'').toUpperCase()+'</span></div>';
 }
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 loadStats();loadEvents();
-const es=new EventSource('/api/events/stream');
-es.onmessage=function(e){
-  try{
-    const ev=JSON.parse(e.data);
-    const el=document.getElementById('events');
-    const empty=el.querySelector('.empty');
-    if(empty)empty.remove();
-    el.insertAdjacentHTML('afterbegin',eventRow(ev));
-    loadStats();
-  }catch{}
-};
+function connectSSE(){
+  var es=new EventSource('/api/events/stream');
+  es.onmessage=function(e){
+    try{
+      var ev=JSON.parse(e.data);
+      var el=document.getElementById('events');
+      var empty=el.querySelector('.empty');
+      if(empty)empty.remove();
+      var tmp=document.createElement('div');
+      tmp.innerHTML=eventRow(ev);
+      if(tmp.firstChild)el.insertBefore(tmp.firstChild,el.firstChild);
+      loadStats();
+    }catch(err){console.error('SSE parse error:',err)}
+  };
+  es.onerror=function(){es.close();setTimeout(connectSSE,5000)};
+}
+connectSSE();
 setInterval(loadStats,10000);
 </script>
 </body>

@@ -8,7 +8,22 @@
  * - 策略导入/导出（JSON 格式）
  */
 
-import type { CarapaceConfig } from "@carapace/core";
+import { type CarapaceConfig, loadYamlRules } from "@carapace/core";
+
+const DANGEROUS_PROTO_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+/** Deep-clone an object, stripping prototype pollution keys */
+function sanitizeObject<T>(obj: T): T {
+  if (obj === null || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeObject) as unknown as T;
+  const clean: Record<string, unknown> = {};
+  for (const key of Object.keys(obj as Record<string, unknown>)) {
+    if (!DANGEROUS_PROTO_KEYS.has(key)) {
+      clean[key] = sanitizeObject((obj as Record<string, unknown>)[key]);
+    }
+  }
+  return clean as T;
+}
 
 // ── 策略定义 ──
 
@@ -53,8 +68,11 @@ export class PolicyManager {
    * 添加策略
    */
   addPolicy(policy: PolicyDefinition): void {
+    if (!policy.name || typeof policy.name !== "string" || !/^[\w\-.]{1,100}$/.test(policy.name)) {
+      throw new Error("Invalid policy name: must be 1-100 chars using letters, digits, hyphens, underscores, or dots");
+    }
     policy.updatedAt = Date.now();
-    this.policies.set(policy.name, policy);
+    this.policies.set(policy.name, sanitizeObject(policy));
   }
 
   /**
@@ -133,22 +151,96 @@ export class PolicyManager {
 
   /**
    * 从 JSON 导入策略
+   *
+   * Returns import summary with count of imported and skipped policies.
+   * Does NOT auto-activate any policy — caller should explicitly setActivePolicy if desired.
    */
-  importPolicies(json: string): number {
+  importPolicies(json: string): ImportResult {
     const data = JSON.parse(json);
     if (!data || typeof data !== "object" || !Array.isArray(data.policies)) {
       throw new Error("Invalid import format: expected { policies: [...] }");
     }
-    let count = 0;
+    let imported = 0;
+    let skipped = 0;
+    const importedNames = new Set<string>();
     for (const policy of data.policies as PolicyDefinition[]) {
-      if (!policy.name || typeof policy.name !== "string") continue;
-      this.addPolicy(policy);
-      count++;
+      if (!policy.name || typeof policy.name !== "string") { skipped++; continue; }
+      if (policy.config !== undefined && (typeof policy.config !== "object" || policy.config === null || Array.isArray(policy.config))) { skipped++; continue; }
+
+      // Validate config fields
+      if (policy.config) {
+        if ("trustedSkills" in policy.config && policy.config.trustedSkills !== undefined) {
+          if (!Array.isArray(policy.config.trustedSkills) || !policy.config.trustedSkills.every((s: unknown) => typeof s === "string")) {
+            skipped++; continue;
+          }
+        }
+        if ("blockOnCritical" in policy.config && policy.config.blockOnCritical !== undefined) {
+          if (typeof policy.config.blockOnCritical !== "boolean") {
+            skipped++; continue;
+          }
+        }
+      }
+
+      // Validate override arrays contain only strings
+      if (policy.overrides) {
+        const arrayFields = ["forceBlock", "disabledRules", "additionalTrustedSkills"] as const;
+        let overrideInvalid = false;
+        for (const field of arrayFields) {
+          const arr = policy.overrides[field];
+          if (arr !== undefined) {
+            if (!Array.isArray(arr) || !arr.every((v: unknown) => typeof v === "string")) {
+              overrideInvalid = true;
+              break;
+            }
+          }
+        }
+        if (overrideInvalid) { skipped++; continue; }
+      }
+
+      // Validate YAML rules to prevent ReDoS and malformed patterns
+      if (typeof policy.yamlRules === "string" && policy.yamlRules.trim()) {
+        try {
+          loadYamlRules(policy.yamlRules);
+        } catch {
+          skipped++; continue;
+        }
+      }
+
+      try {
+        this.addPolicy(policy);
+        importedNames.add(policy.name);
+        imported++;
+      } catch {
+        skipped++;
+      }
     }
-    if (data.activePolicy && this.policies.has(data.activePolicy)) {
-      this.activePolicy = data.activePolicy;
+    // Validate `extends` references — iterate until stable to handle cascading removals
+    // (e.g., A extends B, B extends C — if C is removed, B becomes invalid, then A becomes invalid)
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const toRemove: string[] = [];
+      for (const name of importedNames) {
+        const policy = this.policies.get(name);
+        if (policy?.extends && !this.policies.has(policy.extends)) {
+          process.stderr.write(`[carapace] Warning: Imported policy "${name}" extends unknown policy "${policy.extends}", removing it\n`);
+          toRemove.push(name);
+        }
+      }
+      for (const name of toRemove) {
+        this.policies.delete(name);
+        importedNames.delete(name);
+        imported--;
+        skipped++;
+        changed = true;
+      }
     }
-    return count;
+
+    return {
+      imported,
+      skipped,
+      activePolicy: data.activePolicy ?? null,
+    };
   }
 
   /**
@@ -163,11 +255,15 @@ export class PolicyManager {
   private buildInheritanceChain(name: string): PolicyDefinition[] {
     const chain: PolicyDefinition[] = [];
     const visited = new Set<string>();
+    const MAX_DEPTH = 10;
     let current: string | undefined = name;
 
     while (current) {
       if (visited.has(current)) {
         throw new Error(`Circular policy inheritance detected: ${current}`);
+      }
+      if (chain.length >= MAX_DEPTH) {
+        throw new Error(`Policy inheritance chain too deep (max ${MAX_DEPTH})`);
       }
       visited.add(current);
 
@@ -193,13 +289,24 @@ export class PolicyManager {
       trustedSkills: [],
     };
 
+    const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
     for (const policy of chain) {
-      // 合并 config（后者覆盖前者）
-      result.config = { ...result.config, ...policy.config };
+      // 合并 config（后者覆盖前者），过滤危险键防止原型污染
+      if (policy.config) {
+        for (const [key, value] of Object.entries(policy.config)) {
+          if (!DANGEROUS_KEYS.has(key)) {
+            (result.config as Record<string, unknown>)[key] = value;
+          }
+        }
+      }
 
-      // 合并 trustedSkills
-      if (policy.config.trustedSkills) {
-        result.trustedSkills.push(...policy.config.trustedSkills);
+      // 合并 trustedSkills（仅接受字符串数组）
+      if (policy.config && Array.isArray(policy.config.trustedSkills)) {
+        for (const skill of policy.config.trustedSkills) {
+          if (typeof skill === "string") {
+            result.trustedSkills.push(skill);
+          }
+        }
       }
 
       // 收集 YAML 规则
@@ -229,6 +336,15 @@ export class PolicyManager {
 
     return result;
   }
+}
+
+export interface ImportResult {
+  /** Number of policies successfully imported */
+  imported: number;
+  /** Number of policies skipped due to validation failures */
+  skipped: number;
+  /** The activePolicy value from the import data (not auto-applied) */
+  activePolicy: string | null;
 }
 
 export interface ResolvedPolicy {
