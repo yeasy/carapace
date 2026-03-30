@@ -18,18 +18,24 @@ export function parseArgs(argv: string[]): {
 } {
   const [, , command, ...rest] = argv;
   const args: string[] = [];
-  const flags: Record<string, string | boolean> = {};
+  const flags: Record<string, string | boolean> = Object.create(null);
 
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
     if (arg.startsWith("--")) {
-      const key = arg.slice(2);
-      const nextArg = rest[i + 1];
-      if (nextArg && !nextArg.startsWith("--")) {
-        flags[key] = nextArg;
-        i++;
+      const raw = arg.slice(2);
+      const eqIdx = raw.indexOf("=");
+      if (eqIdx !== -1) {
+        flags[raw.slice(0, eqIdx)] = raw.slice(eqIdx + 1);
       } else {
-        flags[key] = true;
+        const key = raw;
+        const nextArg = rest[i + 1];
+        if (nextArg && !nextArg.startsWith("--")) {
+          flags[key] = nextArg;
+          i++;
+        } else {
+          flags[key] = true;
+        }
       }
     } else if (arg.startsWith("-")) {
       const key = arg.slice(1);
@@ -54,7 +60,7 @@ export function parseArgs(argv: string[]): {
  */
 export function parseDuration(str: string): number {
   const match = str.match(/^(\d+)([a-z]+)$/i);
-  if (!match) return 0;
+  if (!match) return NaN;
 
   const num = parseInt(match[1], 10);
   const unit = match[2].toLowerCase();
@@ -78,7 +84,7 @@ export function parseDuration(str: string): number {
     case "week":
       return num * 7 * 24 * 60 * 60 * 1000;
     default:
-      return 0;
+      return NaN;
   }
 }
 
@@ -105,6 +111,22 @@ export function color(text: string, colorCode: string): string {
 }
 
 /**
+ * Strip ANSI escape sequences for accurate visible-width calculation
+ */
+function stripAnsi(str: string): string {
+  return str.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+/**
+ * Pad a string (possibly containing ANSI codes) to a target visible width
+ */
+function padVisible(str: string, targetWidth: number): string {
+  const visibleLen = stripAnsi(str).length;
+  const padLen = Math.max(0, targetWidth - visibleLen);
+  return str + " ".repeat(padLen);
+}
+
+/**
  * 格式化简单 ASCII 表格
  */
 export function formatTable(
@@ -115,10 +137,10 @@ export function formatTable(
     return "No data";
   }
 
-  // 计算列宽度
+  // 计算列宽度 (using visible width, stripping ANSI codes)
   const colWidths = headers.map((h, i) => {
     const maxRowWidth = Math.max(
-      ...rows.map((r) => String(r[i] || "").length)
+      ...rows.map((r) => stripAnsi(String(r[i] || "")).length)
     );
     return Math.max(h.length, maxRowWidth);
   });
@@ -141,7 +163,7 @@ export function formatTable(
   // 数据行
   for (const row of rows) {
     const dataRow = row
-      .map((cell, i) => String(cell || "").padEnd(colWidths[i]))
+      .map((cell, i) => padVisible(String(cell || ""), colWidths[i]))
       .join(" │ ");
     lines.push(dataRow);
   }
@@ -256,24 +278,33 @@ export function formatTime(timestamp: number): string {
 }
 
 /**
- * 格式化相对时间
- */
-/**
  * 解析并验证端口号
  */
 export function parsePort(value: string | boolean | undefined, defaultPort: number): number {
   if (!value || typeof value === "boolean") return defaultPort;
   const port = parseInt(value, 10);
   if (isNaN(port) || port < 0 || port > 65535) {
-    console.error(color(`Invalid port: ${value} (must be 0-65535)`, COLORS.red));
+    console.error(color(`Invalid port: ${String(value).replace(/[\x00-\x1f\x7f]/g, "")} (must be 0-65535)`, COLORS.red));
     process.exit(1);
   }
   return port;
 }
 
+/**
+ * 格式化相对时间
+ */
 export function formatRelativeTime(timestamp: number): string {
   const now = Date.now();
   const diff = now - timestamp;
+
+  // Handle future timestamps (e.g., dismissal expiry dates)
+  if (diff < 0) {
+    const absDiff = -diff;
+    if (absDiff < 60000) return "in <1m";
+    if (absDiff < 3600000) return `in ${Math.floor(absDiff / 60000)}m`;
+    if (absDiff < 86400000) return `in ${Math.floor(absDiff / 3600000)}h`;
+    return `in ${Math.floor(absDiff / 86400000)}d`;
+  }
 
   if (diff < 60000) return "just now";
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;

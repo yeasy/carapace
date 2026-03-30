@@ -27,7 +27,7 @@ export async function eventsCommand(
       const n = parseInt(String(flags.limit), 10);
       if (isNaN(n) || n <= 0) {
         console.error(color("Invalid --limit value (must be a positive integer)", COLORS.red));
-        return;
+        process.exit(1);
       }
       query.limit = n;
     }
@@ -35,6 +35,10 @@ export async function eventsCommand(
     // 处理时间过滤
     if (flags.since) {
       const duration = parseDuration(String(flags.since));
+      if (isNaN(duration)) {
+        console.error(color(`Invalid --since value: "${flags.since}". Expected format like "24h", "7d", "30m"`, COLORS.red));
+        process.exit(1);
+      }
       if (duration > 0) {
         query.since = Date.now() - duration;
       }
@@ -46,7 +50,7 @@ export async function eventsCommand(
       const sev = String(flags.severity).toLowerCase();
       if (!VALID_SEVERITIES.has(sev)) {
         console.error(color(`Invalid severity: ${flags.severity}. Must be one of: critical, high, medium, low, info`, COLORS.red));
-        return;
+        process.exit(1);
       }
       query.severity = sev as Severity;
     }
@@ -116,14 +120,13 @@ export async function eventsCommand(
 }
 
 /**
- * 导出事件为 CSV
- */
-/**
  * Sanitize a CSV cell value to prevent formula injection.
  * Prefixes dangerous leading characters with a single quote.
  */
 function csvSafe(value: string): string {
-  const escaped = value.replace(/"/g, '""');
+  // Normalize newlines before escaping
+  const normalized = value.replace(/\r\n/g, " ").replace(/\r/g, " ").replace(/\n/g, " ");
+  const escaped = normalized.replace(/"/g, '""');
   // Prevent CSV formula injection
   if (/^[=+\-@\t\r]/.test(escaped)) {
     return `"'${escaped}"`;

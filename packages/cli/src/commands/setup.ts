@@ -156,7 +156,11 @@ export async function setupCommand(): Promise<void> {
       ""
     );
     if (webhookAnswer) {
-      config.webhookUrl = webhookAnswer;
+      if (/^https?:\/\/.+/i.test(webhookAnswer)) {
+        config.webhookUrl = webhookAnswer;
+      } else {
+        console.log(color("Invalid webhook URL — must start with http:// or https://. Skipping.", COLORS.yellow));
+      }
     }
     console.log("");
 

@@ -13,7 +13,7 @@ import { execFile } from "node:child_process";
  * Generates a UUID-like string for event IDs
  */
 function generateId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 /**
@@ -55,6 +55,10 @@ export async function demoCommand(flags: Record<string, string | boolean> = {}):
   const host = typeof flags.host === "string" ? flags.host : "127.0.0.1";
   const sessionId = `demo-${Date.now().toString(36)}`;
 
+  if (host !== "127.0.0.1" && host !== "::1" && host !== "localhost") {
+    console.warn(`\n  ${color("WARNING:", COLORS.yellow)} Binding to ${host} exposes the unauthenticated dashboard to the network.`);
+  }
+
   console.log(`${color("Carapace Demo", COLORS.bright)}\n`);
   console.log(`Starting demo with session: ${color(sessionId, COLORS.cyan)}\n`);
 
@@ -69,13 +73,9 @@ export async function demoCommand(flags: Record<string, string | boolean> = {}):
       `${color("✓ Dashboard server started", COLORS.green)} on port ${port}\n`
     );
   } catch (err) {
-    console.error(
-      color(
-        `Failed to start dashboard: ${err instanceof Error ? err.message : String(err)}`,
-        COLORS.red
-      )
+    throw new Error(
+      `Failed to start dashboard: ${err instanceof Error ? err.message : String(err)}`
     );
-    process.exit(1);
   }
 
   // Define demo scenarios (12 events covering all categories)
@@ -344,7 +344,8 @@ export async function demoCommand(flags: Record<string, string | boolean> = {}):
   await sleep(1000);
 
   // Print dashboard URL
-  const dashboardUrl = `http://localhost:${port}/dashboard`;
+  const displayHost = host.includes(":") ? `[${host}]` : host;
+  const dashboardUrl = `http://${displayHost}:${port}/dashboard`;
   console.log(color("Dashboard running at", COLORS.bright), dashboardUrl);
   console.log(
     color(
@@ -354,22 +355,22 @@ export async function demoCommand(flags: Record<string, string | boolean> = {}):
   );
   console.log();
 
-  // Try to open in browser (use execFile to avoid shell injection)
+  // Best-effort browser open (use execFile to avoid shell injection)
   const openCommand = process.platform === "darwin" ? "open" :
                      process.platform === "win32" ? "cmd" : "xdg-open";
   const openArgs = process.platform === "win32" ? ["/c", "start", dashboardUrl] : [dashboardUrl];
-  try {
-    execFile(openCommand, openArgs, () => {/* ignore errors */});
-  } catch {
-    console.log(color("(Could not auto-open browser)", COLORS.dim));
-  }
+  execFile(openCommand, openArgs, () => {/* ignore errors */});
 
-  // Keep running until Ctrl+C with graceful shutdown
+  // Keep running until Ctrl+C or SIGTERM with graceful shutdown
   await new Promise<void>((resolve) => {
-    process.once("SIGINT", async () => {
+    const shutdown = async () => {
+      process.removeListener("SIGINT", shutdown);
+      process.removeListener("SIGTERM", shutdown);
       console.log(`\n  ${color("Shutting down demo...", COLORS.yellow)}`);
-      await server.stop();
+      try { await server.stop(); } catch {}
       resolve();
-    });
+    };
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
   });
 }

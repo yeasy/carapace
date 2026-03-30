@@ -59,16 +59,16 @@ describe("CLI utils extras", () => {
       expect(parseDuration("0ms")).toBe(0);
     });
 
-    it("empty string returns 0", () => {
-      expect(parseDuration("")).toBe(0);
+    it("empty string returns NaN", () => {
+      expect(parseDuration("")).toBeNaN();
     });
 
-    it("just number without unit returns 0", () => {
-      expect(parseDuration("123")).toBe(0);
+    it("just number without unit returns NaN", () => {
+      expect(parseDuration("123")).toBeNaN();
     });
 
-    it("unknown unit returns 0", () => {
-      expect(parseDuration("5xyz")).toBe(0);
+    it("unknown unit returns NaN", () => {
+      expect(parseDuration("5xyz")).toBeNaN();
     });
   });
 
@@ -145,6 +145,21 @@ describe("CLI utils extras", () => {
     it("very recent timestamp shows 'just now'", () => {
       const result = formatRelativeTime(Date.now() - 5000);
       expect(result).toBe("just now");
+    });
+
+    it("future timestamp shows 'in Xh' format", () => {
+      const result = formatRelativeTime(Date.now() + 7200000);
+      expect(result).toMatch(/^in 2h$/);
+    });
+
+    it("near-future timestamp shows 'in <1m'", () => {
+      const result = formatRelativeTime(Date.now() + 30000);
+      expect(result).toBe("in <1m");
+    });
+
+    it("future days shows 'in Xd' format", () => {
+      const result = formatRelativeTime(Date.now() + 172800000);
+      expect(result).toMatch(/^in 2d$/);
     });
   });
 

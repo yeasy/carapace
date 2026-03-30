@@ -144,11 +144,11 @@ async function main(): Promise<void> {
         break;
 
       case "dismiss":
-        await dismissCommand(args, flags);
+        await dismissCommand("dismiss", args, flags);
         break;
 
       case "dismissals":
-        await dismissCommand(args, flags);
+        await dismissCommand("dismissals", args, flags);
         break;
 
       case "help":
@@ -166,7 +166,7 @@ async function main(): Promise<void> {
       default:
         if (command) {
           console.error(
-            color(`Unknown command: ${command}`, COLORS.red)
+            color(`Unknown command: ${String(command).replace(/[\x00-\x1f\x7f]/g, "")}`, COLORS.red)
           );
           console.error(
             `Run '${color("carapace help", COLORS.cyan)}' for usage information`

@@ -36,10 +36,13 @@ export async function scanCommand(flags: Record<string, string | boolean> = {}):
     }
 
     // 检查是否定义了信任技能
-    if (config.trustedSkills && Object.keys(config.trustedSkills).length > 0) {
+    const ts = config.trustedSkills;
+    const trustedCount = Array.isArray(ts) ? ts.length :
+      (ts && typeof ts === "object") ? Object.keys(ts).length : 0;
+    if (trustedCount > 0) {
       results.push({
         status: "✓",
-        message: `${Object.keys(config.trustedSkills).length} trusted skill(s) defined`,
+        message: `${trustedCount} trusted skill(s) defined`,
       });
     } else {
       results.push({

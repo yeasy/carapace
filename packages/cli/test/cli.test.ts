@@ -100,9 +100,9 @@ describe("parseDuration", () => {
     expect(parseDuration("2week")).toBe(2 * 7 * 24 * 60 * 60 * 1000);
   });
 
-  it("should return 0 for invalid format", () => {
-    expect(parseDuration("invalid")).toBe(0);
-    expect(parseDuration("xxx")).toBe(0);
+  it("should return NaN for invalid format", () => {
+    expect(parseDuration("invalid")).toBeNaN();
+    expect(parseDuration("xxx")).toBeNaN();
   });
 });
 

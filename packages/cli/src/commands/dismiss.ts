@@ -12,6 +12,7 @@ import {
 } from "../utils.js";
 
 export async function dismissCommand(
+  command: "dismiss" | "dismissals",
   args: string[],
   flags: Record<string, string | boolean>
 ): Promise<void> {
@@ -20,11 +21,9 @@ export async function dismissCommand(
     const store = await createStore({ sqlitePath: dbPath });
 
     try {
-      const subcommand = args[0];
-
-      if (subcommand === "list") {
+      if (command === "dismissals" && args[0] === "list") {
         await listDismissals(store);
-      } else if (subcommand === "clear") {
+      } else if (command === "dismissals" && args[0] === "clear") {
         await clearDismissals(store);
       } else {
         // 驳回单个事件
@@ -66,7 +65,18 @@ async function dismissEvent(store: StorageBackend, eventId: string, reason: stri
     process.exit(1);
   }
 
-  const dismissalId = `d-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // Require at least one filter field to prevent wildcard dismissal that suppresses all alerts
+  if (!event.ruleName && !event.toolName && !event.skillName) {
+    console.error(
+      color(
+        `Cannot dismiss: event ${eventId} has no ruleName, toolName, or skillName to scope the dismissal. A wildcard dismissal would suppress all future alerts.`,
+        COLORS.red
+      )
+    );
+    process.exit(1);
+  }
+
+  const dismissalId = `d-${crypto.randomUUID()}`;
   await store.addDismissal({
     id: dismissalId,
     ruleName: event.ruleName,
