@@ -50,16 +50,38 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
 
   // 裸 IP 地址（可能是 C2 通信）— IPv4 and IPv6
   {
-    pattern: /https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?/i,
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?/i,
     severity: "medium",
     title: "直接 IP 地址连接",
     description: "连接到裸 IP 地址而非域名——可能是 C2 通信。",
   },
   {
-    pattern: /https?:\/\/\[[0-9a-fA-F:]+\]/i,
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/\[[0-9a-fA-F:]+\]/i,
     severity: "medium",
     title: "IPv6 直接地址连接",
     description: "连接到裸 IPv6 地址而非域名——可能是 C2 通信。",
+  },
+
+  // Decimal IP encoding (e.g., http://3232235777 = 192.168.1.1)
+  {
+    pattern: /(?:https?|ftp|wss?):\/\/\d{8,10}(?:[:/]|$)/i,
+    severity: "high",
+    title: "十进制编码 IP 连接",
+    description: "通过十进制编码 IP 地址连接——绕过域名检测的常见 C2 手法。",
+  },
+  // Octal IP encoding (e.g., http://0300.0250.0001.0001)
+  {
+    pattern: /(?:https?|ftp|wss?):\/\/0[0-7]{1,3}\.0[0-7]{1,3}\.0[0-7]{1,3}\.0[0-7]{1,3}/i,
+    severity: "high",
+    title: "八进制编码 IP 连接",
+    description: "通过八进制编码 IP 地址连接——绕过域名检测的 C2 手法。",
+  },
+  // Hex IP encoding (e.g., http://0xC0.0xA8.0x01.0x01 or http://0xC0A80101)
+  {
+    pattern: /(?:https?|ftp|wss?):\/\/0x[0-9a-fA-F]+(?:\.0x[0-9a-fA-F]+){0,3}(?:[:/]|$)/i,
+    severity: "high",
+    title: "十六进制编码 IP 连接",
+    description: "通过十六进制编码 IP 地址连接——绕过域名检测的 C2 手法。",
   },
 
   // 加密货币挖矿池
@@ -114,8 +136,34 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
   {
     pattern: /\[::ffff:169\.254\.169\.254\]/i,
     severity: "critical",
-    title: "云元数据访问（IPv6 映射）",
+    title: "云元数据访问（IPv6 映射 - dotted）",
     description: "IPv6 映射地址访问云元数据端点 (169.254.169.254)。",
+  },
+  {
+    pattern: /\[(?:0:){5}ffff:a9fe:a9fe\]/i,
+    severity: "critical",
+    title: "云元数据访问（IPv6 映射 - hex）",
+    description: "IPv6 全零展开形式访问云元数据端点。",
+  },
+  {
+    pattern: /\[::ffff:a9fe:a9fe\]/i,
+    severity: "critical",
+    title: "云元数据访问（IPv6 映射 - 压缩 hex）",
+    description: "IPv6 压缩形式 hex 地址访问云元数据端点。",
+  },
+  // IPv6-mapped with dotted-decimal IPv4 in expanded form
+  {
+    pattern: /\[0{1,4}:0{1,4}:0{1,4}:0{1,4}:0{1,4}:ffff:169\.254\.169\.254\]/i,
+    severity: "critical",
+    title: "云元数据访问（IPv6 展开 dotted）",
+    description: "IPv6 完全展开形式（dotted-decimal）访问云元数据端点。",
+  },
+  // Mixed hex/decimal IP encoding (requires at least one 0x octet, e.g., 0xa9.254.0xa9.254)
+  {
+    pattern: /(?:https?|ftp|wss?):\/\/(?:(?:0x[0-9a-fA-F]+\.(?:0x[0-9a-fA-F]+|\d{1,3})\.(?:0x[0-9a-fA-F]+|\d{1,3})\.(?:0x[0-9a-fA-F]+|\d{1,3}))|(?:(?:0x[0-9a-fA-F]+|\d{1,3})\.(?:0x[0-9a-fA-F]+|\d{1,3})\.(?:0x[0-9a-fA-F]+|\d{1,3})\.0x[0-9a-fA-F]+))/i,
+    severity: "high",
+    title: "混合编码 IP 连接",
+    description: "通过混合十六进制/十进制编码 IP 地址连接——绕过域名检测的 C2 手法。",
   },
 
   // Alibaba Cloud metadata
@@ -124,6 +172,20 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     severity: "critical",
     title: "阿里云元数据访问",
     description: "访问阿里云 ECS 元数据服务 (100.100.100.200)。",
+  },
+
+  // SSRF loopback/localhost access
+  {
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict):\/\/(?:localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|0\.0\.0\.0)(?:[:/]|$)/i,
+    severity: "medium",
+    title: "本地回环地址访问",
+    description: "连接到 localhost/127.x.x.x/0.0.0.0——可能是 SSRF 攻击。",
+  },
+  {
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict):\/\/\[::1?\](?:[:/]|$)/i,
+    severity: "medium",
+    title: "IPv6 本地回环地址访问",
+    description: "连接到 IPv6 localhost (::1)——可能是 SSRF 攻击。",
   },
 ];
 
@@ -141,13 +203,19 @@ const MAX_DECODE_PASSES = 5;
  * triple-, etc.) encoding such as `https%253A%252F%252Fevil.com`.
  */
 function fullyDecodeURI(raw: string): string {
-  let decoded = raw;
+  // Apply NFKC normalization to prevent bypass via fullwidth Unicode characters
+  // (consistent with PathGuard's normalization in path-guard.ts)
+  let decoded = raw.normalize("NFKC");
   for (let i = 0; i < MAX_DECODE_PASSES; i++) {
     let next: string;
     try {
       next = decodeURIComponent(decoded);
     } catch {
-      break; // malformed percent-encoding — stop decoding
+      // Malformed percent-encoding (e.g., %zz): decode valid %XX sequences
+      // individually so a malformed prefix can't protect encoded payloads.
+      next = decoded.replace(/%[0-9A-Fa-f]{2}/g, (m) => {
+        try { return decodeURIComponent(m); } catch { return m; }
+      });
     }
     if (next === decoded) break; // stable
     decoded = next;
@@ -160,8 +228,10 @@ function extractUrls(params: Record<string, unknown>): string[] {
   // Primary: known URL parameter keys
   const keys = ["url", "uri", "href", "endpoint", "target", "address", "host", "domain",
     "webhook", "callback", "redirect", "base_url", "api_endpoint", "server", "remote"];
+  const lowerParams: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) lowerParams[k.toLowerCase()] = v;
   for (const key of keys) {
-    const val = params[key];
+    const val = lowerParams[key];
     if (typeof val === "string" && val.length > 0) {
       seen.add(val.length > MAX_URL_LEN ? val.slice(0, MAX_URL_LEN) : val);
     }
@@ -172,7 +242,7 @@ function extractUrls(params: Record<string, unknown>): string[] {
     if (depth > MAX_WALK_DEPTH || seen.size >= MAX_URL_COUNT) return;
     if (typeof val === "string" && val.length > 8) {
       const capped = val.length > MAX_URL_LEN ? val.slice(0, MAX_URL_LEN) : val;
-      const matches = capped.match(/https?:\/\/[^\s"']+/gi);
+      const matches = capped.match(/(?:https?|ftp|wss?|stratum\+tcp|gopher|ldap|dict|sftp|telnet|tftp):\/\/[^\s"']+/gi);
       if (matches) {
         for (const m of matches) {
           if (seen.size >= MAX_URL_COUNT) break;

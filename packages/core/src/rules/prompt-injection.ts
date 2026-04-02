@@ -79,14 +79,18 @@ const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\
 
 function normalizeForDetection(text: string): string {
   // NFKC normalization to collapse combining characters AND compatibility equivalents
-  // (fullwidth Latin, superscripts, Roman numerals, etc.), then strip invisible chars
-  return text.normalize("NFKC").replace(INVISIBLE_CHARS_RE, "");
+  // (fullwidth Latin, superscripts, Roman numerals, etc.), then strip invisible chars,
+  // then normalize exotic whitespace (non-breaking space U+00A0, em-space U+2003, etc.)
+  // to ASCII space so \s+ in patterns matches consistently.
+  return text.normalize("NFKC")
+    .replace(INVISIBLE_CHARS_RE, "")
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, " ");
 }
 
 function extractTextValues(params: Record<string, unknown>): string[] {
   const texts: string[] = [];
 
-  function walk(val: unknown, depth: number): void {
+  function walk(val: unknown, depth: number, scanKeys = false): void {
     if (depth > MAX_WALK_DEPTH || texts.length >= MAX_TEXT_COUNT) return;
     if (typeof val === "string" && val.length > 4) {
       const trimmed = val.length > MAX_TEXT_LEN
@@ -97,11 +101,18 @@ function extractTextValues(params: Record<string, unknown>): string[] {
     } else if (Array.isArray(val)) {
       for (const item of val) walk(item, depth + 1);
     } else if (val && typeof val === "object") {
-      for (const v of Object.values(val as Record<string, unknown>)) walk(v, depth + 1);
+      for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+        // Scan parameter keys for injections (attackers can hide instructions in keys)
+        if (scanKeys && k.length > 4) {
+          const normalizedKey = normalizeForDetection(k);
+          texts.push(normalizedKey);
+        }
+        walk(v, depth + 1);
+      }
     }
   }
 
-  walk(params, 0);
+  walk(params, 0, true);
   return texts;
 }
 

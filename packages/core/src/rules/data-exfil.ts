@@ -30,24 +30,35 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /\bsk_(?:live|test)_[a-zA-Z0-9]{20,}/i, severity: "critical", title: "Stripe API Key 出现在请求中", category: "credential_leak" },
   { pattern: /sk-ant-[a-zA-Z0-9_-]{20,}/i, severity: "critical", title: "Anthropic API Key 出现在请求中", category: "credential_leak" },
   { pattern: /AIzaSy[a-zA-Z0-9_-]{33}/i, severity: "critical", title: "Google API Key 出现在请求中", category: "credential_leak" },
-  { pattern: /-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----/i, severity: "critical", title: "私钥出现在请求中", category: "credential_leak" },
+  { pattern: /xox[bpsa]-[0-9a-zA-Z-]{20,}/i, severity: "critical", title: "Slack Token 出现在请求中", category: "credential_leak" },
+  { pattern: /-----BEGIN\s+(RSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----/i, severity: "critical", title: "私钥出现在请求中", category: "credential_leak" },
 
-  // 大量 base64 编码数据外发（可能是文件/凭证编码后传输）
-  { pattern: /(?<=\s|^|["'`])[A-Za-z0-9+/]{200,4000}={0,2}(?=\s|$|["'`])/, severity: "medium", title: "大块 Base64 数据外发", category: "encoded_exfil" },
+  // Base64 encoded credentials (~40+ chars covers typical API keys/tokens)
+  { pattern: /(?<=\s|^|["'`])[A-Za-z0-9+/]{40,16000}={0,2}(?=\s|$|["'`])/, severity: "medium", title: "Base64 编码数据外发", category: "encoded_exfil" },
 
   // 将文件内容通过 curl/wget 发送到外部
-  { pattern: /curl\s+.*-[dX]\s+.*@\//i, severity: "high", title: "通过 curl 上传本地文件", category: "file_upload" },
+  { pattern: /curl\s+.*-[dX]\s+.*@\.?\//i, severity: "high", title: "通过 curl 上传本地文件", category: "file_upload" },
   { pattern: /curl\s+.*--data-binary\s+@/i, severity: "high", title: "通过 curl 二进制上传文件", category: "file_upload" },
   { pattern: /curl\s+.*--upload-file\s+/i, severity: "high", title: "通过 curl 上传文件", category: "file_upload" },
-  { pattern: /curl\s+.*-F\s+.*@\//i, severity: "high", title: "通过 curl multipart 上传本地文件", category: "file_upload" },
+  { pattern: /curl\s+.*-F\s+.*@\.?\//i, severity: "high", title: "通过 curl multipart 上传本地文件", category: "file_upload" },
 
   // 将环境变量发送到外部
   { pattern: /\$\{?\w*(KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL)\w*\}?.*https?:\/\//i, severity: "critical", title: "环境变量凭证与 URL 组合外发", category: "env_leak" },
   { pattern: /https?:\/\/.*\$\{?\w*(KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL)\w*\}?/i, severity: "critical", title: "凭证嵌入 URL 参数", category: "env_leak" },
 
+  // wget --post-file / --body-file 文件上传
+  { pattern: /wget\s+.*--post-file[=\s]/i, severity: "high", title: "通过 wget 上传文件", category: "file_upload" },
+  { pattern: /wget\s+.*--body-file[=\s]/i, severity: "high", title: "通过 wget --body-file 上传文件", category: "file_upload" },
+
   // 管道组合：读取敏感文件并发送
   { pattern: /cat\s+.*\.(pem|key|env|credentials|secret).*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "读取敏感文件并通过网络发送", category: "pipe_exfil" },
   { pattern: /(curl|wget|nc)\s+.*<\s*.*\.(pem|key|env|credentials|secret)/i, severity: "critical", title: "将敏感文件重定向到网络工具", category: "pipe_exfil" },
+  // Redirect credential paths (not just extensions) to network tools
+  { pattern: /(nc|ncat)\s+\S+\s+\d+\s*<\s*.*~?\/?\.(?:ssh|aws|config\/gcloud)\//i, severity: "critical", title: "凭证文件重定向到 netcat", category: "pipe_exfil" },
+  { pattern: /cat\s+.*~?\/?\.(?:ssh|aws)\/(id_rsa|id_ed25519|credentials).*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "读取凭证文件并通过网络发送", category: "pipe_exfil" },
+
+  // scp 凭证文件外泄
+  { pattern: /\bscp\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud)\//i, severity: "critical", title: "通过 scp 外泄凭证文件", category: "pipe_exfil" },
 
   // DNS 外泄：通过 dig/nslookup/host 将命令替换结果嵌入查询域名
   { pattern: /(?:dig|nslookup|host)\s+.*\$\(.*\).*\.\S+/i, severity: "critical", title: "DNS 查询中嵌入命令替换（DNS 外泄）", category: "dns_exfil" },
@@ -146,7 +157,7 @@ export function createDataExfilRule(): SecurityRule {
       for (const dest of EXFIL_DESTINATIONS) {
         const match = dest.exec(combined);
         if (match) {
-          const hasSendAction = /(?:POST|PUT|PATCH|upload|send|--data|--form|--upload-file|--post-file|--post-data|-d\s|-F\s|-T\s)/i.test(combined);
+          const hasSendAction = /(?:POST|PUT|PATCH|upload|send|--data|--form|--upload-file|--post-file|--post-data|--body-file|-d[\s@]|-F[\s@]|-T\s)/i.test(combined);
           const hasCmdSubstitution = /\$\([^)]+\)|`[^`]+`|\$\{[^}]+\}/.test(combined);
           const hasSensitiveParams = /\?\S*(?:data|secret|token|key|passwd|password|credential|file)=/i.test(combined);
           if (hasSendAction || hasCmdSubstitution || hasSensitiveParams) {

@@ -30,9 +30,26 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   { pattern: /[/\\]\.config[/\\]gcloud[/\\]/i, severity: "high", title: "GCloud 配置访问", category: "credentials" },
 
   // API 密钥和 token
-  { pattern: /[/\\]\.env(\.(local|production|development|staging))?\b/i, severity: "high", title: ".env 文件访问", category: "credentials" },
+  { pattern: /[/\\]\.env(\.\w+)?\b/i, severity: "high", title: ".env 文件访问", category: "credentials" },
   { pattern: /[/\\]\.netrc\b/i, severity: "high", title: ".netrc 凭证访问", category: "credentials" },
   { pattern: /[/\\]\.npmrc\b/i, severity: "medium", title: ".npmrc 访问（可能含 token）", category: "credentials" },
+
+  // Database credentials
+  { pattern: /[/\\]\.pgpass\b/i, severity: "high", title: "PostgreSQL 密码文件访问", category: "credentials" },
+  { pattern: /[/\\]\.my\.cnf\b/i, severity: "high", title: "MySQL 配置文件访问", category: "credentials" },
+
+  // Cloud / DevOps tokens
+  { pattern: /[/\\]\.vault-token\b/i, severity: "high", title: "HashiCorp Vault Token 访问", category: "credentials" },
+  { pattern: /[/\\]\.terraform\.d[/\\]credentials\.tfrc\.json/i, severity: "high", title: "Terraform Cloud Token 访问", category: "credentials" },
+  { pattern: /[/\\]\.config[/\\]gh[/\\]hosts\.yml/i, severity: "high", title: "GitHub CLI Token 访问", category: "credentials" },
+
+  // Package registry credentials
+  { pattern: /[/\\]\.pypirc\b/i, severity: "high", title: "PyPI 凭证访问", category: "credentials" },
+  { pattern: /[/\\]\.gem[/\\]credentials\b/i, severity: "high", title: "RubyGems 凭证访问", category: "credentials" },
+
+  // Java ecosystem credentials
+  { pattern: /[/\\]\.gradle[/\\]gradle\.properties\b/i, severity: "high", title: "Gradle 凭证访问", category: "credentials" },
+  { pattern: /[/\\]\.m2[/\\]settings\.xml\b/i, severity: "high", title: "Maven 仓库凭证访问", category: "credentials" },
 
   // GPG
   { pattern: /[/\\]\.gnupg[/\\]/i, severity: "high", title: "GPG 密钥环访问", category: "credentials" },
@@ -41,6 +58,11 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   { pattern: /[/\\](Chrome|Chromium|Google Chrome)[/\\].*\b(Login Data|Cookies|History|Web Data)\b/i, severity: "critical", title: "Chrome 浏览器数据访问", category: "browser" },
   { pattern: /[/\\](Firefox|Mozilla)[/\\].*\b(logins\.json|cookies\.sqlite|key[34]\.db)\b/i, severity: "critical", title: "Firefox 浏览器数据访问", category: "browser" },
   { pattern: /[/\\]Safari[/\\].*\b(Cookies\.binarycookies|History\.db)\b/i, severity: "critical", title: "Safari 浏览器数据访问", category: "browser" },
+
+  // Linux procfs (environment variables, memory, command line, root filesystem traversal)
+  { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\](environ|mem|cmdline)/i, severity: "critical", title: "Linux /proc 敏感文件访问", category: "system" },
+  { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\]root[/\\]/i, severity: "critical", title: "Linux /proc/root 文件系统遍历", category: "system" },
+  { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\](fd|maps|smaps|status|stat|io|net)\b/i, severity: "high", title: "Linux /proc 信息泄露", category: "system" },
 
   // 系统认证
   { pattern: /[/\\]etc[/\\](passwd|shadow|sudoers)/i, severity: "high", title: "系统认证文件访问", category: "system" },
@@ -98,14 +120,24 @@ function extractPaths(params: Record<string, unknown>): string[] {
 
   function addPath(val: string): void {
     if (paths.length >= MAX_PATHS) return;
+    // Apply Unicode NFKC normalization to prevent bypass via fullwidth characters
+    // (e.g., fullwidth solidus U+FF0F normalizes to /, consistent with exec-guard)
+    const normalized = val.normalize("NFKC");
     // Strip null bytes (used to truncate paths and bypass checks) before normalization
-    const cleaned = val.includes("\0") ? val.replace(/\0/g, "") : val;
+    const cleaned = normalized.includes("\0") ? normalized.replace(/\0/g, "") : normalized;
     // Iteratively decode URL-encoded paths to prevent double/triple encoding bypass
     // (e.g., %252F.ssh%252Fid_rsa → %2F.ssh%2Fid_rsa → /.ssh/id_rsa)
     let decoded = cleaned;
     for (let i = 0; i < 5; i++) {
       let next: string;
-      try { next = decodeURIComponent(decoded); } catch { break; }
+      try {
+        next = decodeURIComponent(decoded);
+      } catch {
+        // Malformed percent-encoding: decode valid sequences, skip invalid ones
+        next = decoded.replace(/%[0-9A-Fa-f]{2}/g, (m) => {
+          try { return decodeURIComponent(m); } catch { return m; }
+        });
+      }
       if (next === decoded) break;
       decoded = next;
     }
