@@ -10,6 +10,7 @@ import {
   formatRelativeTime,
   getDbPath,
   parseDuration,
+  severityColor,
 } from "../utils.js";
 
 export async function eventsCommand(
@@ -27,7 +28,8 @@ export async function eventsCommand(
       const n = parseInt(String(flags.limit), 10);
       if (isNaN(n) || n <= 0) {
         console.error(color("Invalid --limit value (must be a positive integer)", COLORS.red));
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
       query.limit = n;
     }
@@ -37,7 +39,8 @@ export async function eventsCommand(
       const duration = parseDuration(String(flags.since));
       if (isNaN(duration)) {
         console.error(color(`Invalid --since value: "${flags.since}". Expected format like "24h", "7d", "30m"`, COLORS.red));
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
       if (duration > 0) {
         query.since = Date.now() - duration;
@@ -50,7 +53,8 @@ export async function eventsCommand(
       const sev = String(flags.severity).toLowerCase();
       if (!VALID_SEVERITIES.has(sev)) {
         console.error(color(`Invalid severity: ${flags.severity}. Must be one of: critical, high, medium, low, info`, COLORS.red));
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
       query.severity = sev as Severity;
     }
@@ -85,15 +89,8 @@ export async function eventsCommand(
     );
 
     const rows = events.map((evt) => {
-      const severityColor =
-        evt.severity === "critical"
-          ? COLORS.red
-          : evt.severity === "high"
-            ? COLORS.yellow
-            : COLORS.dim;
-
       return [
-        color(evt.severity || "info", severityColor),
+        color(evt.severity || "info", severityColor(evt.severity || "info")),
         evt.ruleName || "unknown",
         evt.skillName || "-",
         formatRelativeTime(evt.timestamp),
@@ -115,7 +112,7 @@ export async function eventsCommand(
     console.error(
       color(`Error: ${err instanceof Error ? err.message : String(err)}`, COLORS.red)
     );
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
@@ -136,12 +133,13 @@ function csvSafe(value: string): string {
 
 function exportCsv(events: SecurityEvent[]): void {
   // CSV 标题
-  console.log("timestamp,severity,rule,skill,tool,category,message");
+  console.log("timestamp,severity,action,rule,skill,tool,category,message");
 
   // CSV 行
   for (const evt of events) {
     const timestamp = new Date(evt.timestamp).toISOString();
     const severity = evt.severity || "info";
+    const action = evt.action || "alert";
     const rule = evt.ruleName || "";
     const skill = evt.skillName || "";
     const tool = evt.toolName || "";
@@ -149,7 +147,7 @@ function exportCsv(events: SecurityEvent[]): void {
     const message = evt.description || "";
 
     console.log(
-      `${csvSafe(timestamp)},${csvSafe(severity)},${csvSafe(rule)},${csvSafe(skill)},${csvSafe(tool)},${csvSafe(category)},${csvSafe(message)}`
+      `${csvSafe(timestamp)},${csvSafe(severity)},${csvSafe(action)},${csvSafe(rule)},${csvSafe(skill)},${csvSafe(tool)},${csvSafe(category)},${csvSafe(message)}`
     );
   }
 }

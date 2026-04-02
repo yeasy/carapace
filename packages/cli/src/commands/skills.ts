@@ -2,7 +2,7 @@
  * 管理技能和信任分数
  */
 
-import { createStore, type StorageBackend, type SecurityEvent } from "@carapace/core";
+import { createStore, type StorageBackend } from "@carapace/core";
 import {
   color,
   COLORS,
@@ -31,7 +31,7 @@ export async function skillsCommand(
     console.error(
       color(`Error: ${err instanceof Error ? err.message : String(err)}`, COLORS.red)
     );
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
@@ -41,38 +41,35 @@ export async function skillsCommand(
 async function listSkills(store: StorageBackend): Promise<void> {
   console.log(`${color("Skills and Trust Scores", COLORS.bright)}\n`);
 
-  // 查询所有事件，提取技能名称
+  // 查询所有事件，单遍聚合技能信息
   const allEvents = await store.queryEvents({ limit: 10000 });
-  const skillNames = new Set<string>();
+  const skillMap = new Map<string, { tools: Set<string>; count: number }>();
 
   for (const evt of allEvents) {
-    if (evt.skillName) {
-      skillNames.add(evt.skillName);
+    if (!evt.skillName) continue;
+    let entry = skillMap.get(evt.skillName);
+    if (!entry) {
+      entry = { tools: new Set(), count: 0 };
+      skillMap.set(evt.skillName, entry);
     }
+    entry.count++;
+    if (evt.toolName) entry.tools.add(evt.toolName);
   }
 
-  if (skillNames.size === 0) {
+  if (skillMap.size === 0) {
     console.log("No skills observed yet.");
     return;
   }
 
   const rows: (string | number)[][] = [];
-
-  for (const skillName of skillNames) {
-    const skillEvents = allEvents.filter((e: SecurityEvent) => e.skillName === skillName);
-    const toolCount = new Set(skillEvents.map((e: SecurityEvent) => e.toolName)).size;
-    rows.push([
-      skillName,
-      "1.0",
-      toolCount,
-      skillEvents.length,
-    ]);
+  for (const [skillName, { tools, count }] of skillMap) {
+    rows.push([skillName, tools.size, count]);
   }
 
-  rows.sort((a, b) => Number(b[3]) - Number(a[3]));
+  rows.sort((a, b) => Number(b[2]) - Number(a[2]));
 
   console.log(
-    formatTable(["Skill Name", "Trust Score", "Tools", "Events"], rows)
+    formatTable(["Skill Name", "Tools", "Events"], rows)
   );
 }
 
@@ -84,7 +81,8 @@ async function inspectSkill(store: StorageBackend, skillName: string): Promise<v
     console.error(
       color("Error: Skill name required. Usage: carapace skills inspect <name>", COLORS.red)
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   console.log(`${color(`Skill: ${skillName}`, COLORS.bright)}\n`);
@@ -126,6 +124,6 @@ async function inspectSkill(store: StorageBackend, skillName: string): Promise<v
     console.error(
       color(`Failed to load baseline: ${err instanceof Error ? err.message : String(err)}`, COLORS.red)
     );
-    process.exit(1);
+    process.exitCode = 1;
   }
 }

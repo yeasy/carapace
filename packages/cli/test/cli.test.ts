@@ -6,11 +6,13 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   parseArgs,
   parseDuration,
+  parsePort,
   formatTable,
   color,
   COLORS,
   formatTime,
   formatRelativeTime,
+  severityColor,
 } from "../src/utils.js";
 
 describe("parseArgs", () => {
@@ -66,6 +68,33 @@ describe("parseArgs", () => {
     expect(result.command).toBe("report");
     expect(result.args[0]).toBe("session-123");
     expect(result.flags.format).toBe("json");
+  });
+
+  it("should not consume short flags as long-flag values", () => {
+    const result = parseArgs(["node", "cli", "events", "--severity", "-v"]);
+    expect(result.flags.severity).toBe(true);
+    expect(result.flags.v).toBe(true);
+  });
+
+  it("should allow negative numbers as long-flag values", () => {
+    const result = parseArgs(["node", "cli", "events", "--offset", "-5"]);
+    expect(result.flags.offset).toBe("-5");
+  });
+
+  it("should parse --flag=value syntax", () => {
+    const result = parseArgs(["node", "cli", "events", "--limit=50"]);
+    expect(result.flags.limit).toBe("50");
+  });
+
+  it("should return null command when no command provided", () => {
+    const result = parseArgs(["node", "cli"]);
+    expect(result.command).toBeNull();
+  });
+
+  it("should not pollute prototype via __proto__ flag", () => {
+    const result = parseArgs(["node", "cli", "test", "--__proto__", "polluted"]);
+    expect(({} as Record<string, unknown>).__proto__).not.toBe("polluted");
+    expect(result.flags.__proto__).toBeDefined();
   });
 });
 
@@ -146,6 +175,30 @@ describe("formatTable", () => {
     const rows: any[] = [];
     const result = formatTable(headers, rows);
     expect(result).toBe("No data");
+  });
+
+  it("should display zero values correctly instead of blank", () => {
+    const headers = ["Name", "Count"];
+    const rows = [
+      ["Alpha", 0],
+      ["Beta", 5],
+    ];
+    const result = formatTable(headers, rows);
+    expect(result).toContain("0");
+    expect(result).toContain("5");
+    // Verify the zero renders as "0", not as empty string
+    const dataLines = result.split("\n").slice(2);
+    expect(dataLines[0]).toContain("0");
+  });
+
+  it("should handle null and undefined cells", () => {
+    const headers = ["A", "B"];
+    const rows: (string | number)[][] = [
+      ["val", null as unknown as number],
+    ];
+    const result = formatTable(headers, rows);
+    // null/undefined should render as empty, not crash
+    expect(result).toContain("val");
   });
 });
 
@@ -302,5 +355,54 @@ describe("Integration Tests", () => {
 
     expect(result.command).toBe("dismissals");
     expect(result.args[0]).toBe("clear");
+  });
+});
+
+describe("severityColor", () => {
+  it("returns correct color for each severity level", () => {
+    expect(severityColor("critical")).toBe(COLORS.red);
+    expect(severityColor("high")).toBe(COLORS.yellow);
+    expect(severityColor("medium")).toBe(COLORS.cyan);
+    expect(severityColor("low")).toBe(COLORS.dim);
+    expect(severityColor("info")).toBe(COLORS.gray);
+    expect(severityColor("unknown")).toBe(COLORS.dim);
+  });
+});
+
+describe("parsePort", () => {
+  it("returns default port for undefined input", () => {
+    expect(parsePort(undefined, 9877)).toBe(9877);
+  });
+
+  it("returns default port for boolean input", () => {
+    expect(parsePort(true, 9877)).toBe(9877);
+  });
+
+  it("parses valid port number", () => {
+    expect(parsePort("8080", 9877)).toBe(8080);
+  });
+
+  it("accepts port 0", () => {
+    expect(parsePort("0", 9877)).toBe(0);
+  });
+
+  it("accepts port 65535", () => {
+    expect(parsePort("65535", 9877)).toBe(65535);
+  });
+
+  it("throws on invalid port string", () => {
+    expect(() => parsePort("abc", 9877)).toThrow(/Invalid port/);
+  });
+
+  it("throws on negative port", () => {
+    expect(() => parsePort("-1", 9877)).toThrow(/Invalid port/);
+  });
+
+  it("throws on port exceeding 65535", () => {
+    expect(() => parsePort("70000", 9877)).toThrow(/Invalid port/);
+  });
+
+  it("strips control characters from error message", () => {
+    expect(() => parsePort("ab\x07cd", 9877)).toThrow("Invalid port: abcd (must be 0-65535)");
   });
 });

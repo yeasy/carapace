@@ -21,7 +21,8 @@ export async function reportCommand(args: string[]): Promise<void> {
         COLORS.red
       )
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   try {
@@ -36,7 +37,8 @@ export async function reportCommand(args: string[]): Promise<void> {
       console.error(
         color(`Session not found: ${sessionId}`, COLORS.red)
       );
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
 
     console.log(`${color(`Session Report: ${sessionId}`, COLORS.bright)}\n`);
@@ -120,6 +122,6 @@ export async function reportCommand(args: string[]): Promise<void> {
     console.error(
       color(`Error: ${err instanceof Error ? err.message : String(err)}`, COLORS.red)
     );
-    process.exit(1);
+    process.exitCode = 1;
   }
 }

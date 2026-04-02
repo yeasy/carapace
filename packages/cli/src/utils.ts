@@ -30,7 +30,7 @@ export function parseArgs(argv: string[]): {
       } else {
         const key = raw;
         const nextArg = rest[i + 1];
-        if (nextArg && !nextArg.startsWith("--")) {
+        if (nextArg && (!nextArg.startsWith("-") || /^-\d/.test(nextArg))) {
           flags[key] = nextArg;
           i++;
         } else {
@@ -111,6 +111,20 @@ export function color(text: string, colorCode: string): string {
 }
 
 /**
+ * Consistent severity-to-color mapping across all CLI commands.
+ */
+export function severityColor(severity: string): string {
+  switch (severity) {
+    case "critical": return COLORS.red;
+    case "high": return COLORS.yellow;
+    case "medium": return COLORS.cyan;
+    case "low": return COLORS.dim;
+    case "info": return COLORS.gray;
+    default: return COLORS.dim;
+  }
+}
+
+/**
  * Strip ANSI escape sequences for accurate visible-width calculation
  */
 function stripAnsi(str: string): string {
@@ -140,7 +154,7 @@ export function formatTable(
   // 计算列宽度 (using visible width, stripping ANSI codes)
   const colWidths = headers.map((h, i) => {
     const maxRowWidth = Math.max(
-      ...rows.map((r) => stripAnsi(String(r[i] || "")).length)
+      ...rows.map((r) => stripAnsi(String(r[i] ?? "")).length)
     );
     return Math.max(h.length, maxRowWidth);
   });
@@ -163,7 +177,7 @@ export function formatTable(
   // 数据行
   for (const row of rows) {
     const dataRow = row
-      .map((cell, i) => padVisible(String(cell || ""), colWidths[i]))
+      .map((cell, i) => padVisible(String(cell ?? ""), colWidths[i]))
       .join(" │ ");
     lines.push(dataRow);
   }
@@ -189,8 +203,8 @@ export function loadConfig(configPath?: string): Record<string, unknown> {
           config[key] = parsed[key];
         }
       }
-    } catch {
-      // 忽略加载错误
+    } catch (err) {
+      process.stderr.write(`[carapace] Warning: failed to parse ${homeConfigPath}: ${err instanceof Error ? err.message : String(err)}\n`);
     }
   }
 
@@ -205,8 +219,8 @@ export function loadConfig(configPath?: string): Record<string, unknown> {
           config[key] = parsed[key];
         }
       }
-    } catch {
-      // 忽略加载错误
+    } catch (err) {
+      process.stderr.write(`[carapace] Warning: failed to parse ${cwdConfigPath}: ${err instanceof Error ? err.message : String(err)}\n`);
     }
   }
 
@@ -284,8 +298,7 @@ export function parsePort(value: string | boolean | undefined, defaultPort: numb
   if (!value || typeof value === "boolean") return defaultPort;
   const port = parseInt(value, 10);
   if (isNaN(port) || port < 0 || port > 65535) {
-    console.error(color(`Invalid port: ${String(value).replace(/[\x00-\x1f\x7f]/g, "")} (must be 0-65535)`, COLORS.red));
-    process.exit(1);
+    throw new Error(`Invalid port: ${String(value).replace(/[\x00-\x1f\x7f]/g, "")} (must be 0-65535)`);
   }
   return port;
 }

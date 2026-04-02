@@ -35,7 +35,8 @@ export async function dismissCommand(
               COLORS.red
             )
           );
-          process.exit(1);
+          process.exitCode = 1;
+          return;
         }
         const reason = typeof flags.reason === "string" ? flags.reason : "Dismissed by user";
         await dismissEvent(store, eventId, reason);
@@ -47,7 +48,7 @@ export async function dismissCommand(
     console.error(
       color(`Error: ${err instanceof Error ? err.message : String(err)}`, COLORS.red)
     );
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
@@ -62,7 +63,8 @@ async function dismissEvent(store: StorageBackend, eventId: string, reason: stri
     console.error(
       color(`Event not found: ${eventId}`, COLORS.red)
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   // Require at least one filter field to prevent wildcard dismissal that suppresses all alerts
@@ -73,7 +75,8 @@ async function dismissEvent(store: StorageBackend, eventId: string, reason: stri
         COLORS.red
       )
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const dismissalId = `d-${crypto.randomUUID()}`;

@@ -4,7 +4,7 @@
  * opens the dashboard in the browser, and displays events in real-time.
  */
 
-import { color, COLORS, parsePort } from "../utils.js";
+import { color, COLORS, parsePort, severityColor as severityColorFn } from "../utils.js";
 import { DashboardServer } from "@carapace/dashboard";
 import type { SecurityEvent } from "@carapace/core";
 import { execFile } from "node:child_process";
@@ -27,19 +27,11 @@ function sleep(ms: number): Promise<void> {
  * Formats and prints an event with color coding based on severity
  */
 function printEvent(event: SecurityEvent): void {
-  const severityColors: Record<string, string> = {
-    critical: COLORS.red,
-    high: COLORS.red,
-    medium: COLORS.yellow,
-    low: COLORS.cyan,
-    info: COLORS.blue,
-  };
-
-  const severityColor = severityColors[event.severity] || COLORS.cyan;
+  const sevColor = severityColorFn(event.severity);
   const actionColor = event.action === "blocked" ? COLORS.red : COLORS.yellow;
 
   console.log(
-    `${color(`[${event.severity.toUpperCase()}]`, severityColor)} ${event.title}`
+    `${color(`[${event.severity.toUpperCase()}]`, sevColor)} ${event.title}`
   );
   console.log(`  Category: ${event.category}`);
   console.log(`  Description: ${event.description}`);
@@ -64,7 +56,7 @@ export async function demoCommand(flags: Record<string, string | boolean> = {}):
 
   // Create dashboard server with in-memory store
   const server = new DashboardServer({ port, host });
-  const store = server.getStore();
+  const sink = server.createSink();
 
   // Start the server
   try {
@@ -304,12 +296,12 @@ export async function demoCommand(flags: Record<string, string | boolean> = {}):
         severity: "info",
         title: "Session summary",
         description:
-          "Demo session ended: 12 events total, 2 blocked, 5 high/critical",
+          "Demo session ended: 12 events total, 2 blocked, 6 high/critical",
         action: "alert",
         details: {
           totalEvents: 12,
           blockedEvents: 2,
-          highSeverityEvents: 5,
+          highSeverityEvents: 6,
           criticalEvents: 2,
           sessionDuration: "~20 seconds",
         },
@@ -322,55 +314,63 @@ export async function demoCommand(flags: Record<string, string | boolean> = {}):
 
   console.log(color("Injecting events...\n", COLORS.bright));
 
-  // Inject events with delays
-  for (const scenario of scenarios) {
-    await sleep(scenario.delay);
+  try {
+    // Inject events with delays
+    for (const scenario of scenarios) {
+      await sleep(scenario.delay);
 
-    // Create the full event
-    const event: SecurityEvent = {
-      id: generateId(),
-      timestamp: Date.now(),
-      ...scenario.event,
-    };
+      // Create the full event
+      const event: SecurityEvent = {
+        id: generateId(),
+        timestamp: Date.now(),
+        ...scenario.event,
+      };
 
-    // Add to store
-    store.add(event);
+      // Add to store via sink (also broadcasts SSE to live dashboard)
+      await sink.send({
+        event,
+        summary: `[${event.severity.toUpperCase()}] ${event.title}`,
+        actionTaken: event.action,
+      });
 
-    // Print to console
-    printEvent(event);
+      // Print to console
+      printEvent(event);
+    }
+
+    // Wait before opening browser
+    await sleep(1000);
+
+    // Print dashboard URL
+    const displayHost = host.includes(":") ? `[${host}]` : host;
+    const dashboardUrl = `http://${displayHost}:${port}/dashboard`;
+    console.log(color("Dashboard running at", COLORS.bright), dashboardUrl);
+    console.log(
+      color(
+        "Press Ctrl+C to stop the demo",
+        COLORS.dim
+      )
+    );
+    console.log();
+
+    // Best-effort browser open (use execFile to avoid shell injection)
+    const openCommand = process.platform === "darwin" ? "open" :
+                       process.platform === "win32" ? "cmd" : "xdg-open";
+    const openArgs = process.platform === "win32" ? ["/c", "start", dashboardUrl] : [dashboardUrl];
+    execFile(openCommand, openArgs, () => {/* ignore errors */});
+
+    // Keep running until Ctrl+C or SIGTERM with graceful shutdown
+    await new Promise<void>((resolve) => {
+      const shutdown = async () => {
+        process.removeListener("SIGINT", shutdown);
+        process.removeListener("SIGTERM", shutdown);
+        console.log(`\n  ${color("Shutting down demo...", COLORS.yellow)}`);
+        try { await server.stop(); } catch {}
+        resolve();
+      };
+      process.once("SIGINT", shutdown);
+      process.once("SIGTERM", shutdown);
+    });
+  } finally {
+    try { await server.stop(); } catch {}
   }
-
-  // Wait before opening browser
-  await sleep(1000);
-
-  // Print dashboard URL
-  const displayHost = host.includes(":") ? `[${host}]` : host;
-  const dashboardUrl = `http://${displayHost}:${port}/dashboard`;
-  console.log(color("Dashboard running at", COLORS.bright), dashboardUrl);
-  console.log(
-    color(
-      "Press Ctrl+C to stop the demo",
-      COLORS.dim
-    )
-  );
-  console.log();
-
-  // Best-effort browser open (use execFile to avoid shell injection)
-  const openCommand = process.platform === "darwin" ? "open" :
-                     process.platform === "win32" ? "cmd" : "xdg-open";
-  const openArgs = process.platform === "win32" ? ["/c", "start", dashboardUrl] : [dashboardUrl];
-  execFile(openCommand, openArgs, () => {/* ignore errors */});
-
-  // Keep running until Ctrl+C or SIGTERM with graceful shutdown
-  await new Promise<void>((resolve) => {
-    const shutdown = async () => {
-      process.removeListener("SIGINT", shutdown);
-      process.removeListener("SIGTERM", shutdown);
-      console.log(`\n  ${color("Shutting down demo...", COLORS.yellow)}`);
-      try { await server.stop(); } catch {}
-      resolve();
-    };
-    process.once("SIGINT", shutdown);
-    process.once("SIGTERM", shutdown);
-  });
 }
