@@ -1145,6 +1145,61 @@ describe("WebhookSink", () => {
   it("rejects javascript protocol", () => {
     expect(() => new WebhookSink("javascript:alert(1)")).toThrow(/only supports http\/https/);
   });
+
+  it("retries on transient HTTP failure then succeeds", async () => {
+    let callCount = 0;
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation(async () => {
+      callCount++;
+      if (callCount <= 1) {
+        return { ok: false, status: 503, text: async () => "Service Unavailable" };
+      }
+      return { ok: true, text: async () => "OK" };
+    });
+
+    const sink = new WebhookSink("https://example.com/webhook", 2);
+    const event = createSecurityEvent({ title: "retry test" });
+    await sink.send({ event, summary: "test", actionTaken: "alert" });
+
+    expect(callCount).toBe(2); // first attempt fails, retry succeeds
+    global.fetch = originalFetch;
+  });
+
+  it("logs error after all retries exhausted", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation(async () => {
+      return { ok: false, status: 500, text: async () => "Error" };
+    });
+
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const sink = new WebhookSink("https://example.com/webhook", 1);
+    const event = createSecurityEvent({ title: "exhaust retries" });
+    await sink.send({ event, summary: "test", actionTaken: "alert" });
+
+    const output = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(output).toContain("webhook send failed after 2 attempts");
+
+    stderrSpy.mockRestore();
+    global.fetch = originalFetch;
+  });
+
+  it("retries on network error (fetch throws)", async () => {
+    let callCount = 0;
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation(async () => {
+      callCount++;
+      if (callCount <= 1) throw new Error("ECONNREFUSED");
+      return { ok: true, text: async () => "OK" };
+    });
+
+    const sink = new WebhookSink("https://example.com/webhook", 2);
+    const event = createSecurityEvent({ title: "network error retry" });
+    await sink.send({ event, summary: "test", actionTaken: "alert" });
+
+    expect(callCount).toBe(2);
+    global.fetch = originalFetch;
+  });
 });
 
 // ─── LogFileSink TOCTOU Protection Tests ─────────────────────────────

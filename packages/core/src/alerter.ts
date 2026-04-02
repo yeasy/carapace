@@ -100,6 +100,8 @@ export class WebhookSink implements AlertSink {
           await resp.text().catch(() => {});
           throw new Error(`HTTP ${resp.status}`);
         }
+        // Consume success response body to release connection back to pool
+        await resp.text().catch(() => {});
         return; // 发送成功，立即返回
       } catch (err) {
         if (attempt < this.maxRetries) {
@@ -460,7 +462,9 @@ export class AlertEscalation {
 
   private computeKey(event: SecurityEvent): string {
     // 按 rule + tool 分组（不含参数，参数变化不影响升级计数）
-    return `${event.ruleName ?? ""}:${event.toolName ?? ""}`;
+    // Use \x00 separator since it cannot appear in rule/tool names
+    // (colons can appear in namespaced names, causing key collisions)
+    return `${event.ruleName ?? ""}\x00${event.toolName ?? ""}`;
   }
 }
 
@@ -520,9 +524,9 @@ export class AlertRouter {
       }
     }
 
-    // 2. 驳回检查（blocked 事件始终告警，确保运维人员可见）
+    // 2. 驳回检查（blocked 和 critical 事件始终告警，确保运维人员可见）
     // Use finalEvent consistently so escalated events are checked correctly
-    if (this.dismissal?.isDismissed(finalEvent) && finalEvent.action !== "blocked") {
+    if (this.dismissal?.isDismissed(finalEvent) && finalEvent.action !== "blocked" && finalEvent.severity !== "critical") {
       return; // 已驳回，不告警
     }
 
@@ -547,13 +551,13 @@ export class AlertRouter {
   }
 
   private computeDedupKey(event: SecurityEvent): string {
-    // Severity intentionally excluded: escalated events should still be deduped
-    // against their pre-escalation versions to prevent alert floods.
+    // Include severity so that escalated events (higher severity) are not
+    // suppressed by the dedup window of their lower-severity predecessors.
     // Use \x00 as separator since it cannot appear in any field value
     // (null bytes are stripped during input validation).
     // Use "\x01" as sentinel for undefined to distinguish from empty string ""
     const s = (v: string | undefined) => v === undefined ? "\x01" : v;
-    return `${s(event.sessionId)}\x00${s(event.ruleName)}\x00${s(event.toolName)}\x00${s(event.matchedPattern)}`;
+    return `${s(event.sessionId)}\x00${s(event.ruleName)}\x00${s(event.toolName)}\x00${s(event.matchedPattern)}\x00${event.severity}`;
   }
 
   private cleanupDedup(now: number): void {

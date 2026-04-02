@@ -26,8 +26,8 @@ const SENSITIVE_PATTERNS: RegExp[] = [
   /github_pat_[a-zA-Z0-9]{22,}/g,
   // Connection strings with embedded credentials (postgres, mysql, mongodb, redis, amqp)
   /(?:postgres|mysql|mongodb|redis|amqp)(?:\+\w+)?:\/\/[^:]+:[^@\s]+@/gi,
-  // Bearer tokens in authorization headers
-  /(?:Bearer|Authorization:?)\s+[a-zA-Z0-9._~+\/-]{32,}/gi,
+  // Bearer/Basic tokens in authorization headers
+  /(?:Bearer|Basic|Authorization:?)\s+[a-zA-Z0-9._~+\/-]{16,}/gi,
   // Anthropic API keys (sk-ant-xxx)
   /sk-ant-[a-zA-Z0-9_-]{20,}/g,
   // Google API keys (AIzaSy...)

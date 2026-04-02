@@ -200,7 +200,7 @@ export class MemoryBackend extends StorageBackend {
       byCategory[e.category] = (byCategory[e.category] ?? 0) + 1;
       if (e.ruleName) byRule[e.ruleName] = (byRule[e.ruleName] ?? 0) + 1;
       if (e.action === "blocked") blockedCount++;
-      else alertCount++;
+      if (e.action === "alert") alertCount++;
       if (e.timestamp < firstTs) firstTs = e.timestamp;
       if (e.timestamp > lastTs) lastTs = e.timestamp;
     }
@@ -223,6 +223,8 @@ export class MemoryBackend extends StorageBackend {
     bucketMs: number = 60_000,
     since?: number
   ): Promise<TimeSeriesBucket[]> {
+    bucketMs = Math.floor(bucketMs);
+    if (bucketMs <= 0) throw new Error("bucketMs must be positive");
     const events = since !== undefined ? this.events.filter((e) => e.timestamp >= since) : this.events;
 
     if (events.length === 0) return [];
@@ -265,7 +267,9 @@ export class MemoryBackend extends StorageBackend {
   async updateSession(sessionId: string, updates: Partial<Session>): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (session) {
-      this.sessions.set(sessionId, { ...session, ...updates });
+      // Prevent sessionId override which would corrupt the map key → value mapping
+      const { sessionId: _ignored, ...safeUpdates } = updates;
+      this.sessions.set(sessionId, { ...session, ...safeUpdates });
     }
   }
 
@@ -451,7 +455,7 @@ export class SqliteBackend extends StorageBackend {
     await this.initialize();
 
     const stmt = this.db.prepare(`
-      INSERT INTO events (id, timestamp, category, severity, title, description, tool_name, skill_name, session_id, agent_id, rule_name, matched_pattern, action, details_json, tool_params_json)
+      INSERT OR IGNORE INTO events (id, timestamp, category, severity, title, description, tool_name, skill_name, session_id, agent_id, rule_name, matched_pattern, action, details_json, tool_params_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
@@ -591,7 +595,7 @@ export class SqliteBackend extends StorageBackend {
               MIN(timestamp) as first_ts,
               MAX(timestamp) as last_ts,
               SUM(CASE WHEN action = 'blocked' THEN 1 ELSE 0 END) as blocked_count,
-              SUM(CASE WHEN action != 'blocked' THEN 1 ELSE 0 END) as alert_count
+              SUM(CASE WHEN action = 'alert' THEN 1 ELSE 0 END) as alert_count
        FROM events${whereClause}`
     ).get(...params) as SqliteRow;
 
@@ -642,6 +646,8 @@ export class SqliteBackend extends StorageBackend {
     bucketMs: number = 60_000,
     since?: number
   ): Promise<TimeSeriesBucket[]> {
+    bucketMs = Math.floor(bucketMs);
+    if (bucketMs <= 0) throw new Error("bucketMs must be positive");
     this.ensureOpen();
     await this.initialize();
 
@@ -670,7 +676,7 @@ export class SqliteBackend extends StorageBackend {
     await this.initialize();
 
     const stmt = this.db.prepare(`
-      INSERT INTO sessions (session_id, agent_id, started_at, ended_at, tool_call_count, event_count, skills_used_json)
+      INSERT OR REPLACE INTO sessions (session_id, agent_id, started_at, ended_at, tool_call_count, event_count, skills_used_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
@@ -877,6 +883,10 @@ export class SqliteBackend extends StorageBackend {
 
   async close(): Promise<void> {
     this.closed = true;
+    // Await pending initialization to prevent leaked database handles
+    if (this.initPromise) {
+      try { await this.initPromise; } catch { /* ignore init errors during close */ }
+    }
     if (this.db && this.initialized) {
       this.db.close();
       this.db = null as unknown as SqliteDatabase; // prevent use-after-close

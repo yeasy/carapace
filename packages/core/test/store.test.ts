@@ -926,3 +926,93 @@ describe("createStore factory function", () => {
     await store.close();
   });
 });
+
+// ─── MemoryBackend.updateSession sessionId protection ───────────
+
+describe("MemoryBackend.updateSession sessionId protection", () => {
+  it("does not corrupt map key when sessionId is in updates", async () => {
+    const store = new MemoryBackend();
+    const session: Session = {
+      sessionId: "original-id",
+      startedAt: Date.now(),
+      toolCallCount: 0,
+      eventCount: 0,
+    };
+    await store.addSession(session);
+
+    // Pass sessionId in updates — should be ignored
+    await store.updateSession("original-id", { sessionId: "hacked-id" as string, eventCount: 5 } as Partial<Session>);
+
+    // Original key should still work and sessionId should be preserved
+    const result = await store.getSession("original-id");
+    expect(result).not.toBeNull();
+    expect(result!.sessionId).toBe("original-id");
+    expect(result!.eventCount).toBe(5);
+
+    // Hacked key should not exist
+    const hacked = await store.getSession("hacked-id");
+    expect(hacked).toBeNull();
+
+    await store.close();
+  });
+
+  it("addSession with duplicate sessionId overwrites in MemoryBackend", async () => {
+    const store = new MemoryBackend();
+    await store.addSession({ sessionId: "dup", startedAt: 100, toolCallCount: 1, eventCount: 1 });
+    await store.addSession({ sessionId: "dup", startedAt: 200, toolCallCount: 2, eventCount: 2 });
+
+    const session = await store.getSession("dup");
+    expect(session!.startedAt).toBe(200);
+    expect(session!.toolCallCount).toBe(2);
+
+    await store.close();
+  });
+});
+
+// ─── timeSeries bucketMs validation ───────────────────────────────
+
+describe("timeSeries bucketMs validation", () => {
+  it("throws on zero bucketMs (MemoryBackend)", async () => {
+    const store = new MemoryBackend();
+    await expect(store.timeSeries(0)).rejects.toThrow("bucketMs must be positive");
+    await store.close();
+  });
+
+  it("throws on negative bucketMs (MemoryBackend)", async () => {
+    const store = new MemoryBackend();
+    await expect(store.timeSeries(-1000)).rejects.toThrow("bucketMs must be positive");
+    await store.close();
+  });
+
+  it("throws on zero bucketMs (SqliteBackend)", async () => {
+    const store = new SqliteBackend(":memory:");
+    await expect(store.timeSeries(0)).rejects.toThrow("bucketMs must be positive");
+    await store.close();
+  });
+});
+
+describeSqlite("SqliteBackend alertCount consistency", () => {
+  it("counts only action='alert' in getStats, matching MemoryBackend", async () => {
+    const mem = new MemoryBackend();
+    const sql = new SqliteBackend(":memory:");
+
+    const blocked = createTestEvent({ id: "e1", action: "blocked" });
+    const alert = createTestEvent({ id: "e2", action: "alert" });
+
+    await mem.addEvent(blocked);
+    await mem.addEvent(alert);
+    await sql.addEvent(blocked);
+    await sql.addEvent(alert);
+
+    const memStats = await mem.getStats();
+    const sqlStats = await sql.getStats();
+
+    expect(memStats.alertCount).toBe(1);
+    expect(sqlStats.alertCount).toBe(1);
+    expect(memStats.alertCount).toBe(sqlStats.alertCount);
+    expect(memStats.blockedCount).toBe(sqlStats.blockedCount);
+
+    await mem.close();
+    await sql.close();
+  });
+});
