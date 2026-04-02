@@ -65,13 +65,34 @@ All notable changes to this project will be documented in this file.
 - **Dashboard**: `alertCount` in EventStore now uses explicit `action === "alert"` check (matching core MemoryBackend behavior).
 - **CLI `demo`**: Severity color mapping now uses shared `severityColor()` utility for consistency.
 - **CLI `loadConfig`**: Parse errors now logged to stderr instead of silently swallowed.
+- **ExecGuard**: Perl `-e` detection expanded from `socket()` only to include `system()`, `exec()`, and `open(|)`.
+- **ExecGuard**: Added Deno (`deno eval/run`) and Bun (`bun -e/eval/run`) runtime detection; both added to EXEC_TOOL_NAMES.
+- **ExecGuard**: Added Lua inline execution detection (`lua -e os.execute/io.popen/os.remove`).
+- **PathGuard**: Added `/proc/PID/fd`, `/proc/PID/maps`, `/proc/PID/smaps`, `/proc/PID/status`, `/proc/PID/stat`, `/proc/PID/io`, `/proc/PID/net` info leak detection.
+- **PathGuard**: Added `.gradle/gradle.properties` and `.m2/settings.xml` Java ecosystem credential detection.
+- **NetworkGuard**: Added `localhost`, `127.x.x.x`, `0.0.0.0` and `[::1]` loopback SSRF detection.
+- **DataExfil**: Added `scp` credential file exfiltration detection (`.ssh/`, `.aws/`, `.gnupg/`, `.config/gcloud/`).
+- **ExecGuard**: Added `zip` credential archiving detection (`.ssh/`, `.aws/`) alongside existing `tar` detection.
+- **ExecGuard**: Added `find -exec` and `find -name` credential discovery detection (scanning for `id_rsa`, `id_ed25519`, `credentials`, `authorized_keys`).
+- **DataExfil**: Added `tar/zip` pipe to `curl/wget/nc` credential exfiltration detection.
+- **NetworkGuard**: Fixed mixed octal/decimal IP bypass — `http://0300.250.0001.0001` (mixing octal and decimal octets) now detected. Pattern allows optional leading `0` on non-first octets.
+- **ExecGuard**: Null byte injection bypass — `cur\x00l | bash` now detected. Added null byte stripping to `normalizeCommand()` (consistent with PathGuard).
+- **ExecGuard**: Added `at` scheduler and `screen`/`tmux` detached execution detection.
+- **ExecGuard**: Added `rev | sh` string reversal execution detection.
+- **ExecGuard**: Added `xxd -r | bash` hex decode execution detection.
+- **PathGuard**: Added Kubernetes ServiceAccount token (`/var/run/secrets/kubernetes.io/`) detection.
+- **PathGuard**: Added Cargo registry credentials (`.cargo/credentials`) detection.
+- **NetworkGuard**: Added AWS ECS task metadata endpoint (`169.254.170.2`) detection.
+- **DataExfil**: Added `rsync` credential exfiltration detection.
+- **DataExfil**: Added `/dev/tcp` data exfiltration detection.
+- **DataExfil**: Added 4 new exfil destination domains: `ix.io`, `sprunge.us`, `termbin.com`, `oastify.com`.
 
 ### Changed
-- ExecGuard pattern count: 73 → 77 (parameter expansion, exec/pty, openssl, diff/tool credential read).
-- PathGuard pattern count: 20 → 28 (/proc/PID/root traversal, database credentials, cloud/DevOps tokens, package registry credentials).
-- NetworkGuard categories: 12 → 13 (mixed hex/decimal IP encoding, expanded IPv6 metadata).
-- DataExfil pattern count: 20 → 24 (wget --post-file, wget --body-file, nc redirect, credential path pipe).
-- New tests: 1355 total (+20 new: crontab -l false positive, .env variants, new sensitive paths, wget --body-file, curl -d@file fix).
+- ExecGuard pattern count: 73 → 88 (parameter expansion, exec/pty, openssl, diff/tool credential read, perl system/exec, deno/bun runtime, lua execution).
+- PathGuard pattern count: 20 → 33 (/proc/PID/root traversal, database credentials, cloud/DevOps tokens, package registry credentials, /proc info leak, Java ecosystem credentials).
+- NetworkGuard categories: 12 → 15 (mixed hex/decimal IP encoding, expanded IPv6 metadata, localhost/loopback SSRF).
+- DataExfil pattern count: 20 → 28 (wget --post-file, wget --body-file, nc redirect, credential path pipe, scp credential exfiltration, tar/zip pipe exfil).
+- New tests: 1473 total (+56 new: perl system/exec, deno/bun, lua, /proc info leak, gradle/maven, localhost SSRF, scp exfil, zip cred archive, find cred discovery, tar pipe exfil, mixed octal/decimal IP, null byte bypass).
 
 ## [0.9.0] - 2026-03-29
 
