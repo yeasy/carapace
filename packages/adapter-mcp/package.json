@@ -1,6 +1,6 @@
 {
   "name": "@carapace/adapter-mcp",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "MCP (Model Context Protocol) proxy adapter for Carapace runtime security monitor.",
   "type": "module",
   "main": "dist/index.js",

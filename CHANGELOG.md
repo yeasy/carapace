@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.10.0] - 2026-04-01
+## [0.10.1] - 2026-04-01
 
 ### Fixed
 - **ExecGuard**: Multi-char shell quote bypass — `'cu''rl'` and `"cu""rl"` evasion now normalized before pattern matching.
