@@ -136,7 +136,7 @@ export class McpProxy {
       this.engine.addRule(rule);
     }
 
-    if (this.config.trustedSkills?.length) {
+    if (Array.isArray(this.config.trustedSkills) && this.config.trustedSkills.length > 0) {
       this.engine.setTrustedSkills(this.config.trustedSkills);
     }
 
@@ -426,8 +426,8 @@ export class McpProxy {
             if (child.stdin?.writable) { child.stdin.write(line + "\n"); }
           }
         } catch {
-          // 非 JSON 行原样转发
-          if (child.stdin?.writable) { child.stdin.write(line + "\n"); }
+          // Drop non-JSON lines — do not forward unvalidated content to child process
+          this.log(`dropping non-JSON stdin line (${line.length} bytes)`);
         }
       }
     };

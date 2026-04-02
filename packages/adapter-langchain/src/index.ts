@@ -145,7 +145,7 @@ export class CarapaceBridge {
       this.engine.addRule(rule);
     }
 
-    if (this.config.trustedSkills?.length) {
+    if (Array.isArray(this.config.trustedSkills) && this.config.trustedSkills.length > 0) {
       this.engine.setTrustedSkills(this.config.trustedSkills);
     }
 
@@ -333,7 +333,7 @@ export class CarapaceBridge {
           try {
             const checkReq = JSON.parse(body) as CheckRequest;
 
-            if (!checkReq.toolName || typeof checkReq.toolName !== "string" || !checkReq.toolParams || typeof checkReq.toolParams !== "object" || Array.isArray(checkReq.toolParams)) {
+            if (!checkReq.toolName || typeof checkReq.toolName !== "string" || !checkReq.toolParams || checkReq.toolParams === null || typeof checkReq.toolParams !== "object" || Array.isArray(checkReq.toolParams)) {
               res.writeHead(400, { "Content-Type": "application/json" });
               res.end(
                 JSON.stringify({
