@@ -189,6 +189,20 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "读取 .netrc 文件——包含明文网络凭证。",
   },
 
+  // ── GPG 密钥 / macOS 钥匙串 ──
+  {
+    pattern: /\bgpg\s+.*--export-secret-keys/i,
+    severity: "critical",
+    title: "GPG 私钥导出",
+    description: "导出 GPG 私钥——潜在凭证外泄。",
+  },
+  {
+    pattern: /\bsecurity\s+(?:find-generic-password|find-internet-password|dump-keychain)\b/i,
+    severity: "critical",
+    title: "macOS 钥匙串密码读取",
+    description: "通过 security 命令读取 macOS 钥匙串密码——凭证窃取。",
+  },
+
   // ── 凭证文件复制/传输 ──
   {
     pattern: /\b(cp|scp|rsync)\s+.*~?\/?\.ssh\/(id_rsa|id_ed25519|id_ecdsa|authorized_keys)/i,
@@ -460,6 +474,34 @@ const DANGER_PATTERNS: DangerPattern[] = [
     title: "chmod --reference 权限复制",
     description: "通过 --reference 复制其他文件的权限——可能复制 SUID/SGID 位。",
   },
+  {
+    pattern: /\bsetfacl\s+.*-m\s/i,
+    severity: "high",
+    title: "ACL 权限修改",
+    description: "修改文件 ACL 权限——可能绕过传统权限限制。",
+  },
+  {
+    pattern: /\bchattr\s+.*\+i\b/i,
+    severity: "high",
+    title: "文件不可变标志设置",
+    description: "设置文件不可变标志——可用于保护恶意文件不被删除。",
+  },
+
+  // ── 文件系统挂载 ──
+  {
+    pattern: /\bmount\s+.*(-o|--options)\s/i,
+    severity: "high",
+    title: "文件系统挂载",
+    description: "挂载文件系统——可能挂载恶意存储或暴露宿主文件。",
+  },
+
+  // ── 防火墙规则修改 ──
+  {
+    pattern: /\b(iptables|ip6tables|nftables|nft)\s+.*(-A|-I|-D|add|insert|delete)\s/i,
+    severity: "high",
+    title: "防火墙规则修改",
+    description: "修改防火墙规则——可能打开网络通道或阻止安全监控。",
+  },
 
   // ── 下载到文件后执行 ──
   {
@@ -525,6 +567,14 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "high",
     title: "Python 内联网络请求",
     description: "通过 Python -c 内联发起网络请求——潜在远程代码下载。",
+  },
+
+  // ── Python HTTP 服务器 ──
+  {
+    pattern: /\bpython[23]?\s+.*?-m\s+http\.server\b/i,
+    severity: "high",
+    title: "Python HTTP 服务器",
+    description: "启动 Python HTTP 服务器——可对外暴露本地文件。",
   },
 
   // ── Python exec/pty/compile 执行 ──
@@ -633,6 +683,12 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "high",
     title: "PowerShell BITS 传输",
     description: "通过 BITS 服务下载文件——可绕过应用层防火墙。",
+  },
+  {
+    pattern: /\bcertutil\b.*(-urlcache|-encode|-decode)/i,
+    severity: "critical",
+    title: "Windows certutil 下载/编码",
+    description: "通过 certutil 下载文件或编码数据——Windows 常见 LOLBin 手法。",
   },
 ];
 

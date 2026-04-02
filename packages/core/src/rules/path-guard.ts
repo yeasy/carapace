@@ -42,6 +42,7 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   { pattern: /[/\\]\.vault-token\b/i, severity: "high", title: "HashiCorp Vault Token 访问", category: "credentials" },
   { pattern: /[/\\]\.terraform\.d[/\\]credentials\.tfrc\.json/i, severity: "high", title: "Terraform Cloud Token 访问", category: "credentials" },
   { pattern: /[/\\]\.config[/\\]gh[/\\]hosts\.yml/i, severity: "high", title: "GitHub CLI Token 访问", category: "credentials" },
+  { pattern: /[/\\]\.consul[/\\]|[/\\]\.nomad[/\\]/i, severity: "high", title: "HashiCorp Consul/Nomad Token 访问", category: "credentials" },
 
   // Package registry credentials
   { pattern: /[/\\]\.pypirc\b/i, severity: "high", title: "PyPI 凭证访问", category: "credentials" },
@@ -73,6 +74,9 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   // 系统认证
   { pattern: /[/\\]etc[/\\](passwd|shadow|sudoers)/i, severity: "high", title: "系统认证文件访问", category: "system" },
 
+  // macOS 安全偏好
+  { pattern: /[/\\]Library[/\\]Preferences[/\\]com\.apple\.security/i, severity: "high", title: "macOS 安全偏好访问", category: "system" },
+
   // 加密钱包
   { pattern: /[/\\]\.bitcoin[/\\]wallet\.dat/i, severity: "critical", title: "Bitcoin 钱包访问", category: "crypto_wallet" },
   { pattern: /[/\\]\.ethereum[/\\]keystore[/\\]/i, severity: "critical", title: "Ethereum 密钥库访问", category: "crypto_wallet" },
@@ -80,9 +84,23 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   // Kubernetes / Docker
   { pattern: /[/\\]\.kube[/\\]config/i, severity: "high", title: "Kubernetes 配置访问", category: "credentials" },
   { pattern: /[/\\]\.docker[/\\]config\.json/i, severity: "high", title: "Docker 配置访问", category: "credentials" },
+  { pattern: /[/\\]run[/\\]secrets[/\\]/i, severity: "critical", title: "Docker Swarm 密钥访问", category: "credentials" },
+
+  // SSL 私钥
+  { pattern: /[/\\]etc[/\\]ssl[/\\]private[/\\]/i, severity: "critical", title: "SSL 私钥目录访问", category: "credentials" },
+
+  // FTP/SCP 客户端凭证
+  { pattern: /[/\\]\.?config[/\\]filezilla[/\\]/i, severity: "high", title: "FileZilla 保存密码访问", category: "credentials" },
+  { pattern: /[/\\]WinSCP\.ini\b/i, severity: "high", title: "WinSCP 会话数据访问", category: "credentials" },
 
   // macOS Keychain
   { pattern: /[/\\]Keychains[/\\].*\.(keychain-db|keychain)/i, severity: "critical", title: "macOS 钥匙串访问", category: "credentials" },
+
+  // GNOME Keyring
+  { pattern: /[/\\]\.local[/\\]share[/\\]keyrings[/\\]/i, severity: "critical", title: "GNOME 密钥环访问", category: "credentials" },
+
+  // KeePass 密码数据库
+  { pattern: /\.(kdbx?|kdb)\b/i, severity: "critical", title: "KeePass 密码数据库访问", category: "credentials" },
 
   // Windows 凭证
   { pattern: /[/\\]Windows[/\\]System32[/\\]config[/\\](SAM|SECURITY|SYSTEM)/i, severity: "critical", title: "Windows 凭证存储访问", category: "credentials" },

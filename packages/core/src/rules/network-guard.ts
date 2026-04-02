@@ -26,6 +26,12 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "向粘贴/剪贴板服务发送数据——常用于数据外泄。",
   },
   {
+    pattern: /\b(paste\.mozilla\.org|toptal\.com\/developers\/hastebin|cl1p\.net|controlc\.com)\b/i,
+    severity: "high",
+    title: "数据发送到粘贴服务",
+    description: "向粘贴/剪贴板服务发送数据——常用于数据外泄。",
+  },
+  {
     pattern: /\b(transfer\.sh|file\.io|0x0\.st|tmpfiles\.org|gofile\.io|temp\.sh|oshi\.at|catbox\.moe|fileditch\.com|anonfiles\.com|sendspace\.com|dropmefiles\.com)\b/i,
     severity: "high",
     title: "数据发送到文件共享服务",
@@ -38,6 +44,12 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     severity: "high",
     title: "数据发送到请求捕获/隧道服务",
     description: "向 webhook/请求捕获/隧道服务发送数据——潜在外泄端点。",
+  },
+  {
+    pattern: /\b(playit\.gg|telebit\.cloud|remote\.it|portmap\.io)\b/i,
+    severity: "high",
+    title: "数据发送到隧道服务",
+    description: "向隧道/端口转发服务发送数据——潜在外泄端点。",
   },
 
   // Tor / 匿名化
@@ -114,6 +126,30 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     title: "GCP 元数据服务访问",
     description: "访问 GCP 实例元数据服务——可获取服务账号凭证。",
   },
+  {
+    pattern: /metadata\.azure\.com/i,
+    severity: "critical",
+    title: "Azure 元数据服务访问",
+    description: "访问 Azure 实例元数据服务——可获取托管身份凭证。",
+  },
+  {
+    pattern: /metadata\.oraclecloud\.com/i,
+    severity: "critical",
+    title: "Oracle Cloud 元数据访问",
+    description: "访问 Oracle Cloud 实例元数据服务。",
+  },
+  {
+    pattern: /\bmetadata\.internal\b/i,
+    severity: "critical",
+    title: "DigitalOcean 元数据访问",
+    description: "访问 DigitalOcean Droplet 元数据服务。",
+  },
+  {
+    pattern: /\bkubernetes\.default\.svc\b/i,
+    severity: "medium",
+    title: "Kubernetes API 内部访问",
+    description: "从 Pod 内部访问 Kubernetes API——可能获取集群权限。",
+  },
 
   // Cloud metadata — alternative IP encodings for 169.254.169.254
   {
@@ -151,6 +187,12 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     severity: "critical",
     title: "云元数据访问（IPv6 映射 - 压缩 hex）",
     description: "IPv6 压缩形式 hex 地址访问云元数据端点。",
+  },
+  {
+    pattern: /\[::169\.254\.169\.254\]/i,
+    severity: "critical",
+    title: "云元数据访问（IPv4 兼容 IPv6）",
+    description: "IPv4 兼容 IPv6 地址访问云元数据端点——绕过 IPv6 映射检测。",
   },
   // IPv6-mapped with dotted-decimal IPv4 in expanded form
   {
