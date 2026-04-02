@@ -443,3 +443,93 @@ describe("DashboardServer", () => {
     expect(events).toHaveLength(1);
   });
 });
+
+// ═══════════════════════════════════════════════════════════
+// Dashboard API Authentication
+// ═══════════════════════════════════════════════════════════
+
+describe("DashboardServer API authentication", () => {
+  let server: DashboardServer;
+
+  afterEach(async () => {
+    if (server) await server.stop();
+  });
+
+  it("rejects POST /api/policies without auth token", async () => {
+    server = new DashboardServer({ port: 0, apiToken: "test-secret-token" });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/policies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "test", rules: {} }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("accepts POST /api/policies with valid auth token", async () => {
+    server = new DashboardServer({ port: 0, apiToken: "test-secret-token" });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/policies`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer test-secret-token",
+      },
+      body: JSON.stringify({ name: "test-policy", rules: {} }),
+    });
+    expect(res.status).toBe(201);
+  });
+
+  it("rejects DELETE /api/policies/x without auth token", async () => {
+    server = new DashboardServer({ port: 0, apiToken: "my-token" });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/policies/x`, {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("allows GET endpoints without auth token", async () => {
+    server = new DashboardServer({ port: 0, apiToken: "my-token" });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/health`);
+    expect(res.status).toBe(200);
+  });
+
+  it("allows all methods when no apiToken is configured", async () => {
+    server = new DashboardServer({ port: 0 });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/policies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "test-policy", rules: {} }),
+    });
+    expect(res.status).toBe(201);
+  });
+
+  it("rejects wrong auth token", async () => {
+    server = new DashboardServer({ port: 0, apiToken: "correct-token" });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/policies`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer wrong-token",
+      },
+      body: JSON.stringify({ name: "test-policy", rules: {} }),
+    });
+    expect(res.status).toBe(401);
+  });
+});

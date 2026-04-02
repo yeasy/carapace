@@ -12,6 +12,7 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import type { SecurityEvent, AlertSink, AlertPayload } from "@carapace/core";
 import { EventStore, type EventQuery } from "./event-store.js";
 import { PolicyManager, type PolicyDefinition } from "./policy.js";
@@ -25,6 +26,10 @@ export interface DashboardConfig {
   corsOrigin?: string;
   /** 最大存储事件数 (default: 10000) */
   maxEvents?: number;
+  /** API token for mutation endpoints (POST/PUT/DELETE). When set, requests
+   *  must include `Authorization: Bearer <token>`. Read-only GET endpoints
+   *  remain open so the embedded dashboard UI works without auth. */
+  apiToken?: string;
 }
 
 export class DashboardServer {
@@ -86,7 +91,9 @@ export class DashboardServer {
     const failed: ServerResponse[] = [];
     for (const client of this.sseClients) {
       try {
-        const ok = client.write(`data: ${data}\n\n`);
+        // Sanitize event ID to prevent SSE frame injection via newlines
+        const safeId = String(event.id).replace(/[\r\n]/g, "");
+        const ok = client.write(`id: ${safeId}\ndata: ${data}\n\n`);
         if (!ok) {
           // Buffer full — slow client, disconnect to prevent memory growth
           failed.push(client);
@@ -117,7 +124,7 @@ export class DashboardServer {
         if (cors) {
           res.setHeader("Access-Control-Allow-Origin", cors);
           res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-          res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+          res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
         }
 
         if (req.method === "OPTIONS") {
@@ -197,6 +204,29 @@ export class DashboardServer {
       srv.close(() => resolve());
       srv.closeAllConnections?.();
     });
+  }
+
+  /**
+   * Check Bearer token for mutation endpoints. Returns true if authorized.
+   * When no apiToken is configured, all requests are allowed (backwards-compatible).
+   */
+  private requireAuth(req: IncomingMessage, res: ServerResponse): boolean {
+    const token = this.config.apiToken;
+    if (!token) return true; // no auth configured
+    const authHeader = req.headers["authorization"];
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      this.json(res, { error: "Unauthorized" }, 401);
+      return false;
+    }
+    const provided = authHeader.slice(7);
+    // Constant-time comparison to prevent timing attacks
+    const a = Buffer.from(token, "utf-8");
+    const b = Buffer.from(provided, "utf-8");
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      this.json(res, { error: "Unauthorized" }, 401);
+      return false;
+    }
+    return true;
   }
 
   private route(req: IncomingMessage, res: ServerResponse, url: string): void {
@@ -307,6 +337,11 @@ export class DashboardServer {
     }
 
     if (req.method === "POST" && urlPath === "/api/policies") {
+      if (!this.requireAuth(req, res)) return;
+      if (req.headers["content-type"]?.split(";")[0]?.trim() !== "application/json") {
+        this.json(res, { error: "Content-Type must be application/json" }, 415);
+        return;
+      }
       this.readBody(req, (body) => {
         try {
           const policy = JSON.parse(body) as PolicyDefinition;
@@ -331,9 +366,11 @@ export class DashboardServer {
     }
 
     if (req.method === "PUT" && urlPath.startsWith("/api/policies/active/")) {
+      if (!this.requireAuth(req, res)) return;
       const rawName = urlPath.slice("/api/policies/active/".length);
       if (!rawName) { this.json(res, { error: "Missing policy name" }, 400); return; }
-      const name = decodeURIComponent(rawName);
+      let name: string;
+      try { name = decodeURIComponent(rawName); } catch { this.json(res, { error: "Invalid policy name encoding" }, 400); return; }
       try {
         this.policyManager.setActivePolicy(name);
         this.json(res, { ok: true, activePolicy: name });
@@ -345,19 +382,22 @@ export class DashboardServer {
     }
 
     if (req.method === "DELETE" && urlPath.startsWith("/api/policies/")) {
+      if (!this.requireAuth(req, res)) return;
       const rawName = urlPath.slice("/api/policies/".length);
       // Reject sub-paths (e.g., /api/policies/active/foo) and reserved endpoints
       if (!rawName || rawName.includes("/") || rawName === "export" || rawName === "import" || rawName === "active") {
         this.json(res, { error: "Missing or invalid policy name" }, 400);
         return;
       }
-      const name = decodeURIComponent(rawName);
+      let name: string;
+      try { name = decodeURIComponent(rawName); } catch { this.json(res, { error: "Invalid policy name encoding" }, 400); return; }
       const ok = this.policyManager.removePolicy(name);
       this.json(res, { ok }, ok ? 200 : 404);
       return;
     }
 
     if (req.method === "POST" && urlPath === "/api/policies/export") {
+      if (!this.requireAuth(req, res)) return;
       const exported = this.policyManager.exportPolicies();
       res.writeHead(200, {
         "Content-Type": "application/json",
@@ -368,6 +408,11 @@ export class DashboardServer {
     }
 
     if (req.method === "POST" && urlPath === "/api/policies/import") {
+      if (!this.requireAuth(req, res)) return;
+      if (req.headers["content-type"]?.split(";")[0]?.trim() !== "application/json") {
+        this.json(res, { error: "Content-Type must be application/json" }, 415);
+        return;
+      }
       this.readBody(req, (body) => {
         try {
           const result = this.policyManager.importPolicies(body);
@@ -531,6 +576,7 @@ function connectSSE(){
       var tmp=document.createElement('div');
       tmp.innerHTML=eventRow(ev);
       if(tmp.firstChild)el.insertBefore(tmp.firstChild,el.firstChild);
+      while(el.children.length>200)el.removeChild(el.lastChild);
       loadStats();
     }catch(err){console.error('SSE parse error:',err)}
   };

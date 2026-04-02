@@ -111,7 +111,7 @@ export class EventStore {
       byCategory[e.category] = (byCategory[e.category] ?? 0) + 1;
       if (e.ruleName) byRule[e.ruleName] = (byRule[e.ruleName] ?? 0) + 1;
       if (e.action === "blocked") blockedCount++;
-      else alertCount++;
+      if (e.action === "alert") alertCount++;
       if (e.timestamp < firstTs) firstTs = e.timestamp;
       if (e.timestamp > lastTs) lastTs = e.timestamp;
     }
