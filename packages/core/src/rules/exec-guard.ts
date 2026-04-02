@@ -14,6 +14,7 @@ const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\
 function normalizeCommand(text: string): string {
   return text.normalize("NFKC")
     .replace(INVISIBLE_CHARS_RE, "")
+    .replace(/\0/g, "")              // Strip null bytes (used to break regex matching)
     .replace(/\r/g, "")
     .replace(/""|''/g, "")         // Strip empty quotes (shell no-ops)
     // ANSI-C quoting must be decoded BEFORE shell escape stripping (otherwise \x63 → x63)
@@ -226,6 +227,30 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "critical",
     title: "tar 打包 AWS 凭证",
     description: "通过 tar 打包 AWS 凭证目录。",
+  },
+  {
+    pattern: /\bzip\s+.*~?\/?\.ssh\//i,
+    severity: "critical",
+    title: "zip 打包 SSH 密钥",
+    description: "通过 zip 打包 SSH 密钥目录——批量凭证外泄。",
+  },
+  {
+    pattern: /\bzip\s+.*~?\/?\.aws\//i,
+    severity: "critical",
+    title: "zip 打包 AWS 凭证",
+    description: "通过 zip 打包 AWS 凭证目录。",
+  },
+  {
+    pattern: /\bfind\s+.*-(?:exec|ok)\s+.*~?\/?\.ssh\//i,
+    severity: "critical",
+    title: "find -exec 搜索 SSH 密钥",
+    description: "通过 find -exec 搜索并操作 SSH 密钥文件——凭证扫描。",
+  },
+  {
+    pattern: /\bfind\s+.*(?:id_rsa|id_ed25519|id_ecdsa|authorized_keys|credentials)\b.*-(?:exec|ok|print)/i,
+    severity: "critical",
+    title: "find 搜索凭证文件",
+    description: "通过 find 搜索凭证文件名——凭证发现与外泄。",
   },
 
   // ── 环境变量外泄 ──
@@ -552,6 +577,36 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "critical",
     title: "Lua 内联系统命令执行",
     description: "通过 Lua -e 执行系统命令——常见于 nginx/OpenResty 环境。",
+  },
+
+  // ── 定时/后台执行 ──
+  {
+    pattern: /\bat\s+(now|midnight|noon|teatime|\d{1,2}:\d{2})\b/i,
+    severity: "high",
+    title: "at 定时执行",
+    description: "通过 at 命令定时执行任务——可能建立延迟后门。",
+  },
+  {
+    pattern: /\b(screen|tmux)\s+.*(-[dD]|new-session\s+-d)\s/i,
+    severity: "high",
+    title: "后台分离执行",
+    description: "通过 screen/tmux 后台执行命令——隐藏恶意进程。",
+  },
+
+  // ── 字符串反转执行 ──
+  {
+    pattern: /\brev\b.*\|\s*(sh|bash|zsh|dash)\b/i,
+    severity: "critical",
+    title: "字符串反转执行",
+    description: "通过 rev 反转命令字符串并执行——绕过命令模式检测。",
+  },
+
+  // ── xxd 解码执行 ──
+  {
+    pattern: /\bxxd\s+.*-r\b.*\|\s*(sh|bash|zsh)\b/i,
+    severity: "critical",
+    title: "十六进制解码执行",
+    description: "通过 xxd 解码十六进制载荷并执行——绕过 base64 检测。",
   },
 
   // ── Windows PowerShell ──

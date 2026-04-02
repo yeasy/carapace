@@ -60,6 +60,15 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   // scp 凭证文件外泄
   { pattern: /\bscp\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud)\//i, severity: "critical", title: "通过 scp 外泄凭证文件", category: "pipe_exfil" },
 
+  // tar/zip pipe to network tool exfiltration
+  { pattern: /\b(tar|zip)\s+.*~?\/?\.(?:ssh|aws)\b.*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "通过 tar/zip 管道外泄凭证", category: "pipe_exfil" },
+
+  // rsync credential exfiltration
+  { pattern: /\brsync\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud)\//i, severity: "critical", title: "通过 rsync 外泄凭证文件", category: "pipe_exfil" },
+
+  // /dev/tcp data exfiltration (non-shell redirect)
+  { pattern: />\s*\/dev\/tcp\/\S+\/\d+/i, severity: "critical", title: "通过 /dev/tcp 外泄数据", category: "pipe_exfil" },
+
   // DNS 外泄：通过 dig/nslookup/host 将命令替换结果嵌入查询域名
   { pattern: /(?:dig|nslookup|host)\s+.*\$\(.*\).*\.\S+/i, severity: "critical", title: "DNS 查询中嵌入命令替换（DNS 外泄）", category: "dns_exfil" },
   { pattern: /(?:dig|nslookup|host)\s+.*`[^`]+`.*\.\S+/i, severity: "critical", title: "DNS 查询中嵌入命令替换（DNS 外泄）", category: "dns_exfil" },
@@ -81,6 +90,10 @@ const EXFIL_DESTINATIONS: RegExp[] = [
   /\bburpcollaborator\b/i,
   /(?:^|[\s/.@])interact\.sh(?:$|[\s/:?#])/i,
   /\bpipedream\.net\b/i,
+  /(?:^|[\s/.@])ix\.io(?:$|[\s/:?#])/i,
+  /(?:^|[\s/.@])sprunge\.us(?:$|[\s/:?#])/i,
+  /(?:^|[\s/.@])termbin\.com(?:$|[\s/:?#])/i,
+  /\boastify\.com\b/i,
 ];
 
 // ── 从工具参数提取所有字符串 ──

@@ -69,9 +69,10 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     title: "十进制编码 IP 连接",
     description: "通过十进制编码 IP 地址连接——绕过域名检测的常见 C2 手法。",
   },
-  // Octal IP encoding (e.g., http://0300.0250.0001.0001)
+  // Octal IP encoding (e.g., http://0300.0250.0001.0001 or mixed http://0300.250.0001.1)
+  // First octet must be a clear octal number (0 + 2-3 octal digits), remaining can be decimal
   {
-    pattern: /(?:https?|ftp|wss?):\/\/0[0-7]{1,3}\.0[0-7]{1,3}\.0[0-7]{1,3}\.0[0-7]{1,3}/i,
+    pattern: /(?:https?|ftp|wss?):\/\/0[0-7]{2,3}(?:\.0?[0-7]{1,3}){3}/i,
     severity: "high",
     title: "八进制编码 IP 连接",
     description: "通过八进制编码 IP 地址连接——绕过域名检测的 C2 手法。",
@@ -174,15 +175,23 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "访问阿里云 ECS 元数据服务 (100.100.100.200)。",
   },
 
+  // AWS ECS task metadata
+  {
+    pattern: /169\.254\.170\.2/,
+    severity: "critical",
+    title: "AWS ECS 任务元数据访问",
+    description: "访问 AWS ECS 任务元数据端点 (169.254.170.2)——可获取任务角色凭证。",
+  },
+
   // SSRF loopback/localhost access
   {
-    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict):\/\/(?:localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|0\.0\.0\.0)(?:[:/]|$)/i,
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/(?:localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|0\.0\.0\.0)(?:[:/]|$)/i,
     severity: "medium",
     title: "本地回环地址访问",
     description: "连接到 localhost/127.x.x.x/0.0.0.0——可能是 SSRF 攻击。",
   },
   {
-    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict):\/\/\[::1?\](?:[:/]|$)/i,
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/\[::1?\](?:[:/]|$)/i,
     severity: "medium",
     title: "IPv6 本地回环地址访问",
     description: "连接到 IPv6 localhost (::1)——可能是 SSRF 攻击。",

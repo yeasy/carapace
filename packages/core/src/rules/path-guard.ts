@@ -54,6 +54,12 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   // GPG
   { pattern: /[/\\]\.gnupg[/\\]/i, severity: "high", title: "GPG 密钥环访问", category: "credentials" },
 
+  // Kubernetes service account token
+  { pattern: /[/\\]var[/\\]run[/\\]secrets[/\\]kubernetes\.io[/\\]/i, severity: "critical", title: "Kubernetes ServiceAccount Token 访问", category: "credentials" },
+
+  // Rust/Cargo registry credentials
+  { pattern: /[/\\]\.cargo[/\\]credentials/i, severity: "high", title: "Cargo 仓库凭证访问", category: "credentials" },
+
   // 浏览器数据
   { pattern: /[/\\](Chrome|Chromium|Google Chrome)[/\\].*\b(Login Data|Cookies|History|Web Data)\b/i, severity: "critical", title: "Chrome 浏览器数据访问", category: "browser" },
   { pattern: /[/\\](Firefox|Mozilla)[/\\].*\b(logins\.json|cookies\.sqlite|key[34]\.db)\b/i, severity: "critical", title: "Firefox 浏览器数据访问", category: "browser" },
