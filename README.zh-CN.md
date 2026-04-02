@@ -10,7 +10,7 @@
     <a href="https://www.npmjs.com/package/@carapace/core"><img src="https://img.shields.io/npm/v/@carapace%2Fcore?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-1473%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-1511%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -52,7 +52,7 @@ AI Agent 可以执行 shell 命令、读写任意文件、发起网络请求—�
   编码 PowerShell     加密货币钱包          裸 IP 连接
   eval / subprocess   /etc/shadow           挖矿池
   heredoc 注入        /proc/self/*          十进制/八进制/十六进制 IP
-  ...88 种模式        ...33 种模式          ...15 大类
+  ...96 种模式        ...43 种模式          ...18 大类
 
   PromptInjection     DataExfil            BaselineDrift
   ───────────────     ─────────            ─────────────
@@ -62,7 +62,7 @@ AI Agent 可以执行 shell 命令、读写任意文件、发起网络请求—�
   伪造系统标签        curl 文件上传         新颖度比例告警
   编码绕过            管道外泄链
   隐藏注入指令        环境变量泄漏
-  ...25 种模式        ...28 种模式          可配置阈值
+  ...25 种模式        ...36 种模式          可配置阈值
 ```
 
 ## 核心特性
