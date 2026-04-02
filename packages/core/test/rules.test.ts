@@ -5560,10 +5560,10 @@ describe("ExecGuard — deno/bun runtime detection", () => {
 
   it("recognizes 'deno' as exec tool name", () => {
     const result = execGuardRule.check(
-      makeCtx("deno", { command: "eval 'console.log(1)'" })
+      makeCtx("deno", { command: "console.log('hello world')" })
     );
-    // Tool name recognized, pattern may or may not match, but tool is exec-class
-    expect(result.triggered).toBe(false); // no danger pattern in simple eval
+    // Tool name recognized but no danger pattern in simple console.log
+    expect(result.triggered).toBe(false);
   });
 
   it("recognizes 'bun' as exec tool name", () => {
