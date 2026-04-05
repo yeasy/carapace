@@ -1,6 +1,6 @@
 {
   "name": "@carapace/dashboard",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Web dashboard for Carapace runtime security monitoring — real-time events, stats, and team policy management.",
   "type": "module",
   "main": "dist/index.js",

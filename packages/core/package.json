@@ -1,6 +1,6 @@
 {
   "name": "@carapace/core",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Core rule engine, event processing, and alerting for Carapace — AI agent runtime security.",
   "type": "module",
   "main": "dist/index.js",

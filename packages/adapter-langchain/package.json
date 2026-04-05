@@ -1,6 +1,6 @@
 {
   "name": "@carapace/adapter-langchain",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "LangChain / CrewAI / AutoGen Python bridge adapter for Carapace runtime security monitor.",
   "type": "module",
   "main": "dist/index.js",
