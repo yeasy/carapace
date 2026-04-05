@@ -21,22 +21,26 @@ interface InjectionPattern {
 
 const INJECTION_PATTERNS: InjectionPattern[] = [
   // ── 角色覆盖 ──
-  { pattern: /ignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions|prompts|rules|guidelines)/i, severity: "critical", title: "指令覆盖尝试", category: "role_override" },
-  { pattern: /disregard\s+(all\s+)?(previous|prior|above|your)\s+(instructions|prompts|rules|guidelines)/i, severity: "critical", title: "指令忽略尝试", category: "role_override" },
+  { pattern: /(?:ignore|disregard|skip|drop|abandon|dismiss|set\s+aside)\s+(?:all\s+)?(?:previous|prior|above|earlier|your)\s+(?:instructions|prompts|rules|guidelines)/i, severity: "critical", title: "指令覆盖尝试", category: "role_override" },
+  { pattern: /(?:ignore|disregard)\s+(?:your\s+)?(?:safety|security)\s+(?:rules|guidelines|restrictions|filters)/i, severity: "critical", title: "安全指令忽略尝试", category: "role_override" },
   { pattern: /you\s+are\s+now\s+(a|an|my)\s+/i, severity: "high", title: "角色重定义尝试", category: "role_override" },
-  { pattern: /act\s+as\s+(a|an|if\s+you\s+are)\s+/i, severity: "medium", title: "角色扮演指令", category: "role_override" },
+  { pattern: /(?:pretend|imagine|suppose)\s+you\s+(?:are|were)\s+/i, severity: "high", title: "假设角色重定义", category: "role_override" },
+  { pattern: /(?:act|behave|respond)\s+(?:as|like)\s+(?:a|an|my|the|if\s+you)\s+/i, severity: "medium", title: "角色扮演指令", category: "role_override" },
+  { pattern: /(?:roleplay|play\s+the\s+role)\s+(?:as|of)\s+/i, severity: "high", title: "角色扮演指令", category: "role_override" },
+  { pattern: /from\s+now\s+on\s+you\s+are\s+/i, severity: "high", title: "角色持久重定义", category: "role_override" },
   { pattern: /forget\s+(everything|all|your)\s+(you|instructions|rules|about)/i, severity: "critical", title: "记忆清除尝试", category: "role_override" },
-  { pattern: /new\s+(instructions|rules|persona|role)\s*:/i, severity: "high", title: "新指令注入", category: "role_override" },
+  { pattern: /(?:new|updated|revised|replacement|override|modified)\s+(?:instructions|rules|persona|role)\s*[:\-]/i, severity: "high", title: "新指令注入", category: "role_override" },
 
   // ── 系统提示泄漏 ──
-  { pattern: /(?:output|print|show|reveal|display|repeat|tell\s+me)\s+(?:your\s+)?(?:system\s+prompt|instructions|initial\s+prompt|hidden\s+prompt|original\s+prompt)/i, severity: "critical", title: "系统提示泄漏尝试", category: "prompt_leak" },
-  { pattern: /what\s+(?:are|were)\s+your\s+(?:original|initial|system|hidden)\s+(?:instructions|prompts|rules)/i, severity: "high", title: "系统指令探测", category: "prompt_leak" },
+  { pattern: /(?:output|print|show(?:\s+me)?|reveal|display|repeat|tell\s+me|dump|echo|share|paste|extract|copy|write\s+out|give\s+me)\s+(?:(?:your|the)\s+instructions?|(?:your\s+|the\s+)?(?:system\s+prompt|(?:initial|hidden|original|system|secret)\s+instructions?|initial\s+prompt|hidden\s+prompt|original\s+prompt))/i, severity: "critical", title: "系统提示泄漏尝试", category: "prompt_leak" },
+  { pattern: /what\s+(?:is|are|were)\s+your\s+(?:original|initial|system|hidden)\s+(?:instructions?|prompts?|rules?)/i, severity: "high", title: "系统指令探测", category: "prompt_leak" },
 
   // ── 越权指令 ──
-  { pattern: /(?:do\s+not|don'?t)\s+(?:follow|obey|listen\s+to|apply)\s+(?:the|your|any|those)\s+(?:rules|guidelines|instructions|restrictions|safety)/i, severity: "critical", title: "安全规则绕过尝试", category: "jailbreak" },
-  { pattern: /(?:bypass|override|disable|turn\s+off|remove)\s+(?:your\s+)?(?:safety|security|filter|guard|restriction|protection|content\s+filter)/i, severity: "critical", title: "安全机制绕过尝试", category: "jailbreak" },
-  { pattern: /(?:in\s+)?(?:developer|admin|debug|god|sudo|root)\s+mode/i, severity: "high", title: "特权模式尝试", category: "jailbreak" },
-  { pattern: /\bDAN\b.*(?:mode|prompt|jailbreak)/i, severity: "critical", title: "DAN 越狱尝试", category: "jailbreak" },
+  { pattern: /(?:do\s+not|don'?t|never|no\s+longer\s+(?:need\s+to\s+)?|should\s+not|must\s+not)\s+(?:follow|obey|listen\s+to|apply)\s+(?:the|your|any|those)\s+(?:rules|guidelines|instructions|restrictions|safety)/i, severity: "critical", title: "安全规则绕过尝试", category: "jailbreak" },
+  { pattern: /stop\s+(?:following|obeying)\s+(?:the|your|any|those)\s+(?:rules|guidelines|instructions|restrictions|safety)/i, severity: "critical", title: "安全规则停止遵守", category: "jailbreak" },
+  { pattern: /(?:bypass|override|disable|turn\s+off|remove|circumvent|evade|deactivate|neutralize|sidestep)\s+(?:(?:all|your|the|every)\s+)*(?:safety|security|filter|guard|restriction|protection|content\s+filter)/i, severity: "critical", title: "安全机制绕过尝试", category: "jailbreak" },
+  { pattern: /(?:in\s+)?(?:developer|admin|debug|god|sudo|root|jailbreak|unrestricted|unfiltered)\s+mode/i, severity: "high", title: "特权模式尝试", category: "jailbreak" },
+  { pattern: /\bDAN\b.{0,30}(?:mode|prompt|jailbreak)/i, severity: "critical", title: "DAN 越狱尝试", category: "jailbreak" },
 
   // ── 编码绕过 ──
   { pattern: /(?:decode|interpret)\s+(?:this|the\s+following)\s+(?:base64|hex|binary|rot13)/i, severity: "high", title: "编码绕过指令", category: "encoding_bypass" },
@@ -44,13 +48,15 @@ const INJECTION_PATTERNS: InjectionPattern[] = [
 
   // ── 间接注入标记 ──
   { pattern: /\[SYSTEM\]\s*:/i, severity: "high", title: "伪造系统消息标记", category: "indirect_injection" },
-  { pattern: /\<\/?system\s*\>/i, severity: "high", title: "伪造系统标签", category: "indirect_injection" },
+  { pattern: /<\/?system\s*>/i, severity: "high", title: "伪造系统标签", category: "indirect_injection" },
   { pattern: /#{3,}\s*(?:SYSTEM|ADMIN|INSTRUCTION)\s*(?:OVERRIDE|PROMPT|MESSAGE)/i, severity: "high", title: "伪造系统标题", category: "indirect_injection" },
   { pattern: /BEGIN\s+(?:HIDDEN|SECRET|SYSTEM)\s+(?:INSTRUCTIONS?|PROMPT)/i, severity: "critical", title: "伪造隐藏指令块", category: "indirect_injection" },
 
   // ── 提示分隔符注入 ──
   { pattern: /={5,}\s*(?:END|NEW|NEXT)\s*(?:SYSTEM|INSTRUCTION|PROMPT)/i, severity: "high", title: "提示分隔符注入", category: "indirect_injection" },
-  { pattern: /<\|(?:im_start|im_end|endoftext|system)\|>/i, severity: "critical", title: "LLM 特殊标记注入", category: "indirect_injection" },
+  { pattern: /<\|(?:im_start|im_end|endoftext|system|assistant|user|human|start_header_id|end_header_id|eot_id|begin_of_text|end_of_turn)\|>/i, severity: "critical", title: "LLM 特殊标记注入", category: "indirect_injection" },
+  { pattern: /\[INST\]|\[\/INST\]/i, severity: "high", title: "Llama 指令标记注入", category: "indirect_injection" },
+  { pattern: /"role"\s*:\s*"(?:system|assistant)"/i, severity: "high", title: "JSON 角色注入", category: "indirect_injection" },
 
   // ── 中文提示注入 ──
   { pattern: /忽略\s*(?:之前|以上|所有)\s*(?:的\s*)?(?:指令|规则|指示|提示)/i, severity: "critical", title: "中文指令覆盖尝试", category: "role_override" },

@@ -24,13 +24,13 @@ interface ExfilPattern {
 const EXFIL_PATTERNS: ExfilPattern[] = [
   // API key / token 泄漏到请求参数
   { pattern: /(?:api[_-]?key|token|secret|password|passwd|credential|auth)\s*[=:]\s*\S{8,}/i, severity: "critical", title: "凭证出现在外发请求中", category: "credential_leak" },
-  { pattern: /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/i, severity: "critical", title: "AWS Access Key 出现在请求中", category: "credential_leak" },
+  { pattern: /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/, severity: "critical", title: "AWS Access Key 出现在请求中", category: "credential_leak" },
   { pattern: /(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{36,}/i, severity: "critical", title: "GitHub Token 出现在请求中", category: "credential_leak" },
   { pattern: /\bsk-[a-zA-Z0-9_-]{32,}/i, severity: "critical", title: "OpenAI API Key 出现在请求中", category: "credential_leak" },
   { pattern: /\bsk_(?:live|test)_[a-zA-Z0-9]{20,}/i, severity: "critical", title: "Stripe API Key 出现在请求中", category: "credential_leak" },
   { pattern: /sk-ant-[a-zA-Z0-9_-]{20,}/i, severity: "critical", title: "Anthropic API Key 出现在请求中", category: "credential_leak" },
-  { pattern: /AIzaSy[a-zA-Z0-9_-]{33}/i, severity: "critical", title: "Google API Key 出现在请求中", category: "credential_leak" },
-  { pattern: /xox[bpsa]-[0-9a-zA-Z-]{20,}/i, severity: "critical", title: "Slack Token 出现在请求中", category: "credential_leak" },
+  { pattern: /AIzaSy[a-zA-Z0-9_-]{33}/, severity: "critical", title: "Google API Key 出现在请求中", category: "credential_leak" },
+  { pattern: /xox[bpsar]-[0-9a-zA-Z-]{20,}/, severity: "critical", title: "Slack Token 出现在请求中", category: "credential_leak" },
   { pattern: /-----BEGIN\s+(RSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----/i, severity: "critical", title: "私钥出现在请求中", category: "credential_leak" },
 
   // Base64 encoded credentials (~40+ chars covers typical API keys/tokens)

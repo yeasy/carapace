@@ -505,7 +505,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 下载到文件后执行 ──
   {
-    pattern: /(curl|wget)\s+.*-[oO]\s+(\S+).*?(?:&&|[;&])\s*(sh|bash|zsh|dash|python[23]?|ruby|node|perl)\s+\2/i,
+    pattern: /(curl|wget)\s+.*?-[oO]\s+(\S+).*?(?:&&|[;&])\s*(sh|bash|zsh|dash|python[23]?|ruby|node|perl)\s+\2(?=\s|$)/i,
     severity: "critical",
     title: "下载到文件后执行",
     description: "通过 curl/wget 下载到文件后直接用 shell/解释器执行——绕过管道检测的变体。",
