@@ -1,18 +1,18 @@
 {
   "name": "@carapace/adapter-openclaw",
-  "version": "0.9.0",
+  "version": "0.10.1",
   "description": "OpenClaw plugin adapter for Carapace runtime security monitor.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./tailer": {
-      "import": "./dist/tailer.js",
-      "types": "./dist/tailer.d.ts"
+      "types": "./dist/tailer.d.ts",
+      "import": "./dist/tailer.js"
     }
   },
   "scripts": {

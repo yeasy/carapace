@@ -78,12 +78,14 @@ export class SessionLogTailer extends EventEmitter {
       const MAX_READ_SIZE = 10 * 1024 * 1024; // 10MB
       const readSize = Math.min(fileStat.size - offset, MAX_READ_SIZE);
 
-      // Evict oldest entries if tracking too many files
+      // Evict oldest entries if tracking too many files (exclude current file to prevent re-read)
       if (this.fileOffsets.size > SessionLogTailer.MAX_TRACKED_FILES) {
         const entries = [...this.fileOffsets.entries()];
         // Remove the first half (oldest entries by insertion order)
         for (let i = 0; i < entries.length / 2; i++) {
-          this.fileOffsets.delete(entries[i][0]);
+          if (entries[i][0] !== filePath) {
+            this.fileOffsets.delete(entries[i][0]);
+          }
         }
       }
 
@@ -97,16 +99,27 @@ export class SessionLogTailer extends EventEmitter {
         // Only advance offset to the last complete line to avoid losing partial writes
         const lastNewline = text.lastIndexOf("\n");
         if (lastNewline === -1) {
-          // No complete line yet, don't advance offset
+          if (readSize === MAX_READ_SIZE) {
+            // Line exceeds 10MB cap — skip this chunk to avoid livelock
+            process.stderr.write(`[carapace/tailer] skipping oversized line (>${MAX_READ_SIZE} bytes) in ${filePath}\n`);
+            this.fileOffsets.set(filePath, offset + bytesRead);
+          }
+          // Otherwise partial line at end of file — wait for more data
           return;
         }
-        this.fileOffsets.set(filePath, offset + lastNewline + 1);
+        // Use byte length of consumed text (not character count) for correct
+        // offset tracking with multi-byte UTF-8 characters (e.g. CJK, emoji)
+        const consumed = text.substring(0, lastNewline + 1);
+        this.fileOffsets.set(filePath, offset + Buffer.byteLength(consumed, "utf-8"));
 
         for (const line of text.substring(0, lastNewline).split("\n")) {
           if (!line.trim()) continue;
           try {
             this.emit("entry", JSON.parse(line) as SessionLogEntry, filePath);
-          } catch { /* 跳过不完整的 JSON */ }
+          } catch (parseErr) {
+            // Log malformed lines to help diagnose parsing issues
+            process.stderr.write(`[carapace/tailer] skipping malformed JSON line: ${String(parseErr).slice(0, 100)}\n`);
+          }
         }
       } finally {
         try { await fd.close(); } catch { /* fd already closed or invalid */ }
@@ -126,5 +139,6 @@ export class SessionLogTailer extends EventEmitter {
   stop(): void {
     this.abortController.abort();
     this.fileOffsets.clear();
+    this.pendingReads.clear();
   }
 }
