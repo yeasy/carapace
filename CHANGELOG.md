@@ -2,6 +2,69 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **ExecGuard**: GPG secret key export (`gpg --export-secret-keys`) detection.
+- **ExecGuard**: macOS `security` command (`find-generic-password`, `find-internet-password`, `dump-keychain`) detection.
+- **ExecGuard**: Python HTTP server (`python3 -m http.server`) detection.
+- **ExecGuard**: `setfacl` ACL permission modification detection.
+- **ExecGuard**: Firewall rule modification (`iptables`, `ip6tables`, `nftables`, `nft`) detection.
+- **ExecGuard**: `chattr +i` immutable flag detection.
+- **ExecGuard**: `mount -o` filesystem mount detection.
+- **ExecGuard**: Windows `certutil` LOLBin download/encode detection.
+- **PathGuard**: Docker Swarm secrets (`/run/secrets/`) detection.
+- **PathGuard**: SSL private key directory (`/etc/ssl/private/`) detection.
+- **PathGuard**: FileZilla saved passwords detection.
+- **PathGuard**: WinSCP session data detection.
+- **PathGuard**: HashiCorp Consul/Nomad token detection.
+- **PathGuard**: GNOME keyring (`~/.local/share/keyrings/`) detection.
+- **PathGuard**: KeePass database (`.kdbx`/`.kdb`) detection.
+- **PathGuard**: macOS security preferences plist detection.
+- **NetworkGuard**: Azure Instance Metadata Service (`metadata.azure.com`) detection.
+- **NetworkGuard**: Oracle Cloud metadata (`metadata.oraclecloud.com`) detection.
+- **NetworkGuard**: DigitalOcean metadata (`metadata.internal`) detection.
+- **NetworkGuard**: Kubernetes API internal access (`kubernetes.default.svc`) detection.
+- **NetworkGuard**: IPv4-compatible IPv6 metadata bypass (`[::169.254.169.254]`) detection.
+- **NetworkGuard**: Additional paste services (`paste.mozilla.org`, `cl1p.net`, `controlc.com`) detection.
+- **NetworkGuard**: Additional tunnel services (`playit.gg`, `telebit.cloud`, `remote.it`, `portmap.io`) detection.
+- **DataExfil**: `curl -T` upload detection.
+- **DataExfil**: `ftp` command data transfer detection.
+- **DataExfil**: Telegram Bot API exfiltration detection.
+- **DataExfil**: Discord webhook exfiltration detection.
+- **DataExfil**: `rclone` cloud transfer detection.
+- **DataExfil**: GPG secret key export piped to network tool detection.
+- **PromptInjection**: Expanded instruction override verbs (`skip`, `drop`, `abandon`, `dismiss`, `set aside`).
+- **PromptInjection**: Added `ignore your safety guidelines` direct safety bypass detection.
+- **PromptInjection**: Expanded system prompt leak verbs (`dump`, `echo`, `share`, `paste`, `extract`, `copy`, `write out`, `give me`, `show me`).
+- **PromptInjection**: Fixed `what is your system prompt` detection (`is` was missing from `are|were`).
+- **PromptInjection**: Added role redefinition synonyms (`pretend`, `imagine`, `suppose`, `roleplay`, `from now on`, `behave like`).
+- **PromptInjection**: Expanded jailbreak bypass verbs (`circumvent`, `evade`, `deactivate`, `neutralize`, `sidestep`).
+- **PromptInjection**: Added `jailbreak`, `unrestricted`, `unfiltered` to privilege mode detection.
+- **PromptInjection**: Fixed `bypass all safety` quantifier gap (`all`/`every`/`the` now accepted).
+- **PromptInjection**: Expanded negation forms (`never`, `stop following/obeying`, `no longer`, `should/must not`).
+- **PromptInjection**: Expanded LLM special tokens (`assistant`, `user`, `human`, `eot_id`, `end_of_turn`, etc.).
+- **PromptInjection**: Added Llama `[INST]`/`[/INST]` marker detection.
+- **PromptInjection**: Added JSON `"role": "system"/"assistant"` injection detection.
+- **PromptInjection**: Expanded new instruction adjectives (`updated`, `revised`, `replacement`, `override`, `modified`) and delimiters (`:` and `-`).
+- **Tailer**: Added comprehensive test suite for `SessionLogTailer` (21 tests including file truncation/rotation).
+- **PromptInjection**: Added tests for DAN jailbreak, Chinese patterns, encoding bypass, indirect injection markers, and primary negation patterns (14 tests).
+
+### Fixed
+- **Tailer**: Fixed multi-byte UTF-8 offset tracking — CJK/emoji characters caused incorrect byte offsets, corrupting subsequent reads.
+- **Tailer**: Fixed oversized line livelock — single JSONL lines exceeding 10MB cap now skip forward instead of re-reading infinitely.
+- **Tailer**: File offset eviction now skips the current file to prevent re-reading from offset 0.
+- **Tailer**: Malformed JSON lines now log to stderr instead of being silently swallowed.
+- **Tailer**: `stop()` now clears `pendingReads` to prevent blocked restarts.
+- **PromptInjection**: `act as/like` pattern now requires an article (`a`, `an`, `my`, `the`) to reduce false positives on phrases like "act as expected".
+- **PromptInjection**: System prompt leak pattern no longer matches bare "instructions" without qualifier (e.g., "print instructions for the user").
+- **PromptInjection**: `DAN` jailbreak pattern now limits `.{0,30}` proximity to reduce false matches on distant word combinations.
+- **DataExfil**: Removed unnecessary case-insensitive flag from AWS, Google API Key, and Slack Token patterns to reduce false positives.
+- **DataExfil**: Added `xoxr` to Slack token type detection (`xox[bpsar]`).
+- **ExecGuard**: Download-then-execute pattern now uses non-greedy `.*?` to support multi-flag curl/wget commands (e.g., `curl -sL url -o file`) and anchors backreference with `(?=\s|$)` to prevent partial filename matches.
+- **SIEM sinks**: Splunk, Elastic, and Datadog sinks now consume response body on success to prevent connection pool leaks.
+- **adapter-openclaw**: Version aligned from 0.9.0 to 0.10.1 to match all other packages.
+
 ## [0.10.1] - 2026-04-01
 
 ### Fixed
