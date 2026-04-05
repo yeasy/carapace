@@ -56,6 +56,8 @@ export class SplunkSink implements AlertSink {
         process.stderr.write(
           `[carapace-splunk] HTTP ${response.status}: ${body.slice(0, 1024)}\n`
         );
+      } else {
+        await response.text().catch(() => {});
       }
     } catch (err) {
       process.stderr.write(`[carapace-splunk] Error: ${err}\n`);
@@ -152,6 +154,8 @@ export class ElasticSink implements AlertSink {
         process.stderr.write(
           `[carapace-elastic] HTTP ${response.status}: ${errBody.slice(0, 1024)}\n`
         );
+      } else {
+        await response.text().catch(() => {});
       }
     } catch (err) {
       process.stderr.write(`[carapace-elastic] Error: ${err}\n`);
@@ -234,6 +238,8 @@ export class DatadogSink implements AlertSink {
         process.stderr.write(
           `[carapace-datadog] HTTP ${response.status}: ${errBody.slice(0, 1024)}\n`
         );
+      } else {
+        await response.text().catch(() => {});
       }
     } catch (err) {
       process.stderr.write(`[carapace-datadog] Error: ${err}\n`);
