@@ -7,12 +7,12 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./rules": {
-      "import": "./dist/rules/index.js",
-      "types": "./dist/rules/index.d.ts"
+      "types": "./dist/rules/index.d.ts",
+      "import": "./dist/rules/index.js"
     }
   },
   "scripts": {
