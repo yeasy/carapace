@@ -10,7 +10,7 @@
     <a href="https://www.npmjs.com/package/@carapace/core"><img src="https://img.shields.io/npm/v/@carapace%2Fcore?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-1573%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-1599%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -52,7 +52,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   encoded PowerShell  crypto wallets       raw IP connections
   eval / subprocess   /etc/shadow          mining pools
   heredoc injection   /proc/self/*         decimal/octal/hex IP
-  ...96 patterns      ...41 patterns       ...18 categories
+  ...96 patterns      ...41 patterns       ...20 categories
 
   PromptInjection     DataExfil            BaselineDrift
   ───────────────     ─────────            ─────────────
@@ -73,7 +73,7 @@ mindmap
     7 Built-in Rules
       ExecGuard (96 patterns)
       PathGuard (41 patterns)
-      NetworkGuard (18 categories)
+      NetworkGuard (20 categories)
       RateLimiter
       PromptInjection (31 patterns)
       DataExfil (34 patterns)
@@ -354,7 +354,7 @@ carapace/
 │   │   │   ├── alerter.ts    # Alert router + sinks + escalation + dismissal
 │   │   │   ├── store.ts      # Storage backend (Memory + SQLite)
 │   │   │   └── types.ts      # Type definitions
-│   │   └── test/             # 1038 tests (vitest)
+│   │   └── test/             # 1064 tests (vitest)
 │   ├── adapter-openclaw/     # @carapace/adapter-openclaw — native plugin
 │   │   └── src/
 │   │       ├── index.ts      # Plugin entry, registers hooks, first-run reports
@@ -387,7 +387,7 @@ carapace/
 ```bash
 npm install              # install all dependencies
 npm run build            # build core → adapter (sequential)
-npm run test                     # run 1573+ tests across all packages
+npm run test                     # run 1599+ tests across all packages
 ```
 
 ## Installation
@@ -415,7 +415,7 @@ cd carapace && npm install && npm run build
 - **v0.7** — Docker support, demo/dashboard/test-rule CLI commands, GHCR image publishing, docker-compose, dynamic version management
 - **v0.8** — SIEM SSRF hardening, ReDoS validator, SQLite store improvements, ExecGuard flag-reorder detection, NetworkGuard false-positive reduction, security fixes across CLI/dashboard/adapters
 - **v0.9** — Security bypass fixes (double-encoding, backslash-continuation, wildcard dismissal), busybox/Python inline detection, CLI parseArgs fix, demo SSE broadcast fix
-- **v0.10** (current) — 96 ExecGuard patterns with shell normalization, 41 PathGuard paths, dashboard API auth, SSRF encoding detection, data exfil hardening, 1573 tests
+- **v0.10** (current) — 96 ExecGuard patterns with shell normalization, 41 PathGuard paths, dashboard API auth, SSRF encoding detection, data exfil hardening, 1599 tests
 
 ## Contributing
 

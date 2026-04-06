@@ -155,20 +155,17 @@ Carapace is an **OpenClaw plugin** that provides runtime security monitoring fro
 Carapace is a **100% open-source** project with all features freely available to everyone:
 
 - Core rule engine (ExecGuard, PathGuard, NetworkGuard, PromptInjection, DataExfil, BaselineDrift, RateLimiter)
-- Real-time alerts (console, webhook, log file, email/SMS)
+- Real-time alerts (console, webhook, log file)
 - JSONL session log tailing
 - Per-skill behavioral baselines
 - New skill first-run reports
 - CLI audit tools
-- Dashboard Web UI (event timeline, skill trust score visualization)
+- Dashboard Web UI (event timeline)
 - SIEM integration (Splunk, Elasticsearch, Datadog, Syslog connectors)
 - Team centralized policy management (inheritance chains, import/export)
 - YAML custom rules
 - MCP proxy adapter
 - LangChain/CrewAI Python bridge
-- ML anomaly detection
-- SOC2/ISO27001 compliance reporting
-- SSO and RBAC policy management
 
 ### 5.2 Sustainability
 
@@ -210,8 +207,8 @@ As an open-source project, Carapace relies on community contributions and sponso
 │  │  │  • NetworkGuard     (suspicious URLs/domains)    │  │  │
 │  │  │  • PromptInjection  (prompt injection detection) │  │  │
 │  │  │  • DataExfil        (data exfiltration detection)│  │  │
-│  │  │  • RateGuard        (tool call rate anomaly)     │  │  │
-│  │  │  • BaselineGuard    (behavioral drift detection) │  │  │
+│  │  │  • RateLimiter      (tool call rate anomaly)     │  │  │
+│  │  │  • BaselineDrift    (behavioral drift detection) │  │  │
 │  │  └──────────────┬───────────────────────────────────┘  │  │
 │  │                 │                                      │  │
 │  │  ┌──────────────▼───────────────────────────────────┐  │  │
@@ -447,7 +444,7 @@ Tool Call Event
 └─────────────┘    └──────────────┘    └──────────────┘  │
                                                           │
 ┌─────────────┐    ┌──────────────┐                       │
-│ BaselineGuard│◀──│  RateGuard   │◀──────────────────────┘
+│ BaselineDrift│◀──│ RateLimiter  │◀──────────────────────┘
 └──────┬──────┘    └──────────────┘
        │
        ▼
@@ -467,10 +464,10 @@ Tool Call Event
 | **ExecGuard** | exec_danger | Dangerous shell command patterns (curl\|sh, base64\|bash, reverse shells, encoded PowerShell) | Block critical, alert others |
 | **PathGuard** | path_violation | Sensitive file access (~/.ssh/, ~/.aws/, browser data, crypto wallets, .env files) | Block critical, alert others |
 | **NetworkGuard** | network_suspect | Suspicious URLs (paste services, file sharing, webhook catchers, .onion, raw IP) | Block .onion, alert others |
-| **RateGuard** | rate_anomaly | Tool call rate exceeds threshold (default 60/min) or sudden spike (3x baseline) | Alert only |
+| **RateLimiter** | rate_anomaly | Tool call rate exceeds threshold (default 60/min) or sudden spike (3x baseline) | Alert only |
 | **PromptInjection** | prompt_injection | Prompt injection patterns detected in tool output (instruction override, role hijacking, encoded injection) | Block critical, alert others |
 | **DataExfil** | data_exfil | Data exfiltration patterns detected (sensitive data sent via network/file/clipboard) | Block critical, alert others |
-| **BaselineGuard** | baseline_drift | Skill accesses new tools/paths/domains not in its learned profile | Alert only |
+| **BaselineDrift** | baseline_drift | Skill accesses new tools/paths/domains not in its learned profile | Alert only |
 
 ### 8.3 Rule Priority & Conflict Resolution
 
@@ -560,10 +557,10 @@ First occurrence          → Alert at detected severity
 - Only hard rules active (ExecGuard, PathGuard, NetworkGuard)
 - All tool calls logged to build initial baseline
 - No anomaly alerts triggered (false positive rate too high)
-- After 5 sessions: baseline "freezes," BaselineGuard activates
+- After 5 sessions: baseline "freezes," BaselineDrift activates
 
 **Warm-Up Phase (from session 6 onward)**:
-- BaselineGuard compares each tool call against the skill's profile
+- BaselineDrift compares each tool call against the skill's profile
 - New tools/paths/domains → alert as `baseline_drift`
 - Baseline continues slow updates (exponential moving average)
 - Major changes require re-learning (user can trigger manually)
@@ -699,9 +696,9 @@ carapace dismissals clear
 ### Phase 1: Core Rules (Week 2)
 
 **Deliverables:**
-- [x] ExecGuard: 20+ dangerous command patterns
-- [x] PathGuard: 30+ sensitive path patterns (Windows, macOS, Linux)
-- [x] NetworkGuard: 15+ suspicious domain patterns
+- [x] ExecGuard: 96 dangerous command patterns
+- [x] PathGuard: 41 sensitive path patterns (Windows, macOS, Linux)
+- [x] NetworkGuard: 32 suspicious domain patterns (20 categories)
 - [x] Rule engine with priority and conflict resolution
 - [x] Console alerting (colored stderr)
 
@@ -723,8 +720,8 @@ carapace dismissals clear
 **Deliverables:**
 - [x] JSONL session log tailer
 - [x] Per-skill baseline modeler
-- [x] RateGuard (rate anomaly)
-- [x] BaselineGuard (drift detection)
+- [x] RateLimiter (rate anomaly)
+- [x] BaselineDrift (drift detection)
 - [x] First-run report generator
 - [x] `carapace skills` CLI command
 
@@ -796,7 +793,7 @@ Target frameworks (by priority):
 │  │  (ExecGuard,   │  │  Processor    │  │  (console,     │  │
 │  │   PathGuard,   │  │  (dedup,      │  │   webhook,     │  │
 │  │   NetworkGuard │  │   enrichment, │  │   logfile)     │  │
-│  │   RateGuard,   │  │   correlation)│  │               │  │
+│  │   RateLimiter, │  │   correlation)│  │               │  │
 │  │   Baseline)    │  │               │  │               │  │
 │  └───────┬───────┘  └───────┬───────┘  └───────┬────────┘  │
 │          │                  │                   │           │
