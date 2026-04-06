@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.3] - 2026-04-06
+
+### Fixed
+- **NetworkGuard**: Protocol-relative URLs (`//evil.com`) now extracted and scanned (previously required explicit scheme).
+- **NetworkGuard**: Decimal/octal/hex encoded IP rules now cover all protocols (gopher, ldap, telnet, etc.), matching dotted-IP rule.
+- **NetworkGuard**: Null bytes stripped in `fullyDecodeURI` to prevent domain-splitting bypass.
+- **PathGuard**: `safeRegexTest` uses overlapping sliding windows instead of head+tail sampling, fixing mid-string bypass for inputs >4096 chars.
+- **PathGuard**: KeePass `.kdb`/`.kdbx` pattern now requires path separator anchor, reducing false positives on unrelated `.kdb` files.
+- **ExecGuard**: `isExecTool` now normalizes camelCase tool names (`runCommand` → `run_command`) and recognizes `runner`/`executor` suffixes.
+- **ExecGuard**: ANSI-C `$'...'` decoder now handles `\uHHHH` and `\UHHHHHHHH` Unicode escapes, with safe handling of surrogates and invalid codepoints.
+- **DataExfil**: `extractAllStrings` uses overlapping sliding windows for long strings, fixing mid-string credential bypass.
+- **YamlRule**: Custom YAML rules now apply NFKC normalization and invisible character stripping before pattern matching, consistent with built-in rules.
+- **MCP adapter**: `interceptResponse` scan threshold lowered from 50 to 16 chars to catch short credentials.
+- **Dashboard**: `PolicyManager.resolvePolicy` now returns a defensive copy of `trustedSkills` to prevent shared reference mutation.
+- **package.json**: All packages now place `types` before `import` in conditional exports for correct TypeScript resolution.
+- **DESIGN docs**: Removed claims for unimplemented features (ML, SOC2/ISO27001, SSO/RBAC, email/SMS, trust score visualization).
+- **DESIGN docs**: Fixed rule names `RateGuard` → `RateLimiter`, `BaselineGuard` → `BaselineDrift` to match source code.
+
+### Added
+- 23 new tests covering all security bypass fixes (1599 total).
+
 ## [0.10.2] - 2026-04-04
 
 ### Added
