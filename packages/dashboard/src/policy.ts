@@ -332,7 +332,7 @@ export class PolicyManager {
     result.forceBlock = [...new Set(result.forceBlock)];
     result.disabledRules = [...new Set(result.disabledRules)];
     result.trustedSkills = [...new Set(result.trustedSkills)];
-    result.config.trustedSkills = result.trustedSkills;
+    result.config.trustedSkills = [...result.trustedSkills];
 
     return result;
   }

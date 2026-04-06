@@ -256,7 +256,7 @@ export class McpProxy {
     result: unknown,
     skillName?: string
   ): SecurityEvent[] {
-    if (!result || typeof result !== "string" || result.length < 50) {
+    if (!result || typeof result !== "string" || result.length < 16) {
       return [];
     }
 
