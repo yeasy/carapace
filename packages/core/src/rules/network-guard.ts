@@ -76,7 +76,7 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
 
   // Decimal IP encoding (e.g., http://3232235777 = 192.168.1.1)
   {
-    pattern: /(?:https?|ftp|wss?):\/\/\d{8,10}(?:[:/]|$)/i,
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/\d{8,10}(?:[:/]|$)/i,
     severity: "high",
     title: "十进制编码 IP 连接",
     description: "通过十进制编码 IP 地址连接——绕过域名检测的常见 C2 手法。",
@@ -84,14 +84,14 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
   // Octal IP encoding (e.g., http://0300.0250.0001.0001 or mixed http://0300.250.0001.1)
   // First octet must be a clear octal number (0 + 2-3 octal digits), remaining can be decimal
   {
-    pattern: /(?:https?|ftp|wss?):\/\/0[0-7]{2,3}(?:\.0?[0-7]{1,3}){3}/i,
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/0[0-7]{2,3}(?:\.0?[0-7]{1,3}){3}/i,
     severity: "high",
     title: "八进制编码 IP 连接",
     description: "通过八进制编码 IP 地址连接——绕过域名检测的 C2 手法。",
   },
   // Hex IP encoding (e.g., http://0xC0.0xA8.0x01.0x01 or http://0xC0A80101)
   {
-    pattern: /(?:https?|ftp|wss?):\/\/0x[0-9a-fA-F]+(?:\.0x[0-9a-fA-F]+){0,3}(?:[:/]|$)/i,
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/0x[0-9a-fA-F]+(?:\.0x[0-9a-fA-F]+){0,3}(?:[:/]|$)/i,
     severity: "high",
     title: "十六进制编码 IP 连接",
     description: "通过十六进制编码 IP 地址连接——绕过域名检测的 C2 手法。",
@@ -256,7 +256,8 @@ const MAX_DECODE_PASSES = 5;
 function fullyDecodeURI(raw: string): string {
   // Apply NFKC normalization to prevent bypass via fullwidth Unicode characters
   // (consistent with PathGuard's normalization in path-guard.ts)
-  let decoded = raw.normalize("NFKC");
+  // Strip null bytes that could split domain names and evade pattern matching
+  let decoded = raw.normalize("NFKC").replace(/\0/g, "");
   for (let i = 0; i < MAX_DECODE_PASSES; i++) {
     let next: string;
     try {
@@ -293,7 +294,7 @@ function extractUrls(params: Record<string, unknown>): string[] {
     if (depth > MAX_WALK_DEPTH || seen.size >= MAX_URL_COUNT) return;
     if (typeof val === "string" && val.length > 8) {
       const capped = val.length > MAX_URL_LEN ? val.slice(0, MAX_URL_LEN) : val;
-      const matches = capped.match(/(?:https?|ftp|wss?|stratum\+tcp|gopher|ldap|dict|sftp|telnet|tftp):\/\/[^\s"']+/gi);
+      const matches = capped.match(/(?:(?:https?|ftp|wss?|stratum\+tcp|gopher|ldap|dict|sftp|telnet|tftp):\/\/|\/\/(?=[^\s"'/]*[.:]))[^\s"']+/gi);
       if (matches) {
         for (const m of matches) {
           if (seen.size >= MAX_URL_COUNT) break;

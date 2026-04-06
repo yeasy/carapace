@@ -35,6 +35,14 @@ import type {
 import { isRedosSafe } from "../utils/regex.js";
 import { redactSensitiveValues } from "../utils/redact.js";
 
+// Strip invisible Unicode characters (consistent with exec-guard, data-exfil, prompt-injection)
+const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\u2060-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC01-\uDC7F]/g;
+
+/** Normalize value for pattern matching — prevents Unicode bypass evasion */
+function normalizeForYamlMatch(text: string): string {
+  return text.normalize("NFKC").replace(INVISIBLE_CHARS_RE, "");
+}
+
 // ── YAML 规则定义结构 ──
 
 export interface YamlRuleDefinition {
@@ -215,7 +223,7 @@ export function createYamlRule(def: YamlRuleDefinition): SecurityRule {
       for (const [paramKey, regexes] of paramPatterns) {
         const paramValue = ctx.toolParams[paramKey];
         if (paramValue === undefined) continue;
-        const strVal = String(paramValue);
+        const strVal = normalizeForYamlMatch(String(paramValue));
         for (const rx of regexes) {
           if (rx.test(strVal)) {
             return buildResult(def, ctx, paramKey, rx.source);
@@ -324,8 +332,9 @@ function matchAnyParam(
   for (const [key, value] of Object.entries(params)) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
     if (typeof value === "string") {
+      const normalized = normalizeForYamlMatch(value);
       for (const rx of patterns) {
-        if (rx.test(value)) {
+        if (rx.test(normalized)) {
           return { paramKey: fullKey, pattern: rx.source };
         }
       }
@@ -341,8 +350,9 @@ function matchAnyParam(
       for (let i = 0; i < value.length; i++) {
         const item = value[i];
         if (typeof item === "string") {
+          const normalizedItem = normalizeForYamlMatch(item);
           for (const rx of patterns) {
-            if (rx.test(item)) {
+            if (rx.test(normalizedItem)) {
               return { paramKey: `${fullKey}[${i}]`, pattern: rx.source };
             }
           }

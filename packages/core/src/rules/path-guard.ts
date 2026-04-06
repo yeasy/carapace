@@ -100,7 +100,7 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   { pattern: /[/\\]\.local[/\\]share[/\\]keyrings[/\\]/i, severity: "critical", title: "GNOME 密钥环访问", category: "credentials" },
 
   // KeePass 密码数据库
-  { pattern: /\.(kdbx?|kdb)\b/i, severity: "critical", title: "KeePass 密码数据库访问", category: "credentials" },
+  { pattern: /[/\\][^/\\]*\.kdbx?\b/i, severity: "critical", title: "KeePass 密码数据库访问", category: "credentials" },
 
   // Windows 凭证
   { pattern: /[/\\]Windows[/\\]System32[/\\]config[/\\](SAM|SECURITY|SYSTEM)/i, severity: "critical", title: "Windows 凭证存储访问", category: "credentials" },
@@ -109,10 +109,16 @@ const SENSITIVE_PATHS: SensitivePath[] = [
 // ── 安全正则匹配（防止 ReDoS） ──
 
 function safeRegexTest(regex: RegExp, input: string): boolean {
-  // 对于超长输入，检查头尾两段以避免 ReDoS 同时防止尾部 bypass
+  // 对于超长输入，使用重叠滑动窗口覆盖整个字符串（防止中段 bypass）
   if (input.length > 4096) {
     try {
-      return regex.test(input.slice(0, 4096)) || regex.test(input.slice(-2048));
+      const chunkSize = 4096;
+      const overlap = 256;
+      const step = chunkSize - overlap;
+      for (let i = 0; i < input.length; i += step) {
+        if (regex.test(input.slice(i, i + chunkSize))) return true;
+      }
+      return false;
     } catch {
       return false;
     }

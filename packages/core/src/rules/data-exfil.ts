@@ -115,6 +115,13 @@ const MAX_STRING_LEN = 8192;
 const MAX_TOTAL_LENGTH = 100_000;
 const MAX_STRING_COUNT = 1000;
 
+// Strip invisible Unicode characters (consistent with exec-guard and prompt-injection)
+const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\u2060-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC01-\uDC7F]/g;
+
+function normalizeForExfilDetection(text: string): string {
+  return text.normalize("NFKC").replace(INVISIBLE_CHARS_RE, "");
+}
+
 function extractAllStrings(params: Record<string, unknown>): string[] {
   const strings: string[] = [];
   let totalLength = 0;
@@ -124,12 +131,21 @@ function extractAllStrings(params: Record<string, unknown>): string[] {
     if (typeof val === "string" && val.length > 0) {
       let s: string;
       if (val.length > MAX_STRING_LEN) {
-        // Sample head and tail to prevent bypass by placing payloads at end of long strings
-        const half = MAX_STRING_LEN >>> 1;
-        s = val.slice(0, half) + "\n" + val.slice(-half);
+        // Use overlapping chunks to cover the entire string (prevent mid-string bypass)
+        const chunkSize = MAX_STRING_LEN;
+        const overlap = 256;
+        const step = chunkSize - overlap;
+        for (let i = 0; i < val.length; i += step) {
+          const chunk = normalizeForExfilDetection(val.slice(i, i + chunkSize));
+          strings.push(chunk);
+          totalLength += chunk.length;
+          if (strings.length >= MAX_STRING_COUNT || totalLength >= MAX_TOTAL_LENGTH) return;
+        }
+        return;
       } else {
         s = val;
       }
+      s = normalizeForExfilDetection(s);
       strings.push(s);
       totalLength += s.length;
     } else if (Array.isArray(val)) {

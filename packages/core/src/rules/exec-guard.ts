@@ -18,9 +18,16 @@ function normalizeCommand(text: string): string {
     .replace(/\r/g, "")
     .replace(/""|''/g, "")         // Strip empty quotes (shell no-ops)
     // ANSI-C quoting must be decoded BEFORE shell escape stripping (otherwise \x63 → x63)
-    .replace(/\$'((?:[^'\\]|\\x[0-9a-fA-F]{2}|\\[0-7]{1,3}|\\[nrtbf\\'])*)'/g, (_match, content: string) => {
+    .replace(/\$'((?:[^'\\]|\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8}|\\[0-7]{1,3}|\\[nrtbf\\'])*)'/g, (_match, content: string) => {
       return content
         .replace(/\\x([0-9a-fA-F]{2})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+        .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) => {
+          const cp = parseInt(hex, 16);
+          return (cp >= 0xD800 && cp <= 0xDFFF) ? "" : String.fromCharCode(cp);
+        })
+        .replace(/\\U([0-9a-fA-F]{8})/g, (_, hex: string) => {
+          try { return String.fromCodePoint(parseInt(hex, 16)); } catch { return ""; }
+        })
         .replace(/\\([0-7]{1,3})/g, (_, oct: string) => String.fromCharCode(parseInt(oct, 8)))
         .replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t")
         .replace(/\\'/g, "'").replace(/\\\\/g, "\\");
@@ -704,13 +711,17 @@ const EXEC_TOOL_NAMES = new Set([
   "deno", "bun",
 ]);
 
-const EXEC_TOOL_PATTERN = /(?:^|[_\-.])(exec|shell|bash|command|terminal|subprocess|run|cmd|script|ssh)(?:$|[_\-.])/;
+const EXEC_TOOL_PATTERN = /(?:^|[_\-.])(exec|executor|shell|bash|command|terminal|subprocess|run|runner|cmd|script|ssh)(?:$|[_\-.])/;
 
 function isExecTool(toolName: string): boolean {
   const lower = toolName.toLowerCase();
+  // Normalize camelCase to underscore-separated (e.g., runCommand → run_command)
+  const normalized = toolName.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
   return (
     EXEC_TOOL_NAMES.has(lower) ||
-    EXEC_TOOL_PATTERN.test(lower)
+    EXEC_TOOL_NAMES.has(normalized) ||
+    EXEC_TOOL_PATTERN.test(lower) ||
+    EXEC_TOOL_PATTERN.test(normalized)
   );
 }
 
