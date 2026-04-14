@@ -327,6 +327,16 @@ export class CarapaceBridge {
         });
       };
 
+      // Reject POST requests without application/json Content-Type (CSRF prevention)
+      if (req.method === "POST") {
+        const ct = req.headers["content-type"] ?? "";
+        if (!ct.includes("application/json")) {
+          res.writeHead(415, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Content-Type must be application/json" }));
+          return;
+        }
+      }
+
       // POST /check
       if (req.method === "POST" && urlPath === "/check") {
         readBody(req, (body) => {

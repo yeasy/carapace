@@ -892,7 +892,7 @@ describe("CarapaceBridge - Extra Tests", () => {
   // ── Content-Type 处理 ──
 
   describe("Content-Type handling", () => {
-    it("无 Content-Type 头的请求", async () => {
+    it("无 Content-Type 头的请求返回 415", async () => {
       bridge = createBridge({ port: 0 });
       await bridge.start();
       const port = bridge.getPort();
@@ -905,10 +905,11 @@ describe("CarapaceBridge - Extra Tests", () => {
         }),
       });
 
-      expect(response.status).toBe(200);
+      // Reject missing Content-Type for CSRF prevention
+      expect(response.status).toBe(415);
     });
 
-    it("text/plain Content-Type 返回 400", async () => {
+    it("text/plain Content-Type 返回 415", async () => {
       bridge = createBridge({ port: 0 });
       await bridge.start();
       const port = bridge.getPort();
@@ -919,8 +920,8 @@ describe("CarapaceBridge - Extra Tests", () => {
         body: '{"toolName":"bash","toolParams":{"command":"echo test"}}',
       });
 
-      // 取决于实现，可能接受或拒绝
-      expect([200, 400]).toContain(response.status);
+      // Reject non-JSON Content-Type for CSRF prevention
+      expect(response.status).toBe(415);
     });
   });
 
