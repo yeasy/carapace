@@ -1,6 +1,6 @@
 {
   "name": "@carapace/cli",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "description": "Command-line interface for Carapace — AI agent runtime security monitoring.",
   "type": "module",
   "bin": {

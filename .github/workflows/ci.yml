@@ -81,7 +81,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/yeasy/carapace:latest
-            ghcr.io/yeasy/carapace:0.10.3
+            ghcr.io/yeasy/carapace:0.10.4
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -93,5 +93,5 @@ jobs:
           push: true
           tags: |
             yeasy/carapace:latest
-            yeasy/carapace:0.10.3
+            yeasy/carapace:0.10.4
           cache-from: type=gha
