@@ -20,6 +20,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - run: npm install
 
@@ -37,6 +38,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: 'npm'
 
       - run: npm install
 
@@ -73,23 +75,23 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
             ghcr.io/yeasy/carapace:latest
-            ghcr.io/yeasy/carapace:0.10.2
+            ghcr.io/yeasy/carapace:0.10.3
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Push to Docker Hub
         if: false
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
             yeasy/carapace:latest
-            yeasy/carapace:0.10.2
+            yeasy/carapace:0.10.3
           cache-from: type=gha
