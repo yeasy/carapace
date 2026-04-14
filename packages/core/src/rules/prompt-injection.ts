@@ -99,13 +99,23 @@ function extractTextValues(params: Record<string, unknown>): string[] {
   function walk(val: unknown, depth: number, scanKeys = false): void {
     if (depth > MAX_WALK_DEPTH || texts.length >= MAX_TEXT_COUNT) return;
     if (typeof val === "string" && val.length > 4) {
-      const trimmed = val.length > MAX_TEXT_LEN
-        ? val.slice(0, MAX_TEXT_LEN >>> 1) + "\n" + val.slice(-(MAX_TEXT_LEN >>> 1))
-        : val;
-      const normalized = normalizeForDetection(trimmed);
-      texts.push(normalized);
+      if (val.length > MAX_TEXT_LEN) {
+        // Use overlapping sliding windows to cover the entire string
+        // (prevents mid-string bypass, consistent with data-exfil and path-guard)
+        const chunkSize = MAX_TEXT_LEN;
+        const overlap = 256;
+        const step = chunkSize - overlap;
+        for (let i = 0; i < val.length; i += step) {
+          const chunk = normalizeForDetection(val.slice(i, i + chunkSize));
+          texts.push(chunk);
+          if (texts.length >= MAX_TEXT_COUNT) return;
+        }
+      } else {
+        const normalized = normalizeForDetection(val);
+        texts.push(normalized);
+      }
     } else if (Array.isArray(val)) {
-      for (const item of val) walk(item, depth + 1);
+      for (const item of val) walk(item, depth + 1, scanKeys);
     } else if (val && typeof val === "object") {
       for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
         // Scan parameter keys for injections (attackers can hide instructions in keys)
@@ -113,7 +123,7 @@ function extractTextValues(params: Record<string, unknown>): string[] {
           const normalizedKey = normalizeForDetection(k);
           texts.push(normalizedKey);
         }
-        walk(v, depth + 1);
+        walk(v, depth + 1, scanKeys);
       }
     }
   }

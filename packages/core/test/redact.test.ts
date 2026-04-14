@@ -205,23 +205,33 @@ describe("redactSensitiveValues", () => {
     expect((result.header as string).includes("abcdefghijklmnopqrstuvwxyz")).toBe(false);
   });
 
-  it("should use head+tail sampling for strings exceeding MAX_REDACT_LEN (16384)", () => {
+  it("should use sliding-window redaction for strings exceeding MAX_REDACT_LEN (16384)", () => {
     const longString = "A".repeat(20000);
     const params = { data: longString };
     const result = redactSensitiveValues(params);
-    expect((result.data as string).includes("[...TRUNCATED...]")).toBe(true);
-    // The result should be shorter than the original
-    expect((result.data as string).length).toBeLessThan(longString.length);
+    // With sliding window, the full string is preserved (no truncation marker)
+    expect((result.data as string).length).toBe(longString.length);
   });
 
-  it("should redact secrets at the tail of long strings via head+tail sampling", () => {
-    // Place a secret at position 17000 — beyond the old 16384 cap
+  it("should redact secrets at the tail of long strings", () => {
+    // Place a secret at position 17000
     const padding = "X".repeat(17000);
     const secret = "AKIAIOSFODNN7EXAMPLE";
     const longString = padding + secret;
     const params = { data: longString };
     const result = redactSensitiveValues(params);
-    // The tail portion should have the AWS key redacted
+    expect((result.data as string).includes("AKIA")).toBe(false);
+    expect((result.data as string).includes("[REDACTED]")).toBe(true);
+  });
+
+  it("should redact secrets in the middle of very long strings (sliding window)", () => {
+    // Place a secret in the middle where head+tail would have missed it
+    const prefix = "X".repeat(10000);
+    const suffix = "Y".repeat(10000);
+    const secret = "AKIAIOSFODNN7EXAMPLE";
+    const longString = prefix + secret + suffix;
+    const params = { data: longString };
+    const result = redactSensitiveValues(params);
     expect((result.data as string).includes("AKIA")).toBe(false);
     expect((result.data as string).includes("[REDACTED]")).toBe(true);
   });
@@ -271,5 +281,38 @@ describe("redactSensitiveValues", () => {
     const params = { token: "gho_abcdefghijklmnopqrstuvwxyz1234567890" };
     const result = redactSensitiveValues(params);
     expect((result.token as string).includes("gho_")).toBe(false);
+  });
+
+  it("should redact secrets at sliding-window chunk boundaries without corruption", () => {
+    // Place a secret exactly at the boundary between chunk 0 and chunk 1
+    // Chunk size is 16384, overlap is 512, step is 15872
+    // Place secret spanning the boundary: starts at 15870 (2 bytes before step)
+    const prefix = "Z".repeat(15870);
+    const secret = "AKIAIOSFODNN7EXAMPLE";
+    const suffix = "W".repeat(5000);
+    const longString = prefix + secret + suffix;
+    const params = { data: longString };
+    const result = redactSensitiveValues(params);
+    // Secret must be fully redacted, not split into fragments
+    expect((result.data as string).includes("AKIA")).toBe(false);
+    expect((result.data as string).includes("[REDACTED]")).toBe(true);
+    // Verify no corrupted markers like "[REDAC" or "TED]"
+    expect((result.data as string).includes("[REDAC")).toBe(
+      (result.data as string).includes("[REDACTED]")
+    );
+  });
+
+  it("should preserve correct string length when redacting at boundaries", () => {
+    // Verify the non-sensitive parts remain intact
+    const prefix = "A".repeat(15000);
+    const secret = "sk-ant-api03-abcdefghijklmnopqrst";
+    const suffix = "B".repeat(5000);
+    const longString = prefix + secret + suffix;
+    const params = { data: longString };
+    const result = redactSensitiveValues(params);
+    const resultStr = result.data as string;
+    expect(resultStr.startsWith("A".repeat(100))).toBe(true);
+    expect(resultStr.endsWith("B".repeat(100))).toBe(true);
+    expect(resultStr.includes("sk-ant-")).toBe(false);
   });
 });

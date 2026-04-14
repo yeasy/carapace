@@ -142,7 +142,7 @@ const PATH_KEYS = new Set([
   "content", "url", "uri",
 ]);
 
-const MAX_PATH_WALK_DEPTH = 5;
+const MAX_PATH_WALK_DEPTH = 10;
 const MAX_PATHS = 100;
 
 function extractPaths(params: Record<string, unknown>): string[] {

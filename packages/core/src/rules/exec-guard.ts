@@ -33,12 +33,13 @@ function normalizeCommand(text: string): string {
         .replace(/\\'/g, "'").replace(/\\\\/g, "\\");
     })
     .replace(/\\([a-zA-Z0-9])/g, "$1") // Strip single-char shell escapes
-    .replace(/\$([A-Z])\b/g, "$1") // Strip single-char shell variable expansion ($C$U$R$L → CURL)
+    .replace(/\$([a-zA-Z])\b/g, "$1") // Strip single-char shell variable expansion ($C$U$R$L → CURL, $c$u$r$l → curl)
+    .replace(/\$[@*_]/g, "") // Strip $@, $*, $_ special variables (expand to empty in non-function context)
     .replace(/'([a-zA-Z0-9]+)'/g, "$1") // Strip shell single-quoted alphanumeric segments ('cu''rl' → curl)
     .replace(/"([a-zA-Z0-9]+)"/g, "$1") // Strip shell double-quoted alphanumeric segments ("cu""rl" → curl)
     .replace(/\$\{IFS\}|\$IFS\b/g, " ") // Normalize $IFS to space
     .replace(/\$\{[^}]*:-([^}]+)\}/g, "$1") // Decode ${x:-default} parameter expansion
-    .replace(/\$\{[^}]*:=[^}]+\}/g, "") // Strip ${x:=val} assignment expansions
+    .replace(/\$\{[^}]*:=([^}]+)\}/g, "$1") // Decode ${x:=val} assignment expansion (expands to val)
     .replace(/\$\{#?\w+\}/g, ""); // Strip remaining ${var} expansions
 }
 
@@ -66,7 +67,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 进程替换执行 ──
   {
-    pattern: /\b(bash|sh|zsh)\s+<\(\s*(curl|wget)\s/i,
+    pattern: /\b(bash|sh|zsh)\s*<\(\s*(curl|wget)\s/i,
     severity: "critical",
     title: "远程代码执行：进程替换",
     description: "通过进程替换下载并执行远程代码——绕过管道检测的常见手法。",
@@ -108,19 +109,19 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 命令替换执行 ──
   {
-    pattern: /\b(bash|sh|zsh)\s+-c\s+["']\$\(\s*(curl|wget)\b/i,
+    pattern: /\b(bash|sh|zsh)\s+-c\s+["']?(?:\$\(|`)\s*(curl|wget)\b/i,
     severity: "critical",
     title: "命令替换远程执行",
     description: "通过命令替换下载并执行远程代码。",
   },
   {
-    pattern: /\bsource\s+<\(\s*(curl|wget)\b/i,
+    pattern: /\bsource\s*<\(\s*(curl|wget)\b/i,
     severity: "critical",
     title: "进程替换 source 执行",
     description: "通过 source + 进程替换下载并执行远程代码。",
   },
   {
-    pattern: /\.\s+<\(\s*(curl|wget)\b/i,
+    pattern: /\.\s*<\(\s*(curl|wget)\b/i,
     severity: "critical",
     title: "dot-source 进程替换执行",
     description: "通过 . (dot) + 进程替换下载并执行远程代码。",
@@ -284,10 +285,10 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 反弹 shell ──
   {
-    pattern: /\b(bash|sh)\s+-i\s+>&?\s*\/dev\/tcp\//i,
+    pattern: /\/dev\/tcp\/\S+\/\d+/i,
     severity: "critical",
     title: "反弹 shell：/dev/tcp",
-    description: "尝试通过 /dev/tcp 打开反弹 shell。",
+    description: "尝试通过 /dev/tcp 打开反弹 shell 或数据外泄通道。",
   },
   {
     pattern: /\/dev\/udp\/\S+\/\d+/i,
@@ -362,10 +363,16 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 破坏性操作 ──
   {
-    pattern: /\brm\s+(-{1,2}[\w][\w=-]*\s+)*(-[rRfF]{2,}|-[rR]\s[^/]*-[fF]|-[fF]\s[^/]*-[rR]|--recursive\s[^/]*--force|--force\s[^/]*--recursive)\s+\//i,
+    pattern: /\brm\s+(-{1,2}[\w][\w=-]*\s+)*(-[rRfF]{2,}|-[rR]\s[^/]*-[fF]|-[fF]\s[^/]*-[rR]|--recursive\s[^/]*--force|--force\s[^/]*--recursive)\s+\/(?:\s|$|\*)/i,
     severity: "critical",
     title: "从根目录递归强制删除",
     description: "尝试从根目录递归删除文件。",
+  },
+  {
+    pattern: /\brm\s+(-{1,2}[\w][\w=-]*\s+)*(-[rRfF]{2,}|-[rR]\s[^/]*-[fF]|-[fF]\s[^/]*-[rR]|--recursive\s[^/]*--force|--force\s[^/]*--recursive)\s+\/\w/i,
+    severity: "high",
+    title: "递归强制删除绝对路径",
+    description: "尝试从绝对路径递归删除文件——可能导致严重数据丢失。",
   },
   {
     pattern: /\brm\s+(-{1,2}[\w][\w=-]*\s+)*(-[rRfF]{2,}|-[rR]\s[^~]*-[fF]|-[fF]\s[^~]*-[rR]|--recursive\s[^~]*--force|--force\s[^~]*--recursive)\s+~(?:\s|$|\/)/i,
@@ -707,7 +714,7 @@ const EXEC_TOOL_NAMES = new Set([
   "computer", "run", "invoke",
   "sh", "zsh", "ssh", "cli", "script", "evaluate", "repl",
   "code_interpreter", "runner", "action", "apply",
-  "computer_use", "execute_command", "run_code", "code_execution",
+  "computer_use", "execute_command", "execute_code", "run_code", "code_execution",
   "deno", "bun",
 ]);
 

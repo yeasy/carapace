@@ -72,18 +72,42 @@ function redactString(value: string): string {
     }
     return result;
   }
-  // Head+tail sampling: scan both ends to catch secrets placed at the end
-  // of long strings (consistent with data-exfil and prompt-injection rules)
-  const half = MAX_REDACT_LEN >>> 1;
-  let head = value.slice(0, half);
-  let tail = value.slice(-half);
-  for (const pattern of SENSITIVE_PATTERNS) {
-    pattern.lastIndex = 0;
-    head = head.replace(pattern, "[REDACTED]");
-    pattern.lastIndex = 0;
-    tail = tail.replace(pattern, "[REDACTED]");
+  // Sliding-window redaction: scan the full string in overlapping chunks
+  // (consistent with data-exfil and prompt-injection detection rules).
+  // Collect redaction ranges from each chunk, then apply once on the original
+  // string to avoid boundary corruption when [REDACTED] differs in length.
+  const chunkSize = MAX_REDACT_LEN;
+  const overlap = 512;
+  const step = chunkSize - overlap;
+  const ranges: Array<[number, number]> = [];
+  for (let i = 0; i < value.length; i += step) {
+    const chunk = value.slice(i, i + chunkSize);
+    for (const pattern of SENSITIVE_PATTERNS) {
+      pattern.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = pattern.exec(chunk)) !== null) {
+        ranges.push([i + m.index, i + m.index + m[0].length]);
+        if (!pattern.global) break;
+      }
+    }
   }
-  return head + "[...TRUNCATED...]" + tail;
+  if (ranges.length === 0) return value;
+  // Merge overlapping ranges and apply replacements right-to-left
+  ranges.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  const merged: Array<[number, number]> = [ranges[0]];
+  for (let i = 1; i < ranges.length; i++) {
+    const last = merged[merged.length - 1];
+    if (ranges[i][0] <= last[1]) {
+      last[1] = Math.max(last[1], ranges[i][1]);
+    } else {
+      merged.push(ranges[i]);
+    }
+  }
+  let result = value;
+  for (let i = merged.length - 1; i >= 0; i--) {
+    result = result.slice(0, merged[i][0]) + "[REDACTED]" + result.slice(merged[i][1]);
+  }
+  return result;
 }
 
 const MAX_REDACT_DEPTH = 20;

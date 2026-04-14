@@ -268,7 +268,8 @@ export class MemoryBackend extends StorageBackend {
     const session = this.sessions.get(sessionId);
     if (session) {
       // Prevent sessionId override which would corrupt the map key → value mapping
-      const { sessionId: _ignored, ...safeUpdates } = updates;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { sessionId: _omitted, ...safeUpdates } = updates;
       this.sessions.set(sessionId, { ...session, ...safeUpdates });
     }
   }
@@ -297,6 +298,12 @@ export class MemoryBackend extends StorageBackend {
   }
 
   async addDismissal(pattern: DismissalPattern): Promise<void> {
+    // Evict oldest dismissals if at capacity (prevent unbounded growth)
+    const MAX_DISMISSALS = 10_000;
+    if (!this.dismissals.has(pattern.id) && this.dismissals.size >= MAX_DISMISSALS) {
+      const firstKey = this.dismissals.keys().next().value;
+      if (firstKey !== undefined) this.dismissals.delete(firstKey);
+    }
     this.dismissals.set(pattern.id, pattern);
   }
 

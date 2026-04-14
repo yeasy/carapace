@@ -34,7 +34,8 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /-----BEGIN\s+(RSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----/i, severity: "critical", title: "私钥出现在请求中", category: "credential_leak" },
 
   // Base64 encoded credentials (~40+ chars covers typical API keys/tokens)
-  { pattern: /(?<=\s|^|["'`])[A-Za-z0-9+/]{40,16000}={0,2}(?=\s|$|["'`])/, severity: "medium", title: "Base64 编码数据外发", category: "encoded_exfil" },
+  // Includes base64url charset (-_ instead of +/) used by JWTs and URL-safe tokens
+  { pattern: /(?<=\s|^|["'`])[A-Za-z0-9+/\-_]{40,16000}={0,2}(?=\s|$|["'`])/, severity: "medium", title: "Base64 编码数据外发", category: "encoded_exfil" },
 
   // 将文件内容通过 curl/wget 发送到外部
   { pattern: /curl\s+.*-[dX]\s+.*@\.?\//i, severity: "high", title: "通过 curl 上传本地文件", category: "file_upload" },
@@ -75,6 +76,11 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
 
   // rsync credential exfiltration
   { pattern: /\brsync\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud)\//i, severity: "critical", title: "通过 rsync 外泄凭证文件", category: "pipe_exfil" },
+
+  // socat / openssl s_client data exfiltration
+  { pattern: /cat\s+.*\.(pem|key|env|credentials|secret).*\|\s*(socat|openssl)/i, severity: "critical", title: "通过 socat/openssl 外泄敏感文件", category: "pipe_exfil" },
+  { pattern: /(socat|openssl\s+s_client)\s+.*<\s*.*\.(pem|key|env|credentials|secret)/i, severity: "critical", title: "将敏感文件重定向到 socat/openssl", category: "pipe_exfil" },
+  { pattern: /cat\s+.*~?\/?\.(?:ssh|aws)\/(id_rsa|id_ed25519|credentials).*\|\s*(socat|openssl)/i, severity: "critical", title: "通过 socat/openssl 外泄凭证文件", category: "pipe_exfil" },
 
   // /dev/tcp data exfiltration (non-shell redirect)
   { pattern: />\s*\/dev\/tcp\/\S+\/\d+/i, severity: "critical", title: "通过 /dev/tcp 外泄数据", category: "pipe_exfil" },
@@ -170,59 +176,72 @@ export function createDataExfilRule(): SecurityRule {
       const strings = extractAllStrings(ctx.toolParams);
       if (strings.length === 0) return { triggered: false };
 
-      // Cap combined length to prevent computational amplification from regex matching
+      // Cap combined length to prevent computational amplification from regex matching.
+      // Use overlapping sliding windows to prevent mid-string bypass.
       const MAX_COMBINED_LEN = 65_536;
-      let combined = strings.join("\n");
+      const combined = strings.join("\n");
+      const combinedChunks: string[] = [];
       if (combined.length > MAX_COMBINED_LEN) {
-        const half = MAX_COMBINED_LEN >>> 1;
-        combined = combined.slice(0, half) + "\n" + combined.slice(-half);
+        const chunkSize = MAX_COMBINED_LEN;
+        const overlap = 512;
+        const step = chunkSize - overlap;
+        for (let i = 0; i < combined.length; i += step) {
+          combinedChunks.push(combined.slice(i, i + chunkSize));
+        }
+      } else {
+        combinedChunks.push(combined);
       }
 
-      // Find the highest-severity exfil pattern match
+      // Find the highest-severity exfil pattern match (scan all chunks)
       let bestMatch: { ep: ExfilPattern; snippet: string } | null = null;
 
-      for (const ep of EXFIL_PATTERNS) {
-        const match = ep.pattern.exec(combined);
-        if (match) {
-          if (
-            !bestMatch ||
-            SEVERITY_RANK[ep.severity] > SEVERITY_RANK[bestMatch.ep.severity]
-          ) {
-            bestMatch = { ep, snippet: match[0].slice(0, 100) };
+      for (const chunk of combinedChunks) {
+        for (const ep of EXFIL_PATTERNS) {
+          const match = ep.pattern.exec(chunk);
+          if (match) {
+            if (
+              !bestMatch ||
+              SEVERITY_RANK[ep.severity] > SEVERITY_RANK[bestMatch.ep.severity]
+            ) {
+              bestMatch = { ep, snippet: match[0].slice(0, 100) };
+            }
+            if (ep.severity === "critical") break;
           }
-          if (ep.severity === "critical") break;
         }
+        if (bestMatch?.ep.severity === "critical") break;
       }
 
-      // 检查是否向高风险外泄目标发送数据 (always critical)
-      for (const dest of EXFIL_DESTINATIONS) {
-        const match = dest.exec(combined);
-        if (match) {
-          const hasSendAction = /(?:POST|PUT|PATCH|upload|send|--data|--form|--upload-file|--post-file|--post-data|--body-file|-d[\s@]|-F[\s@]|-T\s)/i.test(combined);
-          const hasCmdSubstitution = /\$\([^)]+\)|`[^`]+`|\$\{[^}]+\}/.test(combined);
-          const hasSensitiveParams = /\?\S*(?:data|secret|token|key|passwd|password|credential|file)=/i.test(combined);
-          if (hasSendAction || hasCmdSubstitution || hasSensitiveParams) {
-            // Exfil destinations are always critical, override pattern match
-            return {
-              triggered: true,
-              shouldBlock: true,
-              event: {
-                category: "data_exfil",
-                severity: "critical",
-                title: "向已知外泄目标发送数据",
-                description: `工具 "${ctx.toolName}" 正在向已知文件共享/外泄服务发送数据`,
-                details: {
-                  exfilCategory: "exfil_destination",
-                  destination: match ? match[0] : "unknown",
+      // 检查是否向高风险外泄目标发送数据 (always critical, scan all chunks)
+      for (const chunk of combinedChunks) {
+        for (const dest of EXFIL_DESTINATIONS) {
+          const match = dest.exec(chunk);
+          if (match) {
+            const hasSendAction = /(?:POST|PUT|PATCH|upload|send|--data(?:-raw|-urlencode)?|--form|--upload-file|--post-file|--post-data|--body-file|--json|-d[\s@"']|-F[\s@"']|-T\s|-XPOST|-XPUT)/i.test(chunk);
+            const hasCmdSubstitution = /\$\([^)]+\)|`[^`]+`|\$\{[^}]+\}/.test(chunk);
+            const hasSensitiveParams = /\?\S*(?:data|secret|token|key|passwd|password|credential|file)=/i.test(chunk);
+            if (hasSendAction || hasCmdSubstitution || hasSensitiveParams) {
+              // Exfil destinations are always critical, override pattern match
+              return {
+                triggered: true,
+                shouldBlock: true,
+                event: {
+                  category: "data_exfil",
+                  severity: "critical",
+                  title: "向已知外泄目标发送数据",
+                  description: `工具 "${ctx.toolName}" 正在向已知文件共享/外泄服务发送数据`,
+                  details: {
+                    exfilCategory: "exfil_destination",
+                    destination: match ? match[0] : "unknown",
+                  },
+                  toolName: ctx.toolName,
+                  toolParams: redactSensitiveValues(ctx.toolParams),
+                  skillName: ctx.skillName,
+                  sessionId: ctx.sessionId,
+                  agentId: ctx.agentId,
+                  matchedPattern: dest.source,
                 },
-                toolName: ctx.toolName,
-                toolParams: redactSensitiveValues(ctx.toolParams),
-                skillName: ctx.skillName,
-                sessionId: ctx.sessionId,
-                agentId: ctx.agentId,
-                matchedPattern: dest.source,
-              },
-            };
+              };
+            }
           }
         }
       }

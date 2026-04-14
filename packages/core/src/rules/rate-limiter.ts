@@ -23,6 +23,12 @@ function lowerBound(arr: number[], target: number): number {
 }
 
 export function createRateLimiterRule(maxCallsPerMinute: number = 60): SecurityRule {
+  // Validate parameter to prevent nonsensical behavior
+  if (!Number.isFinite(maxCallsPerMinute) || maxCallsPerMinute < 1) {
+    maxCallsPerMinute = 60;
+  }
+  maxCallsPerMinute = Math.floor(maxCallsPerMinute);
+
   const sessions = new Map<string, CallRecord>();
   let lastFullCleanup = 0;
   const FULL_CLEANUP_INTERVAL = 5 * 60_000; // 每 5 分钟清理一次空 session
@@ -70,7 +76,7 @@ export function createRateLimiterRule(maxCallsPerMinute: number = 60): SecurityR
 
     check(ctx: RuleContext): RuleResult {
       const sessionKey = ctx.sessionId ?? ctx.agentId ?? "__default__";
-      const now = ctx.timestamp;
+      const now = Number.isFinite(ctx.timestamp) && ctx.timestamp > 0 ? ctx.timestamp : Date.now();
 
       if (!sessions.has(sessionKey)) {
         sessions.set(sessionKey, { timestamps: [] });
