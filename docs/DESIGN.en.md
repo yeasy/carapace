@@ -439,13 +439,13 @@ CREATE TABLE sessions (
 Tool Call Event
      │
      ▼
-┌─────────────┐    ┌──────────────┐    ┌──────────────┐
-│  ExecGuard   │───▶│  PathGuard   │───▶│ NetworkGuard │──┐
-└─────────────┘    └──────────────┘    └──────────────┘  │
-                                                          │
-┌─────────────┐    ┌──────────────┐                       │
-│ BaselineDrift│◀──│ RateLimiter  │◀──────────────────────┘
-└──────┬──────┘    └──────────────┘
+┌──────────┐ ┌──────────┐ ┌────────────┐ ┌─────────────────┐
+│ExecGuard │▶│PathGuard │▶│NetworkGuard│▶│PromptInjection  │
+└──────────┘ └──────────┘ └────────────┘ └────────┬────────┘
+                                                   ▼
+             ┌─────────────┐ ┌───────────┐ ┌──────────────┐
+             │BaselineDrift │◀│RateLimiter│◀│  DataExfil   │
+             └──────┬──────┘ └───────────┘ └──────────────┘
        │
        ▼
   Merge Results (highest severity wins)
@@ -465,7 +465,7 @@ Tool Call Event
 | **PathGuard** | path_violation | Sensitive file access (~/.ssh/, ~/.aws/, browser data, crypto wallets, .env files) | Block critical, alert others |
 | **NetworkGuard** | network_suspect | Suspicious URLs (paste services, file sharing, webhook catchers, .onion, raw IP) | Block .onion, alert others |
 | **RateLimiter** | rate_anomaly | Tool call rate exceeds threshold (default 60/min) or sudden spike (3x baseline) | Alert only |
-| **PromptInjection** | prompt_injection | Prompt injection patterns detected in tool output (instruction override, role hijacking, encoded injection) | Block critical, alert others |
+| **PromptInjection** | prompt_injection | Prompt injection patterns detected in tool parameters (instruction override, role hijacking, encoded injection) | Block critical, alert others |
 | **DataExfil** | data_exfil | Data exfiltration patterns detected (sensitive data sent via network/file/clipboard) | Block critical, alert others |
 | **BaselineDrift** | baseline_drift | Skill accesses new tools/paths/domains not in its learned profile | Alert only |
 
@@ -532,7 +532,7 @@ First occurrence          → Alert at detected severity
 ```json
 {
   "source": "carapace",
-  "version": "0.1.0",
+  "version": "0.10.3",
   "event": {
     "id": "cpc_a1b2c3d4e5f6",
     "timestamp": "2026-03-09T20:30:00Z",
@@ -553,13 +553,13 @@ First occurrence          → Alert at detected severity
 
 ### 10.1 Learning Strategy
 
-**Cold Start (first 5 sessions per skill)**:
-- Only hard rules active (ExecGuard, PathGuard, NetworkGuard)
+**Cold Start (first 20 calls per skill)**:
+- Only hard rules active (ExecGuard, PathGuard, NetworkGuard, PromptInjection, DataExfil)
 - All tool calls logged to build initial baseline
 - No anomaly alerts triggered (false positive rate too high)
-- After 5 sessions: baseline "freezes," BaselineDrift activates
+- After 20 calls: baseline "freezes," BaselineDrift activates
 
-**Warm-Up Phase (from session 6 onward)**:
+**Warm-Up Phase (after learning threshold)**:
 - BaselineDrift compares each tool call against the skill's profile
 - New tools/paths/domains → alert as `baseline_drift`
 - Baseline continues slow updates (exponential moving average)
@@ -696,9 +696,9 @@ carapace dismissals clear
 ### Phase 1: Core Rules (Week 2)
 
 **Deliverables:**
-- [x] ExecGuard: 96 dangerous command patterns
-- [x] PathGuard: 41 sensitive path patterns (Windows, macOS, Linux)
-- [x] NetworkGuard: 32 suspicious domain patterns (20 categories)
+- [x] ExecGuard: 98 dangerous command patterns
+- [x] PathGuard: 43 sensitive path patterns (Windows, macOS, Linux)
+- [x] NetworkGuard: 34 suspicious domain patterns (20 categories)
 - [x] Rule engine with priority and conflict resolution
 - [x] Console alerting (colored stderr)
 
@@ -725,7 +725,7 @@ carapace dismissals clear
 - [x] First-run report generator
 - [x] `carapace skills` CLI command
 
-**Done Criteria:** Baseline established after 5 sessions, can detect new tool/path/domain access
+**Done Criteria:** Baseline established after 20 calls, can detect new tool/path/domain access
 
 ### Phase 4: Polish & Release (Week 6)
 

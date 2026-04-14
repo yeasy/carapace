@@ -439,15 +439,14 @@ CREATE TABLE sessions (
 工具调用事件
      │
      ▼
-┌─────────────┐    ┌──────────────┐    ┌──────────────┐
-│  ExecGuard   │───▶│  PathGuard   │───▶│ NetworkGuard │──┐
-└─────────────┘    └──────────────┘    └──────────────┘  │
-                                                          │
-┌─────────────┐    ┌──────────────┐                       │
-│ BaselineDrift│◀──│ RateLimiter  │◀──────────────────────┘
-└──────┬──────┘    └──────────────┘
-       │
-       ▼
+┌──────────┐ ┌──────────┐ ┌────────────┐ ┌─────────────────┐
+│ExecGuard │▶│PathGuard │▶│NetworkGuard│▶│PromptInjection  │
+└──────────┘ └──────────┘ └────────────┘ └────────┬────────┘
+                                                   ▼
+             ┌─────────────┐ ┌───────────┐ ┌──────────────┐
+             │BaselineDrift │◀│RateLimiter│◀│  DataExfil   │
+             └──────┬──────┘ └───────────┘ └──────────────┘
+                    ▼
   合并结果（最高严重级别优先）
        │
        ▼
@@ -465,7 +464,7 @@ CREATE TABLE sessions (
 | **PathGuard** | path_violation | 敏感文件访问（~/.ssh/、~/.aws/、浏览器数据、加密钱包、.env 文件） | 阻断严重，告警其他 |
 | **NetworkGuard** | network_suspect | 可疑 URL（粘贴服务、文件共享、webhook 捕获器、.onion、裸 IP） | 阻断 .onion，告警其他 |
 | **RateLimiter** | rate_anomaly | 工具调用频率超阈值（默认 60/分钟）或突增（基线的 3 倍） | 仅告警 |
-| **PromptInjection** | prompt_injection | 工具输出中检测到提示词注入模式（指令覆盖、角色劫持、编码注入） | 阻断严重，告警其他 |
+| **PromptInjection** | prompt_injection | 工具参数中检测到提示词注入模式（指令覆盖、角色劫持、编码注入） | 阻断严重，告警其他 |
 | **DataExfil** | data_exfil | 检测到数据外泄模式（敏感数据经网络/文件/剪贴板外传） | 阻断严重，告警其他 |
 | **BaselineDrift** | baseline_drift | Skill 访问了不在其学习画像中的新工具/路径/域名 | 仅告警 |
 
@@ -532,7 +531,7 @@ customRules:
 ```json
 {
   "source": "carapace",
-  "version": "0.1.0",
+  "version": "0.10.3",
   "event": {
     "id": "cpc_a1b2c3d4e5f6",
     "timestamp": "2026-03-09T20:30:00Z",
@@ -553,13 +552,13 @@ customRules:
 
 ### 10.1 学习策略
 
-**冷启动（每个 skill 的前 5 个会话）**：
-- 仅硬规则生效（ExecGuard、PathGuard、NetworkGuard）
+**冷启动（每个 skill 的前 20 次调用）**：
+- 仅硬规则生效（ExecGuard、PathGuard、NetworkGuard、PromptInjection、DataExfil）
 - 所有工具调用被记录以构建初始基线
 - 不触发异常告警（误报率太高）
-- 5 个会话后：基线"冻结"，BaselineDrift 激活
+- 20 次调用后：基线"冻结"，BaselineDrift 激活
 
-**预热阶段（第 6 个会话起）**：
+**预热阶段（学习阈值后）**：
 - BaselineDrift 将每次工具调用与 skill 画像对比
 - 新工具/路径/域名 → 告警为 `baseline_drift`
 - 基线继续缓慢更新（指数移动平均）
@@ -696,9 +695,9 @@ carapace dismissals clear
 ### Phase 1：核心规则（第 2 周）
 
 **交付物：**
-- [x] ExecGuard：96 危险命令模式
-- [x] PathGuard：41 敏感路径模式（Windows、macOS、Linux）
-- [x] NetworkGuard：32 可疑域名模式（20 类别）
+- [x] ExecGuard：98 危险命令模式
+- [x] PathGuard：43 敏感路径模式（Windows、macOS、Linux）
+- [x] NetworkGuard：34 可疑域名模式（20 类别）
 - [x] 带优先级和冲突解决的规则引擎
 - [x] 控制台告警（带颜色的 stderr）
 
@@ -725,7 +724,7 @@ carapace dismissals clear
 - [x] 首次运行报告生成器
 - [x] `carapace skills` CLI 命令
 
-**完成标准：** 基线在 5 个会话后建立，能检测到新工具/路径/域名访问
+**完成标准：** 基线在 20 次调用后建立，能检测到新工具/路径/域名访问
 
 ### Phase 4：打磨与发布（第 6 周）
 
