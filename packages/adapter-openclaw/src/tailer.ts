@@ -60,7 +60,7 @@ export class SessionLogTailer extends EventEmitter {
     }
   }
 
-  async readNewLines(filePath: string): Promise<void> {
+  async readNewLines(filePath: string, _retried = false): Promise<void> {
     // Guard against concurrent reads on the same file to prevent duplicate events
     if (this.pendingReads.has(filePath)) return;
     this.pendingReads.add(filePath);
@@ -89,6 +89,8 @@ export class SessionLogTailer extends EventEmitter {
         }
       }
 
+      let validCount = 0;
+      let malformedCount = 0;
       const fd = await open(filePath, "r");
       try {
         const buf = Buffer.alloc(readSize);
@@ -116,13 +118,27 @@ export class SessionLogTailer extends EventEmitter {
           if (!line.trim()) continue;
           try {
             this.emit("entry", JSON.parse(line) as SessionLogEntry, filePath);
+            validCount++;
           } catch (parseErr) {
+            malformedCount++;
             // Log malformed lines to help diagnose parsing issues
             process.stderr.write(`[carapace/tailer] skipping malformed JSON line: ${String(parseErr).slice(0, 100)}\n`);
           }
         }
       } finally {
         try { await fd.close(); } catch { /* fd already closed or invalid */ }
+      }
+
+      // Heuristic: if ALL lines from a non-zero offset were malformed JSON,
+      // the file was likely truncated and rewritten with larger content
+      // (log rotation where new file size >= old offset). Reset and re-read.
+      // Guard: only retry once to prevent infinite recursion on permanently
+      // corrupted files where all content is malformed JSON.
+      if (validCount === 0 && malformedCount > 0 && offset > 0 && !_retried) {
+        this.fileOffsets.set(filePath, 0);
+        this.pendingReads.delete(filePath);
+        await this.readNewLines(filePath, true);
+        return;
       }
     } catch (err) {
       // Clean up offset tracking for deleted files
