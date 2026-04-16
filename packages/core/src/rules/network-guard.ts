@@ -209,6 +209,22 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "通过混合十六进制/十进制编码 IP 地址连接——绕过域名检测的 C2 手法。",
   },
 
+  // Tencent Cloud metadata
+  {
+    pattern: /\bmetadata\.tencentyun\.com\b/i,
+    severity: "critical",
+    title: "腾讯云元数据访问",
+    description: "访问腾讯云 CVM 元数据服务 (metadata.tencentyun.com)。",
+  },
+
+  // DNS wildcard services that resolve to embedded IPs (metadata bypass)
+  {
+    pattern: /169\.254\.169\.254\.(?:nip|sslip|xip)\.io/i,
+    severity: "critical",
+    title: "DNS 通配符元数据绕过",
+    description: "通过 DNS 通配符服务 (nip.io/sslip.io) 访问云元数据——绕过域名检测。",
+  },
+
   // Alibaba Cloud metadata
   {
     pattern: /100\.100\.100\.200/,
@@ -231,6 +247,20 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     severity: "medium",
     title: "本地回环地址访问",
     description: "连接到 localhost/127.x.x.x/0.0.0.0——可能是 SSRF 攻击。",
+  },
+  // Short-form loopback IP addresses (127.1, 127.0.1, etc.)
+  {
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/127\.\d{1,3}(?:\.\d{1,3})?(?:[:/]|$)/i,
+    severity: "medium",
+    title: "短格式回环地址访问",
+    description: "通过短格式回环 IP（127.1 等）连接——SSRF 绕过手法。",
+  },
+  // Bare 0 as IP (resolves to 0.0.0.0 in most HTTP libraries)
+  {
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/0(?:[:/]|$)/,
+    severity: "medium",
+    title: "零地址访问",
+    description: "连接到 0 地址（解析为 0.0.0.0）——SSRF 绕过手法。",
   },
   {
     pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/\[::1?\](?:[:/]|$)/i,

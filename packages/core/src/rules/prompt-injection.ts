@@ -83,13 +83,27 @@ const MAX_TEXT_COUNT = 1000;
 // tag characters (E0001-E007F via surrogate pairs)
 const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\u2060-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC01-\uDC7F]/g;
 
+// Common Cyrillic-to-Latin confusable mapping (lowercase + uppercase)
+// Prevents bypass via Cyrillic homoglyphs that NFKC normalization does not collapse.
+const CYRILLIC_CONFUSABLES: Record<string, string> = {
+  "\u0430": "a", "\u0435": "e", "\u0451": "e", "\u043E": "o",
+  "\u0440": "p", "\u0441": "c", "\u0443": "y", "\u0445": "x",
+  "\u0456": "i", "\u0458": "j", "\u04BB": "h",
+  "\u0410": "A", "\u0412": "B", "\u0415": "E", "\u041A": "K",
+  "\u041C": "M", "\u041D": "H", "\u041E": "O", "\u0420": "P",
+  "\u0421": "C", "\u0422": "T", "\u0425": "X",
+};
+const CYRILLIC_CONFUSABLE_RE = new RegExp("[" + Object.keys(CYRILLIC_CONFUSABLES).join("") + "]", "g");
+
 function normalizeForDetection(text: string): string {
   // NFKC normalization to collapse combining characters AND compatibility equivalents
   // (fullwidth Latin, superscripts, Roman numerals, etc.), then strip invisible chars,
-  // then normalize exotic whitespace (non-breaking space U+00A0, em-space U+2003, etc.)
-  // to ASCII space so \s+ in patterns matches consistently.
+  // then map Cyrillic homoglyphs to Latin equivalents, then normalize exotic whitespace
+  // (non-breaking space U+00A0, em-space U+2003, etc.) to ASCII space so \s+ in
+  // patterns matches consistently.
   return text.normalize("NFKC")
     .replace(INVISIBLE_CHARS_RE, "")
+    .replace(CYRILLIC_CONFUSABLE_RE, ch => CYRILLIC_CONFUSABLES[ch] || ch)
     .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, " ");
 }
 

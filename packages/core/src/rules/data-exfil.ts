@@ -32,6 +32,13 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /AIzaSy[a-zA-Z0-9_-]{33}/, severity: "critical", title: "Google API Key 出现在请求中", category: "credential_leak" },
   { pattern: /xox[bpsar]-[0-9a-zA-Z-]{20,}/, severity: "critical", title: "Slack Token 出现在请求中", category: "credential_leak" },
   { pattern: /-----BEGIN\s+(RSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----/i, severity: "critical", title: "私钥出现在请求中", category: "credential_leak" },
+  { pattern: /\bglpat-[A-Za-z0-9_-]{20,}/, severity: "critical", title: "GitLab Personal Access Token 出现在请求中", category: "credential_leak" },
+  { pattern: /\bnpm_[A-Za-z0-9]{36,}/, severity: "critical", title: "NPM Token 出现在请求中", category: "credential_leak" },
+  { pattern: /\bpypi-[A-Za-z0-9_-]{16,}/, severity: "critical", title: "PyPI Token 出现在请求中", category: "credential_leak" },
+  { pattern: /\bhf_[A-Za-z0-9]{20,}/, severity: "critical", title: "HuggingFace Token 出现在请求中", category: "credential_leak" },
+  { pattern: /\bSG\.[A-Za-z0-9_-]{22,}\.[A-Za-z0-9_-]{22,}/, severity: "critical", title: "SendGrid API Key 出现在请求中", category: "credential_leak" },
+  { pattern: /\bdop_v1_[a-f0-9]{64}/, severity: "critical", title: "DigitalOcean Token 出现在请求中", category: "credential_leak" },
+  { pattern: /\bhvs\.[A-Za-z0-9_-]{20,}/, severity: "critical", title: "HashiCorp Vault Token 出现在请求中", category: "credential_leak" },
 
   // Base64 encoded credentials (~40+ chars covers typical API keys/tokens)
   // Includes base64url charset (-_ instead of +/) used by JWTs and URL-safe tokens
@@ -59,11 +66,11 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /discord(?:app)?\.com\/api\/webhooks\//i, severity: "critical", title: "通过 Discord Webhook 发送数据", category: "exfil_destination" },
 
   // 管道组合：读取敏感文件并发送
-  { pattern: /cat\s+.*\.(pem|key|env|credentials|secret).*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "读取敏感文件并通过网络发送", category: "pipe_exfil" },
+  { pattern: /(?:cat|head|tail|dd|strings|base64|xxd|tac|nl|less|more)\s+.*\.(pem|key|env|credentials|secret).*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "读取敏感文件并通过网络发送", category: "pipe_exfil" },
   { pattern: /(curl|wget|nc)\s+.*<\s*.*\.(pem|key|env|credentials|secret)/i, severity: "critical", title: "将敏感文件重定向到网络工具", category: "pipe_exfil" },
   // Redirect credential paths (not just extensions) to network tools
   { pattern: /(nc|ncat)\s+\S+\s+\d+\s*<\s*.*~?\/?\.(?:ssh|aws|config\/gcloud)\//i, severity: "critical", title: "凭证文件重定向到 netcat", category: "pipe_exfil" },
-  { pattern: /cat\s+.*~?\/?\.(?:ssh|aws)\/(id_rsa|id_ed25519|credentials).*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "读取凭证文件并通过网络发送", category: "pipe_exfil" },
+  { pattern: /(?:cat|head|tail|dd|strings|base64|xxd|tac|nl|less|more)\s+.*~?\/?\.(?:ssh|aws)\/(id_rsa|id_ed25519|credentials).*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "读取凭证文件并通过网络发送", category: "pipe_exfil" },
 
   // GPG 私钥通过网络导出
   { pattern: /gpg\s+.*--export-secret-keys.*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "GPG 私钥导出并通过网络发送", category: "pipe_exfil" },
@@ -78,9 +85,9 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /\brsync\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud)\//i, severity: "critical", title: "通过 rsync 外泄凭证文件", category: "pipe_exfil" },
 
   // socat / openssl s_client data exfiltration
-  { pattern: /cat\s+.*\.(pem|key|env|credentials|secret).*\|\s*(socat|openssl)/i, severity: "critical", title: "通过 socat/openssl 外泄敏感文件", category: "pipe_exfil" },
+  { pattern: /(?:cat|head|tail|dd|strings|base64|xxd|tac|nl|less|more)\s+.*\.(pem|key|env|credentials|secret).*\|\s*(socat|openssl)/i, severity: "critical", title: "通过 socat/openssl 外泄敏感文件", category: "pipe_exfil" },
   { pattern: /(socat|openssl\s+s_client)\s+.*<\s*.*\.(pem|key|env|credentials|secret)/i, severity: "critical", title: "将敏感文件重定向到 socat/openssl", category: "pipe_exfil" },
-  { pattern: /cat\s+.*~?\/?\.(?:ssh|aws)\/(id_rsa|id_ed25519|credentials).*\|\s*(socat|openssl)/i, severity: "critical", title: "通过 socat/openssl 外泄凭证文件", category: "pipe_exfil" },
+  { pattern: /(?:cat|head|tail|dd|strings|base64|xxd|tac|nl|less|more)\s+.*~?\/?\.(?:ssh|aws)\/(id_rsa|id_ed25519|credentials).*\|\s*(socat|openssl)/i, severity: "critical", title: "通过 socat/openssl 外泄凭证文件", category: "pipe_exfil" },
 
   // /dev/tcp data exfiltration (non-shell redirect)
   { pattern: />\s*\/dev\/tcp\/\S+\/\d+/i, severity: "critical", title: "通过 /dev/tcp 外泄数据", category: "pipe_exfil" },

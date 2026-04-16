@@ -102,6 +102,18 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   // KeePass 密码数据库
   { pattern: /[/\\][^/\\]*\.kdbx?\b/i, severity: "critical", title: "KeePass 密码数据库访问", category: "credentials" },
 
+  // Heroku / Stripe / DigitalOcean CLI credentials
+  { pattern: /[/\\]\.config[/\\]heroku[/\\]/i, severity: "high", title: "Heroku CLI 凭证访问", category: "credentials" },
+  { pattern: /[/\\]\.config[/\\]stripe[/\\]/i, severity: "high", title: "Stripe CLI 凭证访问", category: "credentials" },
+  { pattern: /[/\\]\.config[/\\]doctl[/\\]/i, severity: "high", title: "DigitalOcean CLI 凭证访问", category: "credentials" },
+
+  // Hub (GitHub CLI alternative) and 1Password CLI
+  { pattern: /[/\\]\.config[/\\]hub\b/i, severity: "high", title: "Hub CLI Token 访问", category: "credentials" },
+  { pattern: /[/\\]\.config[/\\]op[/\\]/i, severity: "high", title: "1Password CLI 配置访问", category: "credentials" },
+
+  // Teleport SSH credentials
+  { pattern: /[/\\]\.tsh[/\\]/i, severity: "high", title: "Teleport SSH 凭证访问", category: "credentials" },
+
   // Windows 凭证
   { pattern: /[/\\]Windows[/\\]System32[/\\]config[/\\](SAM|SECURITY|SYSTEM)/i, severity: "critical", title: "Windows 凭证存储访问", category: "credentials" },
 ];

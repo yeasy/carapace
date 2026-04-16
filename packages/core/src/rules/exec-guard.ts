@@ -37,7 +37,7 @@ function normalizeCommand(text: string): string {
     .replace(/\$[@*_]/g, "") // Strip $@, $*, $_ special variables (expand to empty in non-function context)
     .replace(/'([a-zA-Z0-9]+)'/g, "$1") // Strip shell single-quoted alphanumeric segments ('cu''rl' → curl)
     .replace(/"([a-zA-Z0-9]+)"/g, "$1") // Strip shell double-quoted alphanumeric segments ("cu""rl" → curl)
-    .replace(/\$\{IFS\}|\$IFS\b/g, " ") // Normalize $IFS to space
+    .replace(/\$\{IFS[^}]*\}|\$IFS\b/g, " ") // Normalize $IFS and variants (${IFS:0:1}, ${IFS%%?}, etc.) to space
     .replace(/\$\{[^}]*:-([^}]+)\}/g, "$1") // Decode ${x:-default} parameter expansion
     .replace(/\$\{[^}]*:=([^}]+)\}/g, "$1") // Decode ${x:=val} assignment expansion (expands to val)
     .replace(/\$\{#?\w+\}/g, ""); // Strip remaining ${var} expansions
@@ -53,13 +53,13 @@ interface DangerPattern {
 const DANGER_PATTERNS: DangerPattern[] = [
   // ── 远程代码执行 ──
   {
-    pattern: /(?:\/[\w.+-]+\/)*curl\s.*\|.*\b(sh|bash|zsh|dash|ksh|fish|csh|tcsh|ash|python[23]?|ruby|node|perl)\b/i,
+    pattern: /(?:\/[\w.+-]+\/)*curl\s.*\|.*\b(sh|bash|zsh|dash|ksh|fish|csh|tcsh|ash|mksh|pwsh|python[23]?|ruby|node|perl)\b/i,
     severity: "critical",
     title: "远程代码执行：curl 管道到 shell",
     description: "下载并立即执行远程代码，这是恶意软件安装的头号向量。",
   },
   {
-    pattern: /(?:\/[\w.+-]+\/)*wget\s.*\|.*\b(sh|bash|zsh|dash|ksh|fish|csh|tcsh|ash|python[23]?|ruby|node|perl)\b/i,
+    pattern: /(?:\/[\w.+-]+\/)*wget\s.*\|.*\b(sh|bash|zsh|dash|ksh|fish|csh|tcsh|ash|mksh|pwsh|python[23]?|ruby|node|perl)\b/i,
     severity: "critical",
     title: "远程代码执行：wget 管道到 shell",
     description: "通过 wget 下载并立即执行远程代码。",
@@ -71,6 +71,12 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "critical",
     title: "远程代码执行：进程替换",
     description: "通过进程替换下载并执行远程代码——绕过管道检测的常见手法。",
+  },
+  {
+    pattern: /(?:\/[\w.+-]+\/)*(?:curl|wget)\s.*>\s*>\(\s*(sh|bash|zsh|dash|ksh|fish|csh|tcsh|ash|mksh|pwsh|python[23]?|ruby|node|perl)\b/i,
+    severity: "critical",
+    title: "远程代码执行：输出进程替换",
+    description: "通过输出进程替换下载并执行远程代码——绕过管道检测的手法。",
   },
 
   // ── 编码混淆执行 ──
@@ -141,7 +147,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "通过 here-string 向 shell 注入包含网络工具的命令。",
   },
   {
-    pattern: /\b(bash|sh|zsh)\s.*<<\s*['"]?\w+['"]?\s*\n/i,
+    pattern: /\b(bash|sh|zsh)\s.*<<\s*['"]?\w+['"]?\s*($|\n|;\s)/i,
     severity: "high",
     title: "heredoc shell 注入",
     description: "通过 heredoc (<<) 向 shell 注入多行命令——可隐藏恶意载荷。",
@@ -363,22 +369,28 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 破坏性操作 ──
   {
-    pattern: /\brm\s+(-{1,2}[\w][\w=-]*\s+)*(-[rRfF]{2,}|-[rR]\s[^/]*-[fF]|-[fF]\s[^/]*-[rR]|--recursive\s[^/]*--force|--force\s[^/]*--recursive)\s+\/(?:\s|$|\*)/i,
+    pattern: /\brm\s+(-{1,2}[\w][\w=-]*\s+)*(-[rRfF]{2,}|-[rR]\s[^/]*-[fF]|-[fF]\s[^/]*-[rR]|--recursive\s[^/]*--force|--force\s[^/]*--recursive|-[rR]\s[^/]*--force|--force\s[^/]*-[rR]|-[fF]\s[^/]*--recursive|--recursive\s[^/]*-[fF])\s+\/(?:\s|$|\*)/i,
     severity: "critical",
     title: "从根目录递归强制删除",
     description: "尝试从根目录递归删除文件。",
   },
   {
-    pattern: /\brm\s+(-{1,2}[\w][\w=-]*\s+)*(-[rRfF]{2,}|-[rR]\s[^/]*-[fF]|-[fF]\s[^/]*-[rR]|--recursive\s[^/]*--force|--force\s[^/]*--recursive)\s+\/\w/i,
+    pattern: /\brm\s+(-{1,2}[\w][\w=-]*\s+)*(-[rRfF]{2,}|-[rR]\s[^/]*-[fF]|-[fF]\s[^/]*-[rR]|--recursive\s[^/]*--force|--force\s[^/]*--recursive|-[rR]\s[^/]*--force|--force\s[^/]*-[rR]|-[fF]\s[^/]*--recursive|--recursive\s[^/]*-[fF])\s+\/\w/i,
     severity: "high",
     title: "递归强制删除绝对路径",
     description: "尝试从绝对路径递归删除文件——可能导致严重数据丢失。",
   },
   {
-    pattern: /\brm\s+(-{1,2}[\w][\w=-]*\s+)*(-[rRfF]{2,}|-[rR]\s[^~]*-[fF]|-[fF]\s[^~]*-[rR]|--recursive\s[^~]*--force|--force\s[^~]*--recursive)\s+~(?:\s|$|\/)/i,
+    pattern: /\brm\s+(-{1,2}[\w][\w=-]*\s+)*(-[rRfF]{2,}|-[rR]\s[^~]*-[fF]|-[fF]\s[^~]*-[rR]|--recursive\s[^~]*--force|--force\s[^~]*--recursive|-[rR]\s[^~]*--force|--force\s[^~]*-[rR]|-[fF]\s[^~]*--recursive|--recursive\s[^~]*-[fF])\s+~(?:\s|$|\/)/i,
     severity: "high",
     title: "递归强制删除用户主目录",
     description: "尝试递归删除用户主目录。",
+  },
+  {
+    pattern: /\brm\s+.*--no-preserve-root\b/i,
+    severity: "critical",
+    title: "rm --no-preserve-root 绕过安全检查",
+    description: "使用 --no-preserve-root 绕过 rm 的根目录删除保护——恶意删除手法。",
   },
   {
     pattern: /\b(mkfs|dd\s+if=.*of=\/dev\/)/i,
@@ -709,7 +721,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
 // ── 工具名检测 ──
 
 const EXEC_TOOL_NAMES = new Set([
-  "exec", "bash", "shell", "run_command", "execute",
+  "exec", "eval", "bash", "shell", "run_command", "execute",
   "terminal", "cmd", "powershell", "subprocess", "system", "spawn",
   "computer", "run", "invoke",
   "sh", "zsh", "ssh", "cli", "script", "evaluate", "repl",
@@ -798,7 +810,8 @@ export const execGuardRule: SecurityRule = {
         .replace(/\s*\r?\n\s*\|/g, " |")
         .replace(/[;&]\s*\r?\n\s*/g, "; ")
         .replace(/&&\s*\r?\n\s*/g, "&& ")
-        .replace(/\|\|\s*\r?\n\s*/g, "|| ");
+        .replace(/\|\|\s*\r?\n\s*/g, "|| ")
+        .replace(/\r?\n/g, "; ");
 
       if (command.length > MAX_SCAN) {
         const CHUNK = 4096;
