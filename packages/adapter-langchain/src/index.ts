@@ -383,7 +383,7 @@ export class CarapaceBridge {
 
             // Validate each item has required fields
             for (let i = 0; i < checks.length; i++) {
-              if (!checks[i] || typeof checks[i] !== "object" || !checks[i].toolName || !checks[i].toolParams || typeof checks[i].toolParams !== "object" || Array.isArray(checks[i].toolParams)) {
+              if (!checks[i] || typeof checks[i] !== "object" || !checks[i].toolName || typeof checks[i].toolName !== "string" || !checks[i].toolParams || typeof checks[i].toolParams !== "object" || Array.isArray(checks[i].toolParams)) {
                 res.writeHead(400, { "Content-Type": "application/json" });
                 res.end(JSON.stringify({
                   error: `Item ${i}: missing required fields toolName, toolParams`,

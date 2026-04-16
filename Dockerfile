@@ -36,7 +36,7 @@ COPY --from=builder /build/packages/cli/package.json ./packages/cli/
 COPY --from=builder /build/packages/cli/dist/ ./packages/cli/dist/
 
 # Remove dev dependencies to keep image small
-RUN npm prune --omit=dev || true && npm cache clean --force || true
+RUN npm prune --omit=dev || true; npm cache clean --force || true
 
 # Run as non-root user for security
 RUN addgroup -S carapace && adduser -S carapace -G carapace

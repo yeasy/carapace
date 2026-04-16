@@ -144,7 +144,12 @@ export class DashboardServer {
     this.server.keepAliveTimeout = 5_000;
 
     return new Promise((resolve, reject) => {
-      const onError = (err: Error) => reject(err);
+      const onError = (err: Error) => {
+        const srv = this.server;
+        this.server = null;
+        srv?.close();
+        reject(err);
+      };
       this.server!.on("error", onError);
       this.server!.listen(port, host, () => {
         this.server!.removeListener("error", onError);
@@ -241,6 +246,7 @@ export class DashboardServer {
 
     // ── SSE endpoint ──
     if (req.method === "GET" && urlPath === "/api/events/stream") {
+      if (!this.requireAuth(req, res)) return;
       // Limit concurrent SSE connections to prevent resource exhaustion
       const MAX_SSE_CLIENTS = 50;
       if (this.sseClients.size >= MAX_SSE_CLIENTS) {
@@ -278,6 +284,7 @@ export class DashboardServer {
     }
 
     if (req.method === "GET" && urlPath === "/api/events") {
+      if (!this.requireAuth(req, res)) return;
       const params = new URL(url, "http://localhost").searchParams;
       const query: EventQuery = {};
       const VALID_CATEGORIES = new Set(["exec_danger", "path_violation", "network_suspect", "rate_anomaly", "baseline_drift", "prompt_injection", "data_exfil"]);
@@ -305,6 +312,7 @@ export class DashboardServer {
     }
 
     if (req.method === "GET" && urlPath === "/api/stats") {
+      if (!this.requireAuth(req, res)) return;
       const params = new URL(url, "http://localhost").searchParams;
       const sinceVal = parseInt(params.get("since") ?? "", 10);
       const since = isNaN(sinceVal) ? undefined : sinceVal;
@@ -314,6 +322,7 @@ export class DashboardServer {
     }
 
     if (req.method === "GET" && urlPath === "/api/timeseries") {
+      if (!this.requireAuth(req, res)) return;
       const params = new URL(url, "http://localhost").searchParams;
       const bucketVal = parseInt(params.get("bucket") ?? "60000", 10);
       const bucketMs = isNaN(bucketVal) || bucketVal < 1000 ? 60000 : Math.min(bucketVal, 86400000);
@@ -326,11 +335,13 @@ export class DashboardServer {
 
     // ── Policy API ──
     if (req.method === "GET" && urlPath === "/api/policies") {
+      if (!this.requireAuth(req, res)) return;
       this.json(res, this.policyManager.listPolicies());
       return;
     }
 
     if (req.method === "GET" && urlPath === "/api/policies/active") {
+      if (!this.requireAuth(req, res)) return;
       const active = this.policyManager.resolveActivePolicy();
       this.json(res, active ?? { name: null });
       return;
