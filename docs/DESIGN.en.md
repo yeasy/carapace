@@ -696,9 +696,9 @@ carapace dismissals clear
 ### Phase 1: Core Rules (Week 2)
 
 **Deliverables:**
-- [x] ExecGuard: 98 dangerous command patterns
-- [x] PathGuard: 43 sensitive path patterns (Windows, macOS, Linux)
-- [x] NetworkGuard: 34 suspicious domain patterns (20 categories)
+- [x] ExecGuard: 99 dangerous command patterns
+- [x] PathGuard: 47 sensitive path patterns (Windows, macOS, Linux)
+- [x] NetworkGuard: 36 suspicious domain patterns (20 categories)
 - [x] Rule engine with priority and conflict resolution
 - [x] Console alerting (colored stderr)
 

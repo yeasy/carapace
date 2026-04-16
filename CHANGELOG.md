@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.5] - 2026-04-15
+
+### Fixed
+- **ExecGuard**: `${x:=val}` assignment expansion bypass — now extracts value for pattern matching.
+- **ExecGuard**: `$@`/`$*`/`$_` special variable bypass — now stripped during normalization.
+- **ExecGuard**: `rm -rf /path` false positive — split into critical (bare `/` and `/*`) and high (other absolute paths).
+- **ExecGuard**: Added `execute_code`/`executeCode` to recognized exec tool names.
+- **ExecGuard**: Output process substitution (`> >(bash)`) bypass — now detected as RCE.
+- **ExecGuard**: Mixed short+long `rm` flags (`-r --force`) bypass — all combinations now detected.
+- **ExecGuard**: `rm --no-preserve-root` bypass — now detected as critical.
+- **ExecGuard**: `${IFS:0:1}` and other IFS substring variants — now normalized to space.
+- **ExecGuard**: Heredoc pattern no longer requires trailing newline.
+- **ExecGuard**: Bare newline command separation — normalized to semicolons for pattern matching.
+- **ExecGuard**: Added `eval` to recognized exec tool names.
+- **ExecGuard**: Added `mksh`/`pwsh` to shell lists in RCE patterns.
+- **PromptInjection**: Cyrillic homoglyph bypass — 22 confusable characters now normalized to Latin equivalents.
+- **DataExfil**: Pipe exfiltration patterns expanded from `cat`-only to 11 file-reading commands.
+- **DataExfil**: Fixed `let` to `const` for never-reassigned variable.
+- **NetworkGuard**: Short-form loopback IPs (`127.1`, `127.0.1`) and bare zero (`http://0`) now detected.
+- **Dashboard**: GET API endpoints now require auth when `apiToken` is configured.
+- **Dashboard**: Server error handler during listen now properly cleans up server instance.
+- **Tailer**: Fixed potential infinite recursion and improved UTF-8 boundary tracking in session log tailer.
+- **LangChain adapter**: Added CSRF protection via Content-Type enforcement on POST requests.
+- **LangChain adapter**: Added `typeof` check for `toolName` field validation.
+- **CI**: Added npm caching to `actions/setup-node` steps and updated `docker/build-push-action` to v6.
+- **Docs**: Updated stale pattern counts across README and DESIGN docs.
+
+### Added
+- 7 new DataExfil credential patterns: GitLab PAT, NPM, PyPI, HuggingFace, SendGrid, DigitalOcean, HashiCorp Vault.
+- 6 new PathGuard sensitive paths: Heroku, Stripe, DigitalOcean CLI, Hub, 1Password, Teleport SSH.
+- 2 new NetworkGuard patterns: Tencent Cloud metadata, DNS wildcard metadata bypass.
+- 40 new tests covering all above fixes (1679 total).
+
 ## [0.10.3] - 2026-04-06
 
 ### Fixed
