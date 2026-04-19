@@ -2,6 +2,51 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.6] - 2026-04-18
+
+### Fixed
+- **ExecGuard**: ReDoS-prone `.*` changed to non-greedy `.*?` in find-delete, Python exec/pty, and Python pickle/marshal/yaml patterns.
+- **PathGuard**: ReDoS-prone `.*` changed to `.*?` in Chromium, Firefox, and Safari browser data detection patterns.
+- **PathGuard**: `Cookies.binarycookies` pattern narrowed to require `Library/` or `Caches/` prefix, reducing false positives.
+- **PromptInjection**: ReDoS-prone `.*` changed to `.*?` in Base64 decode+execute pattern.
+- **PromptInjection**: Renamed `CYRILLIC_CONFUSABLES` to `HOMOGLYPH_CONFUSABLES` for broader coverage.
+- **Dashboard**: `getPort()` null safety — `typeof addr === "object"` returns true for `null` in JavaScript, now explicitly checked.
+- **Dashboard**: `timeSeries()` validates `bucketMs` is positive integer.
+- **Dashboard**: GET endpoints (`/api/events`, `/api/stats`, `/api/timeseries`) no longer require auth for embedded dashboard UI.
+- **CLI**: Version read wrapped in try/catch for bundled environments where `package.json` is unavailable.
+- **NetworkGuard**: Unicode ideographic full stop (U+3002, U+FF61) normalized to `.` in URL decoding per WHATWG spec.
+
+### Added
+- **ExecGuard**: `find / -delete` destructive operation detection (critical).
+- **ExecGuard**: `launchctl load/submit` macOS persistence detection (high).
+- **ExecGuard**: `setcap` Linux capabilities privilege escalation (critical).
+- **ExecGuard**: `install -m SUID/SGID` bit setting detection (critical).
+- **ExecGuard**: `LD_PRELOAD`/`LD_LIBRARY_PATH` injection detection (high).
+- **ExecGuard**: `/etc/ld.so.preload` system-level persistence detection (critical).
+- **ExecGuard**: `DYLD_INSERT_LIBRARIES` macOS library injection detection (high).
+- **ExecGuard**: Python pickle/marshal/yaml deserialization RCE detection (critical).
+- **ExecGuard**: `update-alternatives` interpreter replacement backdoor detection (critical).
+- **ExecGuard**: Windows LOLBins — `mshta`, `regsvr32`, `msiexec` remote execution (critical).
+- **PathGuard**: Chromium-family browsers expanded (Brave, Edge, Opera, Vivaldi).
+- **PathGuard**: macOS `Cookies.binarycookies`, `/etc/master.passwd`, TCC.db detection.
+- **PathGuard**: Windows Credential Manager vault access detection.
+- **PathGuard**: AWS SSO cache token, Alibaba/Tencent/Huawei cloud credential detection.
+- **PathGuard**: Terraform tfstate, `.htpasswd`, WireGuard/OpenVPN config detection.
+- **PathGuard**: Solana and Monero crypto wallet access detection.
+- **PathGuard**: GitLab Runner and GitHub CLI credential access detection.
+- **NetworkGuard**: `file://` scheme SSRF and DNS rebinding domain detection.
+- **NetworkGuard**: OOB interaction services expanded (burpcollaborator.net, canarytokens.com, requestrepo.com).
+- **DataExfil**: sftp credential exfiltration detection.
+- **DataExfil**: `curl --json @file` upload detection.
+- **DataExfil**: `/dev/udp` exfiltration (extending `/dev/tcp` coverage).
+- **DataExfil**: Hex encoding credential exfiltration via xxd/hexdump/od.
+- **DataExfil**: docker/kube credential paths added to scp/rsync/sftp patterns.
+- **PromptInjection**: Japanese language injection patterns (指示覆盖, システムプロンプト泄漏).
+- **PromptInjection**: Korean language injection patterns (지시 무시, 시스템 프롬프트 泄漏).
+- **PromptInjection**: Greek and Armenian homoglyph normalization (17 additional confusable characters).
+- **PromptInjection**: Base64 decode+execute long-string jailbreak detection.
+- 55 new tests (1734 total).
+
 ## [0.10.5] - 2026-04-15
 
 ### Fixed

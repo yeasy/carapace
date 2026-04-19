@@ -1,6 +1,6 @@
 {
   "name": "@carapace/adapter-openclaw",
-  "version": "0.10.5",
+  "version": "0.10.6",
   "description": "OpenClaw plugin adapter for Carapace runtime security monitor.",
   "type": "module",
   "main": "dist/index.js",
