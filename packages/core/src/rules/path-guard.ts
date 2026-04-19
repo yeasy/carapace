@@ -62,9 +62,10 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   { pattern: /[/\\]\.cargo[/\\]credentials/i, severity: "high", title: "Cargo 仓库凭证访问", category: "credentials" },
 
   // 浏览器数据
-  { pattern: /[/\\](Chrome|Chromium|Google Chrome)[/\\].*\b(Login Data|Cookies|History|Web Data)\b/i, severity: "critical", title: "Chrome 浏览器数据访问", category: "browser" },
-  { pattern: /[/\\](Firefox|Mozilla)[/\\].*\b(logins\.json|cookies\.sqlite|key[34]\.db)\b/i, severity: "critical", title: "Firefox 浏览器数据访问", category: "browser" },
-  { pattern: /[/\\]Safari[/\\].*\b(Cookies\.binarycookies|History\.db)\b/i, severity: "critical", title: "Safari 浏览器数据访问", category: "browser" },
+  { pattern: /[/\\](Chrome|Chromium|Google Chrome|BraveSoftware|Brave-Browser|Microsoft Edge|Opera|Vivaldi)[/\\].*?\b(Login Data|Cookies|History|Web Data)\b/i, severity: "critical", title: "Chromium 浏览器数据访问", category: "browser" },
+  { pattern: /[/\\](Firefox|Mozilla)[/\\].*?\b(logins\.json|cookies\.sqlite|key[34]\.db)\b/i, severity: "critical", title: "Firefox 浏览器数据访问", category: "browser" },
+  { pattern: /[/\\]Safari[/\\].*?\b(Cookies\.binarycookies|History\.db)\b/i, severity: "critical", title: "Safari 浏览器数据访问", category: "browser" },
+  { pattern: /[/\\](?:Library|Caches)[/\\].*?Cookies\.binarycookies\b/i, severity: "critical", title: "macOS Cookie 数据库访问", category: "browser" },
 
   // Linux procfs (environment variables, memory, command line, root filesystem traversal)
   { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\](environ|mem|cmdline)/i, severity: "critical", title: "Linux /proc 敏感文件访问", category: "system" },
@@ -72,7 +73,7 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\](fd|maps|smaps|status|stat|io|net)\b/i, severity: "high", title: "Linux /proc 信息泄露", category: "system" },
 
   // 系统认证
-  { pattern: /[/\\]etc[/\\](passwd|shadow|sudoers)/i, severity: "high", title: "系统认证文件访问", category: "system" },
+  { pattern: /[/\\]etc[/\\](passwd|shadow|sudoers|master\.passwd)/i, severity: "high", title: "系统认证文件访问", category: "system" },
 
   // macOS 安全偏好
   { pattern: /[/\\]Library[/\\]Preferences[/\\]com\.apple\.security/i, severity: "high", title: "macOS 安全偏好访问", category: "system" },
@@ -116,6 +117,40 @@ const SENSITIVE_PATHS: SensitivePath[] = [
 
   // Windows 凭证
   { pattern: /[/\\]Windows[/\\]System32[/\\]config[/\\](SAM|SECURITY|SYSTEM)/i, severity: "critical", title: "Windows 凭证存储访问", category: "credentials" },
+  { pattern: /[/\\]Microsoft[/\\]Credentials[/\\]/i, severity: "critical", title: "Windows 凭证管理器访问", category: "credentials" },
+
+  // AWS SSO cache tokens
+  { pattern: /[/\\]\.aws[/\\]sso[/\\]/i, severity: "critical", title: "AWS SSO 缓存 Token 访问", category: "credentials" },
+
+  // Alibaba Cloud credentials
+  { pattern: /[/\\]\.aliyun[/\\](?:config|credentials)\b/i, severity: "critical", title: "阿里云凭证访问", category: "credentials" },
+
+  // Tencent Cloud credentials
+  { pattern: /[/\\]\.tencentcloud[/\\]/i, severity: "critical", title: "腾讯云凭证访问", category: "credentials" },
+
+  // Huawei Cloud credentials
+  { pattern: /[/\\]\.huaweicloud[/\\]/i, severity: "high", title: "华为云凭证访问", category: "credentials" },
+
+  // Terraform state (often contains embedded secrets)
+  { pattern: /[/\\]terraform\.tfstate(?:\.backup)?\b/i, severity: "high", title: "Terraform 状态文件访问", category: "credentials" },
+
+  // Apache password file
+  { pattern: /[/\\]\.htpasswd\b/i, severity: "high", title: "Apache 密码文件访问", category: "credentials" },
+
+  // macOS TCC privacy database
+  { pattern: /[/\\]TCC\.db\b/i, severity: "critical", title: "macOS TCC 隐私数据库访问", category: "system" },
+
+  // VPN configuration (contain private keys/passwords)
+  { pattern: /[/\\]wireguard[/\\].*\.conf\b/i, severity: "high", title: "WireGuard 配置访问", category: "credentials" },
+  { pattern: /[/\\]openvpn[/\\]/i, severity: "high", title: "OpenVPN 配置访问", category: "credentials" },
+
+  // Additional crypto wallets
+  { pattern: /[/\\]\.config[/\\]solana[/\\]/i, severity: "critical", title: "Solana 钱包访问", category: "crypto_wallet" },
+  { pattern: /[/\\]\.bitmonero[/\\]/i, severity: "critical", title: "Monero 钱包访问", category: "crypto_wallet" },
+
+  // CI/CD runner credentials
+  { pattern: /[/\\]\.cache[/\\]gitlab-runner[/\\]/i, severity: "critical", title: "GitLab Runner 凭证访问", category: "credentials" },
+  { pattern: /[/\\]\.config[/\\]gh[/\\]hosts\.yml\b/i, severity: "high", title: "GitHub CLI 凭证访问", category: "credentials" },
 ];
 
 // ── 安全正则匹配（防止 ReDoS） ──

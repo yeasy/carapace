@@ -281,6 +281,14 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "通过 find 搜索凭证文件名——凭证发现与外泄。",
   },
 
+  // ── find -delete 破坏性操作 ──
+  {
+    pattern: /\bfind\s+\/\s+.*?-delete\b/i,
+    severity: "critical",
+    title: "find -delete 从根目录删除",
+    description: "通过 find -delete 从根目录递归删除文件——绕过 rm 检测的破坏性操作。",
+  },
+
   // ── 环境变量外泄 ──
   {
     pattern: /\b(env|printenv)\b.*\|\s*(curl|wget|nc|ncat)/i,
@@ -444,6 +452,12 @@ const DANGER_PATTERNS: DangerPattern[] = [
     title: "systemd 服务启用",
     description: "启用 systemd 服务——可能建立持久化后门。",
   },
+  {
+    pattern: /\blaunchctl\s+(load|submit)\b/i,
+    severity: "high",
+    title: "macOS launchctl 服务注册",
+    description: "通过 launchctl 注册持久化服务——macOS 等效于 systemctl enable。",
+  },
 
   // ── 容器逃逸 ──
   {
@@ -511,6 +525,44 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "high",
     title: "文件不可变标志设置",
     description: "设置文件不可变标志——可用于保护恶意文件不被删除。",
+  },
+
+  // ── Linux capabilities 特权提升 ──
+  {
+    pattern: /\bsetcap\s+cap_\w+/i,
+    severity: "critical",
+    title: "Linux capabilities 设置",
+    description: "通过 setcap 授予文件特权 capabilities——可用于特权提升。",
+  },
+
+  // ── install 命令 SUID/SGID ──
+  {
+    pattern: /\binstall\s+.*-m\s*0?[2-7]\d{3}\b/i,
+    severity: "critical",
+    title: "install 命令设置 SUID/SGID 位",
+    description: "通过 install 命令复制文件并设置 SUID/SGID 位——特权提升。",
+  },
+
+  // ── LD_PRELOAD / DYLD_INSERT_LIBRARIES 注入 ──
+  {
+    pattern: /\bLD_(?:PRELOAD|LIBRARY_PATH)=/i,
+    severity: "high",
+    title: "LD_PRELOAD/LD_LIBRARY_PATH 注入",
+    description: "通过 LD_PRELOAD 或 LD_LIBRARY_PATH 注入共享库——代码注入和特权提升。",
+  },
+  {
+    pattern: /\bDYLD_INSERT_LIBRARIES=/i,
+    severity: "high",
+    title: "macOS DYLD_INSERT_LIBRARIES 注入",
+    description: "通过 DYLD_INSERT_LIBRARIES 注入动态库——macOS 等效于 LD_PRELOAD。",
+  },
+
+  // ── /etc/ld.so.preload 系统级持久化 ──
+  {
+    pattern: />>\s*\/etc\/ld\.so\.preload\b/i,
+    severity: "critical",
+    title: "/etc/ld.so.preload 注入",
+    description: "向 /etc/ld.so.preload 追加共享库——系统级持久化后门。",
   },
 
   // ── 文件系统挂载 ──
@@ -605,10 +657,26 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── Python exec/pty/compile 执行 ──
   {
-    pattern: /\bpython[23]?\s+.*?-c\s+['"].*\b(exec|compile|pty\.spawn)\b/i,
+    pattern: /\bpython[23]?\s+.*?-c\s+['"].*?\b(exec|compile|pty\.spawn)\b/i,
     severity: "critical",
     title: "Python 内联 exec/pty 执行",
     description: "通过 Python -c 使用 exec()/compile()/pty.spawn() 执行任意代码。",
+  },
+
+  // ── Python 反序列化代码执行 ──
+  {
+    pattern: /\bpython[23]?\s+.*?-c\s+['"].*?\b(?:pickle\.loads|marshal\.loads|yaml\.(?:unsafe_)?load)\b/i,
+    severity: "critical",
+    title: "Python 反序列化代码执行",
+    description: "通过 pickle/marshal/yaml 反序列化未信任数据——任意代码执行向量。",
+  },
+
+  // ── 系统解释器替换（后门安装） ──
+  {
+    pattern: /\bupdate-alternatives\s+.*--install\s+(?:\/usr)?\/(?:bin|local\/bin)\/(?:python|python3|node|ruby|php|perl|java|bash|sh)\b/i,
+    severity: "critical",
+    title: "系统解释器替换（后门安装）",
+    description: "使用 update-alternatives 替换系统解释器——持久化后门安装。",
   },
 
   // ── openssl 反弹 shell ──
@@ -715,6 +783,26 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "critical",
     title: "Windows certutil 下载/编码",
     description: "通过 certutil 下载文件或编码数据——Windows 常见 LOLBin 手法。",
+  },
+
+  // ── Windows LOLBins ──
+  {
+    pattern: /\bmshta\s+https?:/i,
+    severity: "critical",
+    title: "Windows mshta 远程执行",
+    description: "通过 mshta 执行远程 HTA 文件——Windows LOLBin 代码执行。",
+  },
+  {
+    pattern: /\bregsvr32\s+.*\/i:/i,
+    severity: "critical",
+    title: "Windows regsvr32 远程加载",
+    description: "通过 regsvr32 加载远程 scriptlet——Windows LOLBin 代码执行。",
+  },
+  {
+    pattern: /\bmsiexec\s+.*\/i\s+https?:/i,
+    severity: "critical",
+    title: "Windows msiexec 远程安装",
+    description: "通过 msiexec 远程安装恶意 MSI 包。",
   },
 ];
 

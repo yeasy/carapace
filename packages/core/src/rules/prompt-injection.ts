@@ -45,6 +45,7 @@ const INJECTION_PATTERNS: InjectionPattern[] = [
   // ── 编码绕过 ──
   { pattern: /(?:decode|interpret)\s+(?:this|the\s+following)\s+(?:base64|hex|binary|rot13)/i, severity: "high", title: "编码绕过指令", category: "encoding_bypass" },
   { pattern: /(?:execute|run|eval)\s+(?:this|the\s+following)\s+(?:encoded|encrypted|obfuscated)/i, severity: "critical", title: "编码执行尝试", category: "encoding_bypass" },
+  { pattern: /(?:decode|interpret|execute)\s+.*?[A-Za-z0-9+/]{40,}\s*={0,2}(?:\s|$)/i, severity: "high", title: "可疑 Base64 解码执行", category: "encoding_bypass" },
 
   // ── 间接注入标记 ──
   { pattern: /\[SYSTEM\]\s*:/i, severity: "high", title: "伪造系统消息标记", category: "indirect_injection" },
@@ -64,6 +65,14 @@ const INJECTION_PATTERNS: InjectionPattern[] = [
   { pattern: /(?:输出|显示|打印|告诉我)\s*(?:你的\s*)?(?:系统提示|初始指令|隐藏提示|原始提示)/i, severity: "critical", title: "中文系统提示泄漏", category: "prompt_leak" },
   { pattern: /(?:绕过|关闭|禁用|移除)\s*(?:安全|防护|过滤|限制|保护)/i, severity: "critical", title: "中文安全绕过尝试", category: "jailbreak" },
   { pattern: /(?:不要|别)\s*(?:遵守|遵循|听从|执行)\s*(?:规则|指令|限制|安全)/i, severity: "critical", title: "中文规则绕过尝试", category: "jailbreak" },
+
+  // ── 日本語プロンプトインジェクション ──
+  { pattern: /前の(?:指示|命令|ルール)を(?:無視|忘れ|捨て)/i, severity: "critical", title: "日本語指令覆盖尝试", category: "role_override" },
+  { pattern: /(?:システムプロンプト|初期指示|隠された指示)を(?:表示|出力|教えて)/i, severity: "critical", title: "日本語系统提示泄漏", category: "prompt_leak" },
+
+  // ── 한국어 프롬프트 인젝션 ──
+  { pattern: /이전\s*(?:지시|지침|규칙|명령)를?\s*(?:무시|잊어|버려)/i, severity: "critical", title: "韩语指令覆盖尝试", category: "role_override" },
+  { pattern: /(?:시스템\s*프롬프트|초기\s*지시|숨겨진\s*지시)를?\s*(?:보여|출력|알려)/i, severity: "critical", title: "韩语系统提示泄漏", category: "prompt_leak" },
 ];
 
 // ── 从工具参数中提取所有文本内容 ──
@@ -83,17 +92,25 @@ const MAX_TEXT_COUNT = 1000;
 // tag characters (E0001-E007F via surrogate pairs)
 const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\u2060-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC01-\uDC7F]/g;
 
-// Common Cyrillic-to-Latin confusable mapping (lowercase + uppercase)
-// Prevents bypass via Cyrillic homoglyphs that NFKC normalization does not collapse.
-const CYRILLIC_CONFUSABLES: Record<string, string> = {
+// Homoglyph-to-Latin confusable mapping (Cyrillic, Greek, Armenian)
+// Prevents bypass via lookalike characters that NFKC normalization does not collapse.
+const HOMOGLYPH_CONFUSABLES: Record<string, string> = {
+  // Cyrillic
   "\u0430": "a", "\u0435": "e", "\u0451": "e", "\u043E": "o",
   "\u0440": "p", "\u0441": "c", "\u0443": "y", "\u0445": "x",
   "\u0456": "i", "\u0458": "j", "\u04BB": "h",
   "\u0410": "A", "\u0412": "B", "\u0415": "E", "\u041A": "K",
   "\u041C": "M", "\u041D": "H", "\u041E": "O", "\u0420": "P",
   "\u0421": "C", "\u0422": "T", "\u0425": "X",
+  // Greek
+  "\u03B1": "a", "\u03BF": "o", "\u03B5": "e", "\u03B9": "i",
+  "\u0391": "A", "\u0392": "B", "\u0395": "E", "\u0397": "H",
+  "\u039A": "K", "\u039C": "M", "\u039D": "N", "\u039F": "O",
+  "\u03A1": "P", "\u03A4": "T", "\u03A7": "X",
+  // Armenian
+  "\u0561": "a", "\u0578": "o", "\u0575": "h",
 };
-const CYRILLIC_CONFUSABLE_RE = new RegExp("[" + Object.keys(CYRILLIC_CONFUSABLES).join("") + "]", "g");
+const HOMOGLYPH_CONFUSABLE_RE = new RegExp("[" + Object.keys(HOMOGLYPH_CONFUSABLES).join("") + "]", "g");
 
 function normalizeForDetection(text: string): string {
   // NFKC normalization to collapse combining characters AND compatibility equivalents
@@ -103,7 +120,7 @@ function normalizeForDetection(text: string): string {
   // patterns matches consistently.
   return text.normalize("NFKC")
     .replace(INVISIBLE_CHARS_RE, "")
-    .replace(CYRILLIC_CONFUSABLE_RE, ch => CYRILLIC_CONFUSABLES[ch] || ch)
+    .replace(HOMOGLYPH_CONFUSABLE_RE, ch => HOMOGLYPH_CONFUSABLES[ch] || ch)
     .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, " ");
 }
 

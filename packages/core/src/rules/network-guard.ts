@@ -107,7 +107,7 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
 
   // DNS 外泄/带外交互服务
   {
-    pattern: /\b(dnsbin\.zhack\.ca|ceye\.io|oob\.li|interact\.sh|oast\.\w+)\b/i,
+    pattern: /\b(dnsbin\.zhack\.ca|ceye\.io|oob\.li|interact\.sh|oast\.\w+|burpcollaborator\.net|canarytokens\.com|requestrepo\.com)\b/i,
     severity: "high",
     title: "DNS 外泄/交互服务",
     description: "连接到 DNS 外泄或带外交互测试服务。",
@@ -241,6 +241,22 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "访问 AWS ECS 任务元数据端点 (169.254.170.2)——可获取任务角色凭证。",
   },
 
+  // file:// scheme (SSRF local file read)
+  {
+    pattern: /\bfile:\/\//i,
+    severity: "high",
+    title: "file:// 协议访问",
+    description: "使用 file:// 协议访问本地文件——可能是 SSRF 本地文件读取。",
+  },
+
+  // DNS rebinding domains (resolve to 127.0.0.1)
+  {
+    pattern: /\b(localtest\.me|lvh\.me|vcap\.me|lacolhost\.com)\b/i,
+    severity: "medium",
+    title: "DNS 重绑定域名访问",
+    description: "使用已知 DNS 重绑定域名（解析为 127.0.0.1）——可能是 SSRF 绕过。",
+  },
+
   // SSRF loopback/localhost access
   {
     pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/(?:localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|0\.0\.0\.0)(?:[:/]|$)/i,
@@ -287,7 +303,10 @@ function fullyDecodeURI(raw: string): string {
   // Apply NFKC normalization to prevent bypass via fullwidth Unicode characters
   // (consistent with PathGuard's normalization in path-guard.ts)
   // Strip null bytes that could split domain names and evade pattern matching
-  let decoded = raw.normalize("NFKC").replace(/\0/g, "");
+  // NFKC + strip null bytes + normalize Unicode dot variants that NFKC doesn't collapse
+  // U+3002 (ideographic full stop) and U+FF61 (halfwidth ideographic full stop) resolve to "."
+  // in URL contexts per WHATWG URL spec but are not normalized by NFKC.
+  let decoded = raw.normalize("NFKC").replace(/\0/g, "").replace(/[\u3002\uFF61]/g, ".");
   for (let i = 0; i < MAX_DECODE_PASSES; i++) {
     let next: string;
     try {
