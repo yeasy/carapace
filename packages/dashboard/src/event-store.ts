@@ -134,6 +134,8 @@ export class EventStore {
    * 时间序列聚合（按分钟/小时/天分桶）
    */
   timeSeries(bucketMs: number = 60_000, since?: number): TimeSeriesBucket[] {
+    bucketMs = Math.floor(bucketMs);
+    if (bucketMs <= 0) throw new Error("bucketMs must be positive");
     const events = since !== undefined
       ? this.events.filter((e) => e.timestamp >= since)
       : this.events;

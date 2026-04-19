@@ -167,7 +167,7 @@ export class DashboardServer {
   getPort(): number {
     if (this.server) {
       const addr = this.server.address();
-      if (addr && typeof addr === "object") {
+      if (addr !== null && typeof addr === "object") {
         return addr.port;
       }
     }
@@ -284,7 +284,7 @@ export class DashboardServer {
     }
 
     if (req.method === "GET" && urlPath === "/api/events") {
-      if (!this.requireAuth(req, res)) return;
+      // Read-only: no auth required (embedded dashboard UI fetches without headers)
       const params = new URL(url, "http://localhost").searchParams;
       const query: EventQuery = {};
       const VALID_CATEGORIES = new Set(["exec_danger", "path_violation", "network_suspect", "rate_anomaly", "baseline_drift", "prompt_injection", "data_exfil"]);
@@ -312,7 +312,7 @@ export class DashboardServer {
     }
 
     if (req.method === "GET" && urlPath === "/api/stats") {
-      if (!this.requireAuth(req, res)) return;
+      // Read-only: no auth required (embedded dashboard UI fetches without headers)
       const params = new URL(url, "http://localhost").searchParams;
       const sinceVal = parseInt(params.get("since") ?? "", 10);
       const since = isNaN(sinceVal) ? undefined : sinceVal;
@@ -322,7 +322,7 @@ export class DashboardServer {
     }
 
     if (req.method === "GET" && urlPath === "/api/timeseries") {
-      if (!this.requireAuth(req, res)) return;
+      // Read-only: no auth required (embedded dashboard UI fetches without headers)
       const params = new URL(url, "http://localhost").searchParams;
       const bucketVal = parseInt(params.get("bucket") ?? "60000", 10);
       const bucketMs = isNaN(bucketVal) || bucketVal < 1000 ? 60000 : Math.min(bucketVal, 86400000);

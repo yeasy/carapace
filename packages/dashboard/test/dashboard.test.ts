@@ -504,6 +504,24 @@ describe("DashboardServer API authentication", () => {
     expect(res.status).toBe(200);
   });
 
+  it("allows GET /api/events without auth token (dashboard UI)", async () => {
+    server = new DashboardServer({ port: 0, apiToken: "my-token" });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/events`);
+    expect(res.status).toBe(200);
+  });
+
+  it("allows GET /api/stats without auth token (dashboard UI)", async () => {
+    server = new DashboardServer({ port: 0, apiToken: "my-token" });
+    await server.start();
+    const port = server.getPort();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/stats`);
+    expect(res.status).toBe(200);
+  });
+
   it("allows all methods when no apiToken is configured", async () => {
     server = new DashboardServer({ port: 0 });
     await server.start();
