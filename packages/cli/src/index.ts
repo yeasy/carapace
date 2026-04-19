@@ -20,7 +20,10 @@ import { testRuleCommand } from "./commands/test-rule.js";
 import { parseArgs, color, COLORS } from "./utils.js";
 import { readFileSync } from "node:fs";
 
-const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
+let VERSION = "unknown";
+try {
+  VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
+} catch { /* bundled or missing package.json */ }
 
 function printHelp(): void {
   console.log(`
