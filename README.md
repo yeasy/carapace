@@ -10,7 +10,7 @@
     <a href="https://www.npmjs.com/package/@carapace/core"><img src="https://img.shields.io/npm/v/@carapace%2Fcore?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-1734%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-1806%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -52,7 +52,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   encoded PowerShell  crypto wallets       raw IP connections
   eval / subprocess   /etc/shadow          mining pools
   heredoc injection   /proc/self/*         decimal/octal/hex IP
-  ...112 patterns      ...64 patterns       ...40 patterns
+  ...122 patterns      ...72 patterns       ...40 patterns
 
   PromptInjection     DataExfil            BaselineDrift
   ───────────────     ─────────            ─────────────
@@ -62,7 +62,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   fake system tags    curl file upload     novelty ratio alert
   encoding bypass     pipe exfil chains
   hidden injections   env var leak
-  ...37 patterns      ...48 patterns       configurable threshold
+  ...37 patterns      ...58 patterns       configurable threshold
 ```
 
 ## Key Features
@@ -71,12 +71,12 @@ AI agents can execute shell commands, read any file, and make network requests �
 mindmap
   root((🛡️ Carapace))
     7 Built-in Rules
-      ExecGuard (112 patterns)
-      PathGuard (62 patterns)
+      ExecGuard (122 patterns)
+      PathGuard (72 patterns)
       NetworkGuard (40 patterns)
       RateLimiter
       PromptInjection (37 patterns)
-      DataExfil (48 patterns)
+      DataExfil (58 patterns)
       BaselineDrift (anomaly detection)
     Smart Alert Routing
       5-min dedup window
@@ -354,7 +354,7 @@ carapace/
 │   │   │   ├── alerter.ts    # Alert router + sinks + escalation + dismissal
 │   │   │   ├── store.ts      # Storage backend (Memory + SQLite)
 │   │   │   └── types.ts      # Type definitions
-│   │   └── test/             # 1184 tests (vitest)
+│   │   └── test/             # 1269 tests (vitest)
 │   ├── adapter-openclaw/     # @carapace/adapter-openclaw — native plugin
 │   │   └── src/
 │   │       ├── index.ts      # Plugin entry, registers hooks, first-run reports
@@ -387,7 +387,7 @@ carapace/
 ```bash
 npm install              # install all dependencies
 npm run build            # build core → adapter (sequential)
-npm run test                     # run 1734 tests across all packages
+npm run test                     # run 1806 tests across all packages
 ```
 
 ## Installation
@@ -415,7 +415,7 @@ cd carapace && npm install && npm run build
 - **v0.7** — Docker support, demo/dashboard/test-rule CLI commands, GHCR image publishing, docker-compose, dynamic version management
 - **v0.8** — SIEM SSRF hardening, ReDoS validator, SQLite store improvements, ExecGuard flag-reorder detection, NetworkGuard false-positive reduction, security fixes across CLI/dashboard/adapters
 - **v0.9** — Security bypass fixes (double-encoding, backslash-continuation, wildcard dismissal), busybox/Python inline detection, CLI parseArgs fix, demo SSE broadcast fix
-- **v0.10** (current) — 112 ExecGuard patterns with shell normalization, 64 PathGuard paths, dashboard API auth, SSRF encoding detection, data exfil hardening, 1734 tests
+- **v0.10** (current) — 122 ExecGuard patterns with shell normalization, 72 PathGuard paths, 58 DataExfil patterns, dashboard API auth, SSRF encoding detection, data exfil hardening, 1806 tests
 
 ## Contributing
 

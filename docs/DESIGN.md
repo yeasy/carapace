@@ -695,8 +695,8 @@ carapace dismissals clear
 ### Phase 1：核心规则（第 2 周）
 
 **交付物：**
-- [x] ExecGuard：112 危险命令模式
-- [x] PathGuard：64 敏感路径模式（Windows、macOS、Linux）
+- [x] ExecGuard：122 危险命令模式
+- [x] PathGuard：72 敏感路径模式（Windows、macOS、Linux）
 - [x] NetworkGuard：40 可疑域名模式（20 类别）
 - [x] 带优先级和冲突解决的规则引擎
 - [x] 控制台告警（带颜色的 stderr）
@@ -1010,6 +1010,6 @@ carapace/
 
 ---
 
-*文档版本：0.10.5*
-*最后更新：2026-04-16*
+*文档版本：0.10.6*
+*最后更新：2026-04-23*
 *作者：Albert Yang*
