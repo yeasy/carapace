@@ -41,7 +41,6 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   // Cloud / DevOps tokens
   { pattern: /[/\\]\.vault-token\b/i, severity: "high", title: "HashiCorp Vault Token 访问", category: "credentials" },
   { pattern: /[/\\]\.terraform\.d[/\\]credentials\.tfrc\.json/i, severity: "high", title: "Terraform Cloud Token 访问", category: "credentials" },
-  { pattern: /[/\\]\.config[/\\]gh[/\\]hosts\.yml/i, severity: "high", title: "GitHub CLI Token 访问", category: "credentials" },
   { pattern: /[/\\]\.consul[/\\]|[/\\]\.nomad[/\\]/i, severity: "high", title: "HashiCorp Consul/Nomad Token 访问", category: "credentials" },
 
   // Package registry credentials
@@ -70,7 +69,7 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   // Linux procfs (environment variables, memory, command line, root filesystem traversal)
   { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\](environ|mem|cmdline)/i, severity: "critical", title: "Linux /proc 敏感文件访问", category: "system" },
   { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\]root[/\\]/i, severity: "critical", title: "Linux /proc/root 文件系统遍历", category: "system" },
-  { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\](fd|maps|smaps|status|stat|io|net)\b/i, severity: "high", title: "Linux /proc 信息泄露", category: "system" },
+  { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\](fd|maps|smaps|status|stat|io|net|cwd|exe)\b/i, severity: "high", title: "Linux /proc 信息泄露", category: "system" },
 
   // 系统认证
   { pattern: /[/\\]etc[/\\](passwd|shadow|sudoers|master\.passwd)/i, severity: "high", title: "系统认证文件访问", category: "system" },
@@ -151,6 +150,31 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   // CI/CD runner credentials
   { pattern: /[/\\]\.cache[/\\]gitlab-runner[/\\]/i, severity: "critical", title: "GitLab Runner 凭证访问", category: "credentials" },
   { pattern: /[/\\]\.config[/\\]gh[/\\]hosts\.yml\b/i, severity: "high", title: "GitHub CLI 凭证访问", category: "credentials" },
+
+  // Package manager tokens
+  { pattern: /[/\\]\.yarnrc(?:\.yml)?\b/i, severity: "medium", title: ".yarnrc 访问（可能含 token）", category: "credentials" },
+
+  // Shell history files (may contain credentials and sensitive commands)
+  { pattern: /[/\\]\.(?:bash_history|zsh_history|sh_history|python_history|node_repl_history|mysql_history|psql_history|rediscli_history)\b/i, severity: "high", title: "Shell/REPL 历史文件访问", category: "credentials" },
+
+  // direnv configuration (often contains secrets and environment variables)
+  { pattern: /[/\\]\.envrc\b/i, severity: "high", title: ".envrc 文件访问（direnv）", category: "credentials" },
+
+  // Messaging app local data
+  { pattern: /[/\\](?:Signal|org\.signal)[/\\].*?(?:config\.json|sql[/\\]db\.sqlite)\b/i, severity: "high", title: "Signal 本地数据访问", category: "credentials" },
+  { pattern: /[/\\](?:discord|discordcanary)[/\\].*?(?:Local Storage|Session Storage|Cookies)\b/i, severity: "high", title: "Discord 本地数据访问", category: "credentials" },
+
+  // AWS CLI cache (temporary STS tokens)
+  { pattern: /[/\\]\.aws[/\\]cli[/\\]cache[/\\]/i, severity: "critical", title: "AWS CLI 缓存 Token 访问", category: "credentials" },
+
+  // etcd data directory
+  { pattern: /[/\\]var[/\\]lib[/\\]etcd[/\\]/i, severity: "critical", title: "etcd 数据目录访问", category: "credentials" },
+
+  // AI agent configuration directories (API keys, tokens, MCP configs)
+  { pattern: /[/\\]\.(?:claude|cursor|codex|openclaw|gemini|copilot|windsurf|aider)[/\\]/i, severity: "critical", title: "AI Agent 配置目录访问", category: "credentials" },
+
+  // Docker socket
+  { pattern: /[/\\]var[/\\]run[/\\]docker\.sock\b/i, severity: "critical", title: "Docker Socket 访问", category: "system" },
 ];
 
 // ── 安全正则匹配（防止 ReDoS） ──

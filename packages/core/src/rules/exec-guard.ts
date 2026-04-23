@@ -423,22 +423,22 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "尝试修改 crontab——可能建立持久化后门。",
   },
   {
-    pattern: />>\s*~?\/?\.(?:bashrc|bash_profile|zshrc|profile|zprofile)\b/i,
+    pattern: />{1,2}\s*~?\/?\.(?:bashrc|bash_profile|zshrc|profile|zprofile)\b/i,
     severity: "high",
     title: "shell 配置文件注入",
-    description: "向 shell 配置文件追加内容——可能建立持久化执行。",
+    description: "向 shell 配置文件写入或追加内容——可能建立持久化执行。",
   },
   {
-    pattern: />>\s*~?\/?\.ssh\/authorized_keys\b/i,
+    pattern: />{1,2}\s*~?\/?\.ssh\/authorized_keys\b/i,
     severity: "critical",
     title: "SSH authorized_keys 注入",
-    description: "向 authorized_keys 追加内容——可能建立未授权 SSH 访问。",
+    description: "向 authorized_keys 写入或追加内容——可能建立未授权 SSH 访问。",
   },
   {
     pattern: /\btee\s+(-a\s+)?~?\/?\.ssh\/authorized_keys\b/i,
     severity: "critical",
     title: "SSH authorized_keys 注入 (tee)",
-    description: "通过 tee 向 authorized_keys 写入内容——建��未授权 SSH 访问。",
+    description: "通过 tee 向 authorized_keys 写入内容——建立未授权 SSH 访问。",
   },
   {
     pattern: /\btee\s+(-a\s+)?~?\/?\.(?:bashrc|bash_profile|zshrc|profile|zprofile)\b/i,
@@ -467,10 +467,16 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "使用 nsenter 进入主机命名空间——容器逃逸手法。",
   },
   {
+    pattern: /\bchroot\s+\/proc\/(?:self|\d+)\/root\b/i,
+    severity: "critical",
+    title: "容器逃逸：chroot /proc/root",
+    description: "通过 chroot /proc/self/root 逃逸容器——获取宿主机文件系统访问。",
+  },
+  {
     pattern: /\bunshare\s+(-[a-zA-Z]|--\w+)\s/i,
     severity: "critical",
     title: "命名空间逃逸：unshare",
-    description: "使用 unshare 创建���命名空间——潜在容器逃逸或特权提升。",
+    description: "使用 unshare 创建新命名空间——潜在容器逃逸或特权提升。",
   },
   {
     pattern: /\bpkexec\s/i,
@@ -803,6 +809,72 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "critical",
     title: "Windows msiexec 远程安装",
     description: "通过 msiexec 远程安装恶意 MSI 包。",
+  },
+  {
+    pattern: /\bwmic\s+(?:process|os)\s+.*\bcall\s+create\b/i,
+    severity: "critical",
+    title: "Windows wmic 进程创建",
+    description: "通过 wmic process call create 执行命令——Windows LOLBin 代码执行。",
+  },
+  {
+    pattern: /\bbitsadmin\s+.*\/(?:transfer|create)\b/i,
+    severity: "high",
+    title: "Windows bitsadmin 文件传输",
+    description: "通过 bitsadmin BITS 服务下载文件——可绕过安全监控。",
+  },
+
+  // ── /dev/shm 内存文件系统利用 ──
+  {
+    pattern: /\b(?:cp|wget|curl|dd)\s+.*\/dev\/shm\/.*&&.*chmod\s+\+x/i,
+    severity: "critical",
+    title: "通过 /dev/shm 内存执行恶意载荷",
+    description: "将文件写入 /dev/shm 并赋予执行权限——无文件恶意软件部署技术。",
+  },
+  {
+    pattern: /\b(?:bash|sh|\.\/)\s*\/dev\/shm\/\S+/i,
+    severity: "critical",
+    title: "从 /dev/shm 执行脚本",
+    description: "直接从 /dev/shm 内存文件系统执行脚本——无文件攻击向量。",
+  },
+
+  // ── 进程内存凭证提取 ──
+  {
+    pattern: /\b(?:dd|strings|cat|head)\s+.*\/proc\/\d+\/mem\b/i,
+    severity: "critical",
+    title: "进程内存凭证提取",
+    description: "读取 /proc/[pid]/mem 提取进程内存中的凭证——CI/CD runner 攻击向量。",
+  },
+
+  // ── cgroup 容器逃逸 ──
+  {
+    pattern: /\/sys\/fs\/cgroup\/.*(?:release_agent|notify_on_release)/i,
+    severity: "critical",
+    title: "容器逃逸：cgroup release_agent",
+    description: "通过 cgroup release_agent 或 notify_on_release 在宿主机执行命令。",
+  },
+
+  // ── Docker socket 滥用 ──
+  {
+    pattern: /--unix-socket\s+.*docker\.sock/i,
+    severity: "critical",
+    title: "Docker socket 直接交互",
+    description: "通过 Unix socket 直接操作 Docker daemon——可逃逸容器或提权。",
+  },
+
+  // ── 进程环境变量枚举 ──
+  {
+    pattern: /\bps\s+.*auxe/i,
+    severity: "high",
+    title: "进程环境变量枚举",
+    description: "通过 ps auxeww 导出所有进程环境变量——可泄露 API 密钥和凭证。",
+  },
+
+  // ── LLM API 基地址劫持 ──
+  {
+    pattern: /(?:ANTHROPIC|OPENAI|GEMINI|AZURE_OPENAI|MISTRAL|COHERE)_(?:BASE_URL|API_BASE|API_ENDPOINT)\s*=/i,
+    severity: "critical",
+    title: "LLM API 基地址劫持",
+    description: "修改 LLM 服务基地址——可将 API 请求和密钥重定向到攻击者服务器。",
   },
 ];
 

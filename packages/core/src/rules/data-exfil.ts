@@ -39,6 +39,12 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /\bSG\.[A-Za-z0-9_-]{22,}\.[A-Za-z0-9_-]{22,}/, severity: "critical", title: "SendGrid API Key 出现在请求中", category: "credential_leak" },
   { pattern: /\bdop_v1_[a-f0-9]{64}/, severity: "critical", title: "DigitalOcean Token 出现在请求中", category: "credential_leak" },
   { pattern: /\bhvs\.[A-Za-z0-9_-]{20,}/, severity: "critical", title: "HashiCorp Vault Token 出现在请求中", category: "credential_leak" },
+  { pattern: /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/, severity: "high", title: "JWT Token 出现在请求中", category: "credential_leak" },
+  { pattern: /mongodb(?:\+srv)?:\/\/[a-zA-Z0-9_-]+:[^\s@]+@[^\s;]+/i, severity: "critical", title: "MongoDB 连接字符串泄漏", category: "credential_leak" },
+  { pattern: /\bxapp-[0-9]-[A-Za-z0-9_-]{30,}/, severity: "critical", title: "Slack App Token 出现在请求中", category: "credential_leak" },
+  { pattern: /mysql:\/\/[a-zA-Z0-9_-]+:[^\s@]+@[^\s;]+/i, severity: "critical", title: "MySQL 连接字符串泄漏", category: "credential_leak" },
+  { pattern: /postgres(?:ql)?:\/\/[a-zA-Z0-9_-]+:[^\s@]+@[^\s;]+/i, severity: "critical", title: "PostgreSQL 连接字符串泄漏", category: "credential_leak" },
+  { pattern: /rediss?:\/\/[a-zA-Z0-9_-]*:[^\s@]+@[^\s;]+/i, severity: "critical", title: "Redis 连接字符串泄漏", category: "credential_leak" },
 
   // Base64 encoded credentials (~40+ chars covers typical API keys/tokens)
   // Includes base64url charset (-_ instead of +/) used by JWTs and URL-safe tokens
@@ -70,8 +76,12 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /(?:cat|head|tail|dd|strings|base64|xxd|tac|nl|less|more)\s+.*\.(pem|key|env|credentials|secret).*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "读取敏感文件并通过网络发送", category: "pipe_exfil" },
   { pattern: /(curl|wget|nc)\s+.*<\s*.*\.(pem|key|env|credentials|secret)/i, severity: "critical", title: "将敏感文件重定向到网络工具", category: "pipe_exfil" },
   // Redirect credential paths (not just extensions) to network tools
-  { pattern: /(nc|ncat)\s+\S+\s+\d+\s*<\s*.*~?\/?\.(?:ssh|aws|config\/gcloud)\//i, severity: "critical", title: "凭证文件重定向到 netcat", category: "pipe_exfil" },
-  { pattern: /(?:cat|head|tail|dd|strings|base64|xxd|tac|nl|less|more)\s+.*~?\/?\.(?:ssh|aws)\/(id_rsa|id_ed25519|credentials).*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "读取凭证文件并通过网络发送", category: "pipe_exfil" },
+  { pattern: /(nc|ncat)\s+\S+\s+\d+\s*<\s*.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud|docker|kube)\//i, severity: "critical", title: "凭证文件重定向到 netcat", category: "pipe_exfil" },
+  { pattern: /(?:cat|head|tail|dd|strings|base64|xxd|tac|nl|less|more)\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud|docker|kube)\/(id_rsa|id_ed25519|credentials|config|private-keys).*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "读取凭证文件并通过网络发送", category: "pipe_exfil" },
+
+  // 命令替换方式外泄敏感文件（绕过管道检测）
+  { pattern: /(?:curl|wget)\s+.*\$\(\s*(?:cat|head|tail|base64|strings|xxd)\s+.*\.(pem|key|env|credentials|secret)\b/i, severity: "critical", title: "通过命令替换外泄敏感文件", category: "pipe_exfil" },
+  { pattern: /(?:curl|wget)\s+.*\$\(\s*(?:cat|head|tail|base64|strings|xxd)\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud|docker|kube)\/(id_rsa|id_ed25519|credentials|config|private-keys)\b/i, severity: "critical", title: "通过命令替换外泄凭证文件", category: "pipe_exfil" },
 
   // GPG 私钥通过网络导出
   { pattern: /gpg\s+.*--export-secret-keys.*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "GPG 私钥导出并通过网络发送", category: "pipe_exfil" },
@@ -80,7 +90,7 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /\bscp\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud|docker|kube)\//i, severity: "critical", title: "通过 scp 外泄凭证文件", category: "pipe_exfil" },
 
   // tar/zip pipe to network tool exfiltration
-  { pattern: /\b(tar|zip)\s+.*~?\/?\.(?:ssh|aws)\b.*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "通过 tar/zip 管道外泄凭证", category: "pipe_exfil" },
+  { pattern: /\b(tar|zip)\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud|docker|kube)\b.*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "通过 tar/zip 管道外泄凭证", category: "pipe_exfil" },
 
   // rsync credential exfiltration
   { pattern: /\brsync\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud|docker|kube)\//i, severity: "critical", title: "通过 rsync 外泄凭证文件", category: "pipe_exfil" },
@@ -91,17 +101,23 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   // socat / openssl s_client data exfiltration
   { pattern: /(?:cat|head|tail|dd|strings|base64|xxd|tac|nl|less|more)\s+.*\.(pem|key|env|credentials|secret).*\|\s*(socat|openssl)/i, severity: "critical", title: "通过 socat/openssl 外泄敏感文件", category: "pipe_exfil" },
   { pattern: /(socat|openssl\s+s_client)\s+.*<\s*.*\.(pem|key|env|credentials|secret)/i, severity: "critical", title: "将敏感文件重定向到 socat/openssl", category: "pipe_exfil" },
-  { pattern: /(?:cat|head|tail|dd|strings|base64|xxd|tac|nl|less|more)\s+.*~?\/?\.(?:ssh|aws)\/(id_rsa|id_ed25519|credentials).*\|\s*(socat|openssl)/i, severity: "critical", title: "通过 socat/openssl 外泄凭证文件", category: "pipe_exfil" },
+  { pattern: /(?:cat|head|tail|dd|strings|base64|xxd|tac|nl|less|more)\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud|docker|kube)\/(id_rsa|id_ed25519|credentials|config|private-keys).*\|\s*(socat|openssl)/i, severity: "critical", title: "通过 socat/openssl 外泄凭证文件", category: "pipe_exfil" },
 
   // /dev/tcp and /dev/udp data exfiltration (non-shell redirect)
   { pattern: />\s*\/dev\/(?:tcp|udp)\/\S+\/\d+/i, severity: "critical", title: "通过 /dev/tcp|udp 外泄数据", category: "pipe_exfil" },
 
   // 凭证转十六进制编码外泄（绕过 base64 检测）
-  { pattern: /(?:cat|grep|sed|awk|cut|strings)\s+.*~?\/?\.(?:ssh|aws|gnupg)\b.*\|\s*(?:xxd|hexdump|od\b)/i, severity: "critical", title: "凭证转十六进制编码外泄", category: "pipe_exfil" },
+  { pattern: /(?:cat|grep|sed|awk|cut|strings)\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud|docker|kube)\b.*\|\s*(?:xxd|hexdump|od\b)/i, severity: "critical", title: "凭证转十六进制编码外泄", category: "pipe_exfil" },
+
+  // Kubernetes service account token 外泄
+  { pattern: /(?:cat|head|tail|base64|strings)\s+.*\/var\/run\/secrets\/kubernetes\.io\/.*\|\s*(?:curl|wget|nc|ncat|socat)/i, severity: "critical", title: "Kubernetes Service Account Token 外泄", category: "pipe_exfil" },
+
+  // 环境变量枚举后外泄
+  { pattern: /\b(?:env|printenv|set)\b.*\|\s*(?:grep|sed|awk|cut)\s+.*(?:KEY|SECRET|TOKEN|PASS|CRED).*\|\s*(?:curl|wget|nc|ncat)/i, severity: "critical", title: "环境变量枚举后外泄", category: "pipe_exfil" },
 
   // DNS 外泄：通过 dig/nslookup/host 将命令替换结果嵌入查询域名
   { pattern: /(?:dig|nslookup|host)\s+.*\$\(.*\).*\.\S+/i, severity: "critical", title: "DNS 查询中嵌入命令替换（DNS 外泄）", category: "dns_exfil" },
-  { pattern: /(?:dig|nslookup|host)\s+.*`[^`]+`.*\.\S+/i, severity: "critical", title: "DNS 查询中嵌入命令替换（DNS 外泄）", category: "dns_exfil" },
+  { pattern: /(?:dig|nslookup|host)\s+.*`[^`]+`.*\.\S+/i, severity: "critical", title: "DNS 查询中嵌入反引号命令替换（DNS 外泄）", category: "dns_exfil" },
 ];
 
 // ── 外泄目标域名（高风险文件共享/传输服务） ──
