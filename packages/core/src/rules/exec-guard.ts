@@ -133,6 +133,12 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "通过 . (dot) + 进程替换下载并执行远程代码。",
   },
   {
+    pattern: /(?:\bsource\b|\.\s)\s*(?:\/tmp\/|\/dev\/shm\/|\/var\/tmp\/)/i,
+    severity: "high",
+    title: "source 加载临时目录脚本",
+    description: "通过 source 或 dot 加载临时目录中的脚本，可能为两步攻击（先写入再执行）。",
+  },
+  {
     pattern: /\bxargs\s+.*\b(sh|bash|zsh)\b/i,
     severity: "high",
     title: "xargs shell 执行",

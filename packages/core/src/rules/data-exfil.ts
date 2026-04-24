@@ -51,10 +51,10 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /(?<=\s|^|["'`])[A-Za-z0-9+/\-_]{40,16000}={0,2}(?=\s|$|["'`])/, severity: "medium", title: "Base64 编码数据外发", category: "encoded_exfil" },
 
   // 将文件内容通过 curl/wget 发送到外部
-  { pattern: /curl\s+.*-[dX]\s+.*@\.?\//i, severity: "high", title: "通过 curl 上传本地文件", category: "file_upload" },
+  { pattern: /curl\s+.*-[dX]\s+.*@[~.]?\//i, severity: "high", title: "通过 curl 上传本地文件", category: "file_upload" },
   { pattern: /curl\s+.*--data-binary\s+@/i, severity: "high", title: "通过 curl 二进制上传文件", category: "file_upload" },
   { pattern: /curl\s+.*--upload-file\s+/i, severity: "high", title: "通过 curl 上传文件", category: "file_upload" },
-  { pattern: /curl\s+.*-F\s+.*@\.?\//i, severity: "high", title: "通过 curl multipart 上传本地文件", category: "file_upload" },
+  { pattern: /curl\s+.*-F\s+.*@[~.]?\//i, severity: "high", title: "通过 curl multipart 上传本地文件", category: "file_upload" },
   { pattern: /curl\s+.*-T\s+/i, severity: "high", title: "通过 curl -T 上传文件", category: "file_upload" },
   { pattern: /curl\s+.*--json\s+@/i, severity: "high", title: "通过 curl --json 上传文件", category: "file_upload" },
   { pattern: /\bftp\s+.*-[snp]/i, severity: "high", title: "通过 FTP 传输数据", category: "file_upload" },
