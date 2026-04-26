@@ -32,7 +32,7 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   // API 密钥和 token
   { pattern: /[/\\]\.env(\.\w+)?\b/i, severity: "high", title: ".env 文件访问", category: "credentials" },
   { pattern: /[/\\]\.netrc\b/i, severity: "high", title: ".netrc 凭证访问", category: "credentials" },
-  { pattern: /[/\\]\.npmrc\b/i, severity: "medium", title: ".npmrc 访问（可能含 token）", category: "credentials" },
+  { pattern: /[/\\]\.npmrc\b/i, severity: "high", title: ".npmrc 访问（含 registry 配置和 auth token）", category: "credentials" },
 
   // Database credentials
   { pattern: /[/\\]\.pgpass\b/i, severity: "high", title: "PostgreSQL 密码文件访问", category: "credentials" },
@@ -45,11 +45,16 @@ const SENSITIVE_PATHS: SensitivePath[] = [
 
   // Package registry credentials
   { pattern: /[/\\]\.pypirc\b/i, severity: "high", title: "PyPI 凭证访问", category: "credentials" },
+  { pattern: /[/\\]pip\.conf\b/i, severity: "high", title: "pip 配置访问（含 index URL）", category: "credentials" },
+  { pattern: /[/\\]pip\.ini\b/i, severity: "high", title: "pip 配置访问（含 index URL）", category: "credentials" },
   { pattern: /[/\\]\.gem[/\\]credentials\b/i, severity: "high", title: "RubyGems 凭证访问", category: "credentials" },
 
   // Java ecosystem credentials
   { pattern: /[/\\]\.gradle[/\\]gradle\.properties\b/i, severity: "high", title: "Gradle 凭证访问", category: "credentials" },
   { pattern: /[/\\]\.m2[/\\]settings\.xml\b/i, severity: "high", title: "Maven 仓库凭证访问", category: "credentials" },
+
+  // Git credentials
+  { pattern: /[/\\]\.git-credentials\b/i, severity: "critical", title: "Git HTTP 凭证文件访问", category: "credentials" },
 
   // GPG
   { pattern: /[/\\]\.gnupg[/\\]/i, severity: "high", title: "GPG 密钥环访问", category: "credentials" },

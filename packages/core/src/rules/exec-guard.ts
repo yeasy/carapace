@@ -209,6 +209,20 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "读取 .netrc 文件——包含明文网络凭证。",
   },
 
+  // ── Git 凭证窃取 ──
+  {
+    pattern: /\bgit\s+credential\s+(fill|approve|reject)\b/i,
+    severity: "critical",
+    title: "Git 凭证操作",
+    description: "通过 git credential 子命令提取或操纵存储的 HTTP 凭证。",
+  },
+  {
+    pattern: /\b(cat|head|tail|less|more|strings|tac|nl|grep|sed|awk|xxd|base64)\b.*~?\/?\.git-credentials\b/i,
+    severity: "critical",
+    title: "Git 凭证文件读取",
+    description: "读取 .git-credentials 文件——包含明文 HTTP 凭证。",
+  },
+
   // ── GPG 密钥 / macOS 钥匙串 ──
   {
     pattern: /\bgpg\s+.*--export-secret-keys/i,
@@ -859,6 +873,32 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "通过 cgroup release_agent 或 notify_on_release 在宿主机执行命令。",
   },
 
+  // ── 容器横向移动 ──
+  {
+    pattern: /\bdocker\s+exec\s+.*\b(sh|bash|zsh|ash)\b/i,
+    severity: "high",
+    title: "Docker exec shell 访问",
+    description: "通过 docker exec 在容器中获取 shell——容器横向移动。",
+  },
+  {
+    pattern: /\bkubectl\s+exec\s+.*?(?:--\s*)?(?:\/\w+\/)*\b(sh|bash|zsh|ash)\b/i,
+    severity: "high",
+    title: "Kubectl exec shell 访问",
+    description: "通过 kubectl exec 在 Pod 中获取 shell——Kubernetes 横向移动。",
+  },
+  {
+    pattern: /\bdocker\s+cp\s+(?:-\S+\s+)*\S+:/i,
+    severity: "high",
+    title: "Docker cp 文件提取",
+    description: "通过 docker cp 从容器提取文件——可用于数据外泄。",
+  },
+  {
+    pattern: /\bkubectl\s+cp\s+(?:-\S+\s+\S+\s+)*\S+:/i,
+    severity: "high",
+    title: "Kubectl cp 文件提取",
+    description: "通过 kubectl cp 从 Pod 提取文件——可用于数据外泄。",
+  },
+
   // ── Docker socket 滥用 ──
   {
     pattern: /--unix-socket\s+.*docker\.sock/i,
@@ -881,6 +921,72 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "critical",
     title: "LLM API 基地址劫持",
     description: "修改 LLM 服务基地址——可将 API 请求和密钥重定向到攻击者服务器。",
+  },
+
+  // ── 剪贴板/终端捕获 ──
+  {
+    pattern: /\|.*\b(pbcopy|xclip|xsel)\b/i,
+    severity: "high",
+    title: "剪贴板数据外泄",
+    description: "通过管道将数据发送到剪贴板工具——可窃取敏感输出。",
+  },
+  {
+    pattern: /\btmux\s+capture-pane\b/i,
+    severity: "high",
+    title: "终端会话捕获：tmux",
+    description: "通过 tmux capture-pane 捕获终端会话内容——可窃取敏感输出。",
+  },
+  {
+    pattern: /\bscreen\s+-X\s+hardcopy\b/i,
+    severity: "high",
+    title: "终端会话捕获：screen",
+    description: "通过 screen hardcopy 捕获终端会话内容——可窃取敏感输出。",
+  },
+  {
+    pattern: /(?:^|[;&|]\s*)\bscript\s+(?:-[a-zA-Z]\s+)*\/?\S+/i,
+    severity: "high",
+    title: "终端会话录制",
+    description: "通过 script 命令录制终端会话——可捕获所有输入输出包括密码。",
+  },
+
+  // ── eval heredoc 绕过 ──
+  {
+    pattern: /\beval\s*<<\s*['"]?\w*/i,
+    severity: "high",
+    title: "eval heredoc 注入",
+    description: "eval 配合 heredoc (<<) 注入多行命令——可隐藏恶意载荷。",
+  },
+
+  // ── 供应链攻击：包管理器 registry 操纵 ──
+  {
+    pattern: /\bnpm\s+(?:install|i|add|ci)\s+.*--registry\s+https?:\/\//i,
+    severity: "high",
+    title: "npm 自定义 registry 安装",
+    description: "使用自定义 registry 安装 npm 包——可能从恶意源安装后门包。",
+  },
+  {
+    pattern: /\bpip3?\s+install\s+.*(?:--index-url|-i)\s+https?:\/\//i,
+    severity: "high",
+    title: "pip 自定义 index 安装",
+    description: "使用自定义 PyPI index 安装 pip 包——可能从恶意源安装后门包。",
+  },
+  {
+    pattern: /\bpip3?\s+install\s+.*--extra-index-url\s+https?:\/\//i,
+    severity: "high",
+    title: "pip 额外 index 注入",
+    description: "通过 --extra-index-url 添加额外 PyPI index——依赖混淆攻击的常见手法。",
+  },
+  {
+    pattern: />{1,2}\s*~?\/?(?:[\w./-]*\/)?\.npmrc\b/i,
+    severity: "high",
+    title: ".npmrc registry 配置篡改",
+    description: "向 .npmrc 写入或追加内容——可能设置恶意 registry 或注入 auth token。",
+  },
+  {
+    pattern: /\bcargo\s+install\s+.*--(?:registry|index)\s+https?:\/\//i,
+    severity: "high",
+    title: "cargo 自定义 registry 安装",
+    description: "使用自定义 registry/index 安装 cargo 包——可能从恶意源安装后门 crate。",
   },
 ];
 
