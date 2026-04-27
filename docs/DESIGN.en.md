@@ -532,7 +532,7 @@ First occurrence          → Alert at detected severity
 ```json
 {
   "source": "carapace",
-  "version": "0.10.3",
+  "version": "0.10.6",
   "event": {
     "id": "cpc_a1b2c3d4e5f6",
     "timestamp": "2026-03-09T20:30:00Z",

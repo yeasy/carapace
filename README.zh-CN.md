@@ -354,7 +354,7 @@ carapace/
 │   │   │   ├── alerter.ts    # 告警路由 + Sink + 升级 + 驳回
 │   │   │   ├── store.ts      # 存储后端（内存 + SQLite）
 │   │   │   └── types.ts      # 类型定义
-│   │   └── test/             # 1280 个测试（vitest）
+│   │   └── test/             # 1349 个测试（vitest）
 │   ├── adapter-openclaw/     # @carapace/adapter-openclaw — 原生插件
 │   │   └── src/
 │   │       ├── index.ts      # 插件入口，注册 hook，首次运行报告
