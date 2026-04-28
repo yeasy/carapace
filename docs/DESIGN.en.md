@@ -198,6 +198,7 @@ As an open-source project, Carapace relies on community contributions and sponso
 │  │  │  • session_start     (init session tracking)     │  │  │
 │  │  │  • session_end       (generate session report)   │  │  │
 │  │  │  • gateway_start     (startup audit)             │  │  │
+│  │  │  • gateway_stop      (shutdown audit)            │  │  │
 │  │  └──────────────┬───────────────────────────────────┘  │  │
 │  │                 │                                      │  │
 │  │  ┌──────────────▼───────────────────────────────────┐  │  │
