@@ -6,7 +6,10 @@ import { readFileSync } from "node:fs";
 import { createStore } from "@carapace/core";
 import { color, COLORS, formatTable, getDbPath } from "../utils.js";
 
-const VERSION = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf-8")).version;
+let VERSION = "unknown";
+try {
+  VERSION = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf-8")).version;
+} catch { /* fallback for bundled builds */ }
 
 export async function statusCommand(): Promise<void> {
   console.log(`${color("Carapace Status", COLORS.bright)}\n`);
