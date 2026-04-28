@@ -252,7 +252,7 @@ const plugin = {
         }
 
         // 检测响应中的数据外泄模式（当结果是字符串时）
-        if (event.result && typeof event.result === "string" && event.result.length > 50) {
+        if (event.result && typeof event.result === "string" && event.result.length > 16) {
           const resultCtx: RuleContext = {
             toolName: event.toolName,
             toolParams: { _result: event.result },
