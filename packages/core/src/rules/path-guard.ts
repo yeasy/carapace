@@ -221,6 +221,8 @@ const PATH_KEYS = new Set([
 const MAX_PATH_WALK_DEPTH = 10;
 const MAX_PATHS = 100;
 
+const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\u2060-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC01-\uDC7F]/g;
+
 function extractPaths(params: Record<string, unknown>): string[] {
   const paths: string[] = [];
 
@@ -228,7 +230,7 @@ function extractPaths(params: Record<string, unknown>): string[] {
     if (paths.length >= MAX_PATHS) return;
     // Apply Unicode NFKC normalization to prevent bypass via fullwidth characters
     // (e.g., fullwidth solidus U+FF0F normalizes to /, consistent with exec-guard)
-    const normalized = val.normalize("NFKC");
+    const normalized = val.normalize("NFKC").replace(INVISIBLE_CHARS_RE, "");
     // Strip null bytes (used to truncate paths and bypass checks) before normalization
     const cleaned = normalized.includes("\0") ? normalized.replace(/\0/g, "") : normalized;
     // Iteratively decode URL-encoded paths to prevent double/triple encoding bypass
