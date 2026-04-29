@@ -34,7 +34,7 @@ export async function trustCommand(
         const parsed = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
         // Filter prototype pollution keys
         for (const key of Object.keys(parsed)) {
-          if (key !== "__proto__" && key !== "constructor" && key !== "prototype") {
+          if (!DANGEROUS_KEYS.has(key)) {
             config[key] = parsed[key];
           }
         }
