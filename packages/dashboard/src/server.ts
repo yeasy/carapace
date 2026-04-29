@@ -246,7 +246,7 @@ export class DashboardServer {
 
     // ── SSE endpoint ──
     if (req.method === "GET" && urlPath === "/api/events/stream") {
-      if (!this.requireAuth(req, res)) return;
+      // Read-only: no auth required (embedded dashboard UI connects via EventSource without headers)
       // Limit concurrent SSE connections to prevent resource exhaustion
       const MAX_SSE_CLIENTS = 50;
       if (this.sseClients.size >= MAX_SSE_CLIENTS) {
