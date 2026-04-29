@@ -10,7 +10,7 @@
     <a href="https://www.npmjs.com/package/@carapace/core"><img src="https://img.shields.io/npm/v/@carapace%2Fcore?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-1886%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-1889%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -354,7 +354,7 @@ carapace/
 │   │   │   ├── alerter.ts    # 告警路由 + Sink + 升级 + 驳回
 │   │   │   ├── store.ts      # 存储后端（内存 + SQLite）
 │   │   │   └── types.ts      # 类型定义
-│   │   └── test/             # 1349 个测试（vitest）
+│   │   └── test/             # 1352 个测试（vitest）
 │   ├── adapter-openclaw/     # @carapace/adapter-openclaw — 原生插件
 │   │   └── src/
 │   │       ├── index.ts      # 插件入口，注册 hook，首次运行报告
@@ -387,7 +387,7 @@ carapace/
 ```bash
 npm install              # 安装所有依赖
 npm run build            # 按顺序编译 core → adapter
-npm run test                     # 运行全部 1886 个测试
+npm run test                     # 运行全部 1889 个测试
 ```
 
 ## 安装
@@ -415,7 +415,7 @@ cd carapace && npm install && npm run build
 - **v0.7** — Docker 支持、demo/dashboard/test-rule CLI 命令、GHCR 镜像发布、docker-compose、动态版本管理
 - **v0.8** — SIEM SSRF 加固、ReDoS 校验器、SQLite 存储改进、ExecGuard 标志重排检测、NetworkGuard 误报减少、CLI/Dashboard/适配器安全修复
 - **v0.9** — 安全绕过修复（双重编码、反斜杠续行、通配符驳回）、busybox/Python 内联检测、CLI 参数解析修复、demo SSE 广播修复
-- **v0.10**（当前）— 139 条 ExecGuard 模式（含 shell 归一化）、75 条 PathGuard 路径、58 条 DataExfil 模式、Dashboard API 认证、SSRF 编码检测、数据外泄加固、1886 个测试
+- **v0.10**（当前）— 139 条 ExecGuard 模式（含 shell 归一化）、75 条 PathGuard 路径、58 条 DataExfil 模式、Dashboard API 认证、SSRF 编码检测、数据外泄加固、1889 个测试
 
 ## 贡献
 
