@@ -7,6 +7,8 @@ import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { color, COLORS } from "../utils.js";
 
+const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 export async function trustCommand(
   args: string[],
   action: "trust" | "untrust",
@@ -14,7 +16,6 @@ export async function trustCommand(
 ): Promise<void> {
   try {
     const skillName = args[0];
-    const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
     if (!skillName) {
       console.error(

@@ -18,9 +18,15 @@ export default [
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
       "@typescript-eslint/no-explicit-any": "warn",
-      "no-console": "off",
+      "no-console": "error",
       "prefer-const": "error",
       "no-var": "error",
+    },
+  },
+  {
+    files: ["packages/cli/src/**/*.ts"],
+    rules: {
+      "no-console": "off",
     },
   },
   {
