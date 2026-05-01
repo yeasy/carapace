@@ -22,3 +22,11 @@ Thumbs.db
 
 # SQLite
 *.db
+
+# Agent/AI working dirs
+.agent/
+.claude/
+
+# Temp scripts
+_*.sh
+_*.txt
