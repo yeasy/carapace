@@ -2,6 +2,66 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **ExecGuard**: `source`/dot loading from temp directories (`/tmp`, `/dev/shm`, `/var/tmp`) detection (high).
+- **ExecGuard**: `git credential fill/approve/reject` credential extraction detection (critical).
+- **ExecGuard**: `.git-credentials` plaintext file reading detection (critical).
+- **ExecGuard**: `chroot /proc/self/root` container escape detection (critical).
+- **ExecGuard**: Windows `wmic process create` remote execution detection (critical).
+- **ExecGuard**: Windows `bitsadmin` file transfer detection (high).
+- **ExecGuard**: `/dev/shm` in-memory payload execution detection (high/critical).
+- **ExecGuard**: `gcore`/`gdb` process memory credential extraction detection (critical).
+- **ExecGuard**: cgroup `release_agent` container escape detection (critical).
+- **ExecGuard**: `docker exec`/`kubectl exec` shell access detection (high).
+- **ExecGuard**: `docker cp`/`kubectl cp` file extraction detection (high).
+- **ExecGuard**: Docker socket (`/var/run/docker.sock`) direct interaction detection (critical).
+- **ExecGuard**: `/proc/PID/environ` process environment enumeration detection (high).
+- **ExecGuard**: LLM API base URL hijacking (`OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, etc.) detection (critical).
+- **ExecGuard**: Clipboard data exfiltration (`pbcopy`, `xclip`, `xsel`, `wl-copy`) detection (medium).
+- **ExecGuard**: Terminal session capture via `tmux`/`screen`/`script` detection (high).
+- **ExecGuard**: `eval` heredoc injection detection (high).
+- **ExecGuard**: Supply chain attacks — `npm` custom registry install, `pip` custom/extra index install, `.npmrc` registry tampering, `cargo` custom registry install (high/critical).
+- **DataExfil**: JWT token leak detection.
+- **DataExfil**: MongoDB/MySQL/PostgreSQL/Redis connection string leak detection.
+- **DataExfil**: Slack App Token (`xapp-`) detection.
+- **DataExfil**: Command substitution exfiltration of sensitive/credential files.
+- **DataExfil**: Kubernetes ServiceAccount token exfiltration detection.
+- **DataExfil**: Environment variable enumeration piped to network tools.
+- **DataExfil**: DNS query backtick command substitution (DNS exfiltration).
+- **PathGuard**: `.npmrc` access (registry config and auth token).
+- **PathGuard**: `pip.conf`/`pip.ini` configuration access.
+- **PathGuard**: `.git-credentials` HTTP credential file access.
+- **PathGuard**: `.yarnrc`/`.yarnrc.yml` access (possible token exposure).
+- **PathGuard**: Shell/REPL history file (`.python_history`, `.node_repl_history`, etc.) access.
+- **PathGuard**: `.envrc` (direnv) file access.
+- **PathGuard**: Signal/Discord local data access.
+- **PathGuard**: AWS CLI cache token access.
+- **PathGuard**: `etcd` data directory access.
+- **PathGuard**: AI agent config directory (`.claude`, `.cursor`, `.copilot`) access.
+- **PathGuard**: Docker socket file access.
+
+### Fixed
+- **BaselineDrift**: Tool names now NFKC-normalized with invisible character stripping before profiling, preventing Unicode bypass.
+- **DataExfil**: Null byte stripping added to input normalization (consistent with ExecGuard/PathGuard).
+- **DataExfil**: Exfil scan threshold aligned across MCP and OpenClaw adapters.
+- **ExecGuard**: Shell config persistence patterns now detect single-write (`>`) in addition to append (`>>`).
+- **ExecGuard**: SSH `authorized_keys` injection pattern now detects single-write (`>`) in addition to append (`>>`).
+- **PathGuard**: Invisible character stripping added before pattern matching (consistent with other rules).
+- **Dashboard**: SSE endpoint (`/api/events/stream`) auth removed for EventSource compatibility (read-only stream, rate-limited to 50 clients).
+- **CLI `status`**: Version read wrapped in try/catch for bundled builds where `package.json` is unavailable.
+- **CLI `trust`**: `DANGEROUS_KEYS` Set moved to module level; key filtering uses `Set.has()` instead of inline comparison.
+
+### Changed
+- ESLint `no-console` rule scoped — `"error"` globally, `"off"` for CLI package only.
+- `.gitignore` expanded for temp scripts (`_*.sh`, `_*.txt`) and agent working directories (`.agent/`, `.claude/`).
+- Design docs updated with `gateway_stop` hook documentation.
+- ExecGuard pattern count: 112 → 139 (+27 patterns).
+- DataExfil pattern count: 48 → 58 (+10 patterns).
+- PathGuard pattern count: 64 → 75 (+11 patterns).
+- 155 new tests (1889 total).
+
 ## [0.10.6] - 2026-04-18
 
 ### Fixed
