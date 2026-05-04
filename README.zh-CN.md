@@ -52,7 +52,7 @@ AI Agent 可以执行 shell 命令、读写任意文件、发起网络请求—�
   编码 PowerShell     加密货币钱包          裸 IP 连接
   eval / subprocess   /etc/shadow           挖矿池
   heredoc 注入        /proc/self/*          十进制/八进制/十六进制 IP
-  ...139 种模式        ...75 种模式          ...40 种模式
+  ...138 种模式        ...73 种模式          ...38 种模式
 
   PromptInjection     DataExfil            BaselineDrift
   ───────────────     ─────────            ─────────────
@@ -62,7 +62,7 @@ AI Agent 可以执行 shell 命令、读写任意文件、发起网络请求—�
   伪造系统标签        curl 文件上传         新颖度比例告警
   编码绕过            管道外泄链
   隐藏注入指令        环境变量泄漏
-  ...37 种模式        ...58 种模式          可配置阈值
+  ...36 种模式        ...57 种模式          可配置阈值
 ```
 
 ## 核心特性
@@ -71,12 +71,12 @@ AI Agent 可以执行 shell 命令、读写任意文件、发起网络请求—�
 mindmap
   root((🛡️ Carapace))
     7 条内置规则
-      ExecGuard（139 种模式）
-      PathGuard（75 种模式）
-      NetworkGuard（40 种模式）
+      ExecGuard（138 种模式）
+      PathGuard（73 种模式）
+      NetworkGuard（38 种模式）
       RateLimiter
-      PromptInjection（37 种模式）
-      DataExfil（58 种模式）
+      PromptInjection（36 种模式）
+      DataExfil（57 种模式）
       BaselineDrift（异常检测）
     智能告警路由
       5 分钟去重窗口
@@ -415,7 +415,7 @@ cd carapace && npm install && npm run build
 - **v0.7** — Docker 支持、demo/dashboard/test-rule CLI 命令、GHCR 镜像发布、docker-compose、动态版本管理
 - **v0.8** — SIEM SSRF 加固、ReDoS 校验器、SQLite 存储改进、ExecGuard 标志重排检测、NetworkGuard 误报减少、CLI/Dashboard/适配器安全修复
 - **v0.9** — 安全绕过修复（双重编码、反斜杠续行、通配符驳回）、busybox/Python 内联检测、CLI 参数解析修复、demo SSE 广播修复
-- **v0.10**（当前）— 139 条 ExecGuard 模式（含 shell 归一化）、75 条 PathGuard 路径、58 条 DataExfil 模式、Dashboard API 认证、SSRF 编码检测、数据外泄加固、1889 个测试
+- **v0.10**（当前）— 138 条 ExecGuard 模式（含 shell 归一化）、73 条 PathGuard 路径、57 条 DataExfil 模式、Dashboard API 认证、SSRF 编码检测、数据外泄加固、1889 个测试
 
 ## 贡献
 

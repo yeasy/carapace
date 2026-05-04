@@ -52,7 +52,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   encoded PowerShell  crypto wallets       raw IP connections
   eval / subprocess   /etc/shadow          mining pools
   heredoc injection   /proc/self/*         decimal/octal/hex IP
-  ...139 patterns      ...75 patterns       ...40 patterns
+  ...138 patterns      ...73 patterns       ...38 patterns
 
   PromptInjection     DataExfil            BaselineDrift
   ───────────────     ─────────            ─────────────
@@ -62,7 +62,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   fake system tags    curl file upload     novelty ratio alert
   encoding bypass     pipe exfil chains
   hidden injections   env var leak
-  ...37 patterns      ...58 patterns       configurable threshold
+  ...36 patterns      ...57 patterns       configurable threshold
 ```
 
 ## Key Features
@@ -71,12 +71,12 @@ AI agents can execute shell commands, read any file, and make network requests �
 mindmap
   root((🛡️ Carapace))
     7 Built-in Rules
-      ExecGuard (139 patterns)
-      PathGuard (75 patterns)
-      NetworkGuard (40 patterns)
+      ExecGuard (138 patterns)
+      PathGuard (73 patterns)
+      NetworkGuard (38 patterns)
       RateLimiter
-      PromptInjection (37 patterns)
-      DataExfil (58 patterns)
+      PromptInjection (36 patterns)
+      DataExfil (57 patterns)
       BaselineDrift (anomaly detection)
     Smart Alert Routing
       5-min dedup window
@@ -415,7 +415,7 @@ cd carapace && npm install && npm run build
 - **v0.7** — Docker support, demo/dashboard/test-rule CLI commands, GHCR image publishing, docker-compose, dynamic version management
 - **v0.8** — SIEM SSRF hardening, ReDoS validator, SQLite store improvements, ExecGuard flag-reorder detection, NetworkGuard false-positive reduction, security fixes across CLI/dashboard/adapters
 - **v0.9** — Security bypass fixes (double-encoding, backslash-continuation, wildcard dismissal), busybox/Python inline detection, CLI parseArgs fix, demo SSE broadcast fix
-- **v0.10** (current) — 139 ExecGuard patterns with shell normalization, 75 PathGuard paths, 58 DataExfil patterns, dashboard API auth, SSRF encoding detection, data exfil hardening, 1889 tests
+- **v0.10** (current) — 138 ExecGuard patterns with shell normalization, 73 PathGuard paths, 57 DataExfil patterns, dashboard API auth, SSRF encoding detection, data exfil hardening, 1889 tests
 
 ## Contributing
 
