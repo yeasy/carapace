@@ -26,7 +26,11 @@ Thumbs.db
 # Agent/AI working dirs
 .agent/
 .claude/
+tmp-*/
 
-# Temp scripts
+# Temp scripts and build output
 _*.sh
 _*.txt
+build-*.txt
+test-*.txt
+tsc-*.txt
