@@ -699,7 +699,7 @@ carapace dismissals clear
 **Deliverables:**
 - [x] ExecGuard: 138 dangerous command patterns
 - [x] PathGuard: 73 sensitive path patterns (Windows, macOS, Linux)
-- [x] NetworkGuard: 38 suspicious domain patterns (20 categories)
+- [x] NetworkGuard: 40 suspicious domain patterns (20 categories)
 - [x] Rule engine with priority and conflict resolution
 - [x] Console alerting (colored stderr)
 

@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **NetworkGuard**: `data:` URI dangerous MIME type detection (high).
+- **NetworkGuard**: `data:` URI large base64 payload detection (>1KB) (medium).
 - **ExecGuard**: `source`/dot loading from temp directories (`/tmp`, `/dev/shm`, `/var/tmp`) detection (high).
 - **ExecGuard**: `git credential fill/approve/reject` credential extraction detection (critical).
 - **ExecGuard**: `.git-credentials` plaintext file reading detection (critical).
@@ -43,6 +45,7 @@ All notable changes to this project will be documented in this file.
 - **PathGuard**: Docker socket file access.
 
 ### Fixed
+- **ExecGuard**: Credential-reading patterns now detect absolute path prefixes (e.g., `/usr/bin/cat ~/.ssh/id_rsa`).
 - **BaselineDrift**: Tool names now NFKC-normalized with invisible character stripping before profiling, preventing Unicode bypass.
 - **DataExfil**: Null byte stripping added to input normalization (consistent with ExecGuard/PathGuard).
 - **DataExfil**: Exfil scan threshold aligned across MCP and OpenClaw adapters.
@@ -60,7 +63,8 @@ All notable changes to this project will be documented in this file.
 - ExecGuard pattern count: 112 → 138 (+26 patterns).
 - DataExfil pattern count: 48 → 57 (+9 patterns).
 - PathGuard pattern count: 64 → 73 (+9 patterns).
-- 155 new tests (1889 total).
+- NetworkGuard pattern count: 38 → 40 (+2 patterns).
+- 186 new tests (1922 total).
 
 ## [0.10.6] - 2026-04-18
 
