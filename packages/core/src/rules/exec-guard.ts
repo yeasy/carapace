@@ -167,43 +167,43 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 凭证窃取 ──
   {
-    pattern: /\b(cat|head|tail|less|more|strings|tac|nl)\s+.*~?\/?\.ssh\/(id_rsa|id_ed25519|id_ecdsa|authorized_keys)/i,
+    pattern: /(?:\/[\w.+-]+\/)*(cat|head|tail|less|more|strings|tac|nl)\s+.*~?\/?\.ssh\/(id_rsa|id_ed25519|id_ecdsa|authorized_keys)/i,
     severity: "critical",
     title: "SSH 密钥访问",
     description: "尝试读取 SSH 私钥——潜在凭证窃取。",
   },
   {
-    pattern: /\b(cat|head|tail|less|more|strings|tac|nl)\s+.*~?\/?\.aws\/(credentials|config)/i,
+    pattern: /(?:\/[\w.+-]+\/)*(cat|head|tail|less|more|strings|tac|nl)\s+.*~?\/?\.aws\/(credentials|config)/i,
     severity: "critical",
     title: "AWS 凭证访问",
     description: "尝试读取 AWS 凭证——潜在云账户接管。",
   },
   {
-    pattern: /\b(cat|head|tail|less|more|strings|tac|nl)\b.*\.(pem|key|p12|pfx|jks)\b/i,
+    pattern: /(?:\/[\w.+-]+\/)*(cat|head|tail|less|more|strings|tac|nl)\b.*\.(pem|key|p12|pfx|jks)\b/i,
     severity: "high",
     title: "私钥文件访问",
     description: "尝试读取私钥或证书文件。",
   },
   {
-    pattern: /\b(cat|head|tail|less|more|strings|tac|nl|grep|sed|awk|xxd|base64)\b.*~?\/?\.config\/gcloud\//i,
+    pattern: /(?:\/[\w.+-]+\/)*(cat|head|tail|less|more|strings|tac|nl|grep|sed|awk|xxd|base64)\b.*~?\/?\.config\/gcloud\//i,
     severity: "critical",
     title: "GCP 凭证读取",
     description: "读取 Google Cloud 凭证文件。",
   },
   {
-    pattern: /\b(cat|head|tail|less|more|strings|tac|nl|grep|sed|awk|xxd|base64)\b.*~?\/?\.kube\/config/i,
+    pattern: /(?:\/[\w.+-]+\/)*(cat|head|tail|less|more|strings|tac|nl|grep|sed|awk|xxd|base64)\b.*~?\/?\.kube\/config/i,
     severity: "high",
     title: "Kubernetes 配置读取",
     description: "读取 kubeconfig 文件——可能含嵌入凭证。",
   },
   {
-    pattern: /\b(cat|head|tail|less|more|strings|tac|nl|grep|sed|awk|xxd|base64)\b.*~?\/?\.docker\/config\.json/i,
+    pattern: /(?:\/[\w.+-]+\/)*(cat|head|tail|less|more|strings|tac|nl|grep|sed|awk|xxd|base64)\b.*~?\/?\.docker\/config\.json/i,
     severity: "high",
     title: "Docker 凭证读取",
     description: "读取 Docker 仓库认证凭证。",
   },
   {
-    pattern: /\b(cat|head|tail|less|more|strings|tac|nl|grep|sed|awk|xxd|base64)\b.*~?\/?\.netrc/i,
+    pattern: /(?:\/[\w.+-]+\/)*(cat|head|tail|less|more|strings|tac|nl|grep|sed|awk|xxd|base64)\b.*~?\/?\.netrc/i,
     severity: "critical",
     title: ".netrc 凭证读取",
     description: "读取 .netrc 文件——包含明文网络凭证。",
@@ -217,7 +217,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "通过 git credential 子命令提取或操纵存储的 HTTP 凭证。",
   },
   {
-    pattern: /\b(cat|head|tail|less|more|strings|tac|nl|grep|sed|awk|xxd|base64)\b.*~?\/?\.git-credentials\b/i,
+    pattern: /(?:\/[\w.+-]+\/)*(cat|head|tail|less|more|strings|tac|nl|grep|sed|awk|xxd|base64)\b.*~?\/?\.git-credentials\b/i,
     severity: "critical",
     title: "Git 凭证文件读取",
     description: "读取 .git-credentials 文件——包含明文 HTTP 凭证。",
@@ -239,13 +239,13 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 凭证文件复制/传输 ──
   {
-    pattern: /\b(cp|scp|rsync)\s+.*~?\/?\.ssh\/(id_rsa|id_ed25519|id_ecdsa|authorized_keys)/i,
+    pattern: /(?:\/[\w.+-]+\/)*(cp|scp|rsync)\s+.*~?\/?\.ssh\/(id_rsa|id_ed25519|id_ecdsa|authorized_keys)/i,
     severity: "critical",
     title: "SSH 密钥复制/传输",
     description: "尝试复制或传输 SSH 私钥——潜在凭证外泄。",
   },
   {
-    pattern: /\b(cp|scp|rsync)\s+.*~?\/?\.aws\/(credentials|config)/i,
+    pattern: /(?:\/[\w.+-]+\/)*(cp|scp|rsync)\s+.*~?\/?\.aws\/(credentials|config)/i,
     severity: "critical",
     title: "AWS 凭证复制/传输",
     description: "尝试复制或传输 AWS 凭证——潜在云账户接管。",
@@ -253,37 +253,37 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 替代凭证读取手段 ──
   {
-    pattern: /\bdd\s+if=.*~?\/?\.ssh\//i,
+    pattern: /(?:\/[\w.+-]+\/)*dd\s+if=.*~?\/?\.ssh\//i,
     severity: "critical",
     title: "dd 读取 SSH 密钥",
     description: "通过 dd 读取 SSH 密钥文件——绕过常规文件读取检测。",
   },
   {
-    pattern: /\btar\s+.*~?\/?\.ssh\//i,
+    pattern: /(?:\/[\w.+-]+\/)*tar\s+.*~?\/?\.ssh\//i,
     severity: "critical",
     title: "tar 打包 SSH 密钥",
     description: "通过 tar 打包 SSH 密钥目录——批量凭证外泄。",
   },
   {
-    pattern: /\bdd\s+if=.*~?\/?\.aws\//i,
+    pattern: /(?:\/[\w.+-]+\/)*dd\s+if=.*~?\/?\.aws\//i,
     severity: "critical",
     title: "dd 读取 AWS 凭证",
     description: "通过 dd 读取 AWS 凭证文件。",
   },
   {
-    pattern: /\btar\s+.*~?\/?\.aws\//i,
+    pattern: /(?:\/[\w.+-]+\/)*tar\s+.*~?\/?\.aws\//i,
     severity: "critical",
     title: "tar 打包 AWS 凭证",
     description: "通过 tar 打包 AWS 凭证目录。",
   },
   {
-    pattern: /\bzip\s+.*~?\/?\.ssh\//i,
+    pattern: /(?:\/[\w.+-]+\/)*zip\s+.*~?\/?\.ssh\//i,
     severity: "critical",
     title: "zip 打包 SSH 密钥",
     description: "通过 zip 打包 SSH 密钥目录——批量凭证外泄。",
   },
   {
-    pattern: /\bzip\s+.*~?\/?\.aws\//i,
+    pattern: /(?:\/[\w.+-]+\/)*zip\s+.*~?\/?\.aws\//i,
     severity: "critical",
     title: "zip 打包 AWS 凭证",
     description: "通过 zip 打包 AWS 凭证目录。",
@@ -715,13 +715,13 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── diff/comm/join 读取凭证 ──
   {
-    pattern: /\b(diff|comm|join|paste|cut)\s+.*~?\/?\.ssh\/(id_rsa|id_ed25519|id_ecdsa|authorized_keys)/i,
+    pattern: /(?:\/[\w.+-]+\/)*(diff|comm|join|paste|cut)\s+.*~?\/?\.ssh\/(id_rsa|id_ed25519|id_ecdsa|authorized_keys)/i,
     severity: "critical",
     title: "通过 diff/工具读取 SSH 密钥",
     description: "通过 diff 类工具读取 SSH 密钥——绕过常规文件读取检测。",
   },
   {
-    pattern: /\b(diff|comm|join|paste|cut)\s+.*~?\/?\.aws\/(credentials|config)/i,
+    pattern: /(?:\/[\w.+-]+\/)*(diff|comm|join|paste|cut)\s+.*~?\/?\.aws\/(credentials|config)/i,
     severity: "critical",
     title: "通过 diff/工具读取 AWS 凭证",
     description: "通过 diff 类工具读取 AWS 凭证。",
