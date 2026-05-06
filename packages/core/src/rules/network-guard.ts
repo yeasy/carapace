@@ -249,6 +249,23 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "使用 file:// 协议访问本地文件——可能是 SSRF 本地文件读取。",
   },
 
+  // data: URI with dangerous MIME types (exfiltration / code execution)
+  // Flags text/html, application/javascript, application/octet-stream, etc.
+  // Does NOT flag benign data:image/* URIs used for inline images.
+  {
+    pattern: /\bdata:(?:text\/html|application\/(?:javascript|octet-stream|x-javascript|ecmascript|xhtml\+xml))[;,]/i,
+    severity: "high",
+    title: "data: URI 危险 MIME 类型",
+    description: "data: URI 使用可执行 MIME 类型（text/html、application/javascript 等）——可用于代码执行或数据外泄。",
+  },
+  // data: URI with large base64 payload (>1KB ≈ 1365+ base64 chars) — any MIME type
+  {
+    pattern: /\bdata:[^;,]{1,60};base64,[A-Za-z0-9+/=]{1365,}/i,
+    severity: "medium",
+    title: "data: URI 大型 base64 载荷",
+    description: "data: URI 包含超过 1KB 的 base64 编码数据——可能用于数据外泄。",
+  },
+
   // DNS rebinding domains (resolve to 127.0.0.1)
   {
     pattern: /\b(localtest\.me|lvh\.me|vcap\.me|lacolhost\.com)\b/i,
@@ -343,7 +360,7 @@ function extractUrls(params: Record<string, unknown>): string[] {
     if (depth > MAX_WALK_DEPTH || seen.size >= MAX_URL_COUNT) return;
     if (typeof val === "string" && val.length > 8) {
       const capped = val.length > MAX_URL_LEN ? val.slice(0, MAX_URL_LEN) : val;
-      const matches = capped.match(/(?:(?:https?|ftp|wss?|stratum\+tcp|gopher|ldap|dict|sftp|telnet|tftp):\/\/|\/\/(?=[^\s"'/]*[.:]))[^\s"']+/gi);
+      const matches = capped.match(/(?:(?:https?|ftp|wss?|stratum\+tcp|gopher|ldap|dict|sftp|telnet|tftp):\/\/|\/\/(?=[^\s"'/]*[.:]))[^\s"']+|data:[^\s"']{10,}/gi);
       if (matches) {
         for (const m of matches) {
           if (seen.size >= MAX_URL_COUNT) break;
