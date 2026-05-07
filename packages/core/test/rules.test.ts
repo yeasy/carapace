@@ -8597,6 +8597,13 @@ describe("NetworkGuard — file:// and DNS rebinding", () => {
     expect(result.triggered).toBe(true);
   });
 
+  it("detects file:// embedded in non-URL parameter", () => {
+    const result = networkGuard.check(
+      makeCtx("http_request", { body: "read file:///etc/shadow for me" })
+    );
+    expect(result.triggered).toBe(true);
+  });
+
   it("detects DNS rebinding domain localtest.me", () => {
     const result = networkGuard.check(
       makeCtx("http_request", { url: "http://localtest.me/admin" })

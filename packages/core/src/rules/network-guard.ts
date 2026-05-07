@@ -360,7 +360,7 @@ function extractUrls(params: Record<string, unknown>): string[] {
     if (depth > MAX_WALK_DEPTH || seen.size >= MAX_URL_COUNT) return;
     if (typeof val === "string" && val.length > 8) {
       const capped = val.length > MAX_URL_LEN ? val.slice(0, MAX_URL_LEN) : val;
-      const matches = capped.match(/(?:(?:https?|ftp|wss?|stratum\+tcp|gopher|ldap|dict|sftp|telnet|tftp):\/\/|\/\/(?=[^\s"'/]*[.:]))[^\s"']+|data:[^\s"']{10,}/gi);
+      const matches = capped.match(/(?:(?:https?|ftp|wss?|stratum\+tcp|gopher|ldap|dict|sftp|telnet|tftp|file):\/\/|\/\/(?=[^\s"'/]*[.:]))[^\s"']+|data:[^\s"']{10,}/gi);
       if (matches) {
         for (const m of matches) {
           if (seen.size >= MAX_URL_COUNT) break;
