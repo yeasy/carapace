@@ -60,11 +60,12 @@ All notable changes to this project will be documented in this file.
 - ESLint `no-console` rule scoped — `"error"` globally, `"off"` for CLI package only.
 - `.gitignore` expanded for temp scripts (`_*.sh`, `_*.txt`) and agent working directories (`.agent/`, `.claude/`).
 - Design docs updated with `gateway_stop` hook documentation.
-- ExecGuard pattern count: 112 → 138 (+26 patterns).
-- DataExfil pattern count: 48 → 57 (+9 patterns).
-- PathGuard pattern count: 64 → 73 (+9 patterns).
-- NetworkGuard pattern count: 38 → 40 (+2 patterns).
-- 186 new tests (1922 total).
+- ExecGuard pattern count: 112 → 139 (+27 patterns).
+- DataExfil pattern count: 48 → 58 (+10 patterns).
+- PathGuard pattern count: 64 → 75 (+11 patterns).
+- NetworkGuard pattern count: 38 → 42 (+4 patterns).
+- PromptInjection pattern count: 36 → 37 (+1 pattern).
+- 187 new tests (1923 total).
 
 ## [0.10.6] - 2026-04-18
 
