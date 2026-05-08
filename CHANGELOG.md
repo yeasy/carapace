@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-05-08
+
 ### Added
 - **NetworkGuard**: IPv6-mapped loopback address (`[::ffff:127.0.0.1]`) SSRF detection (medium).
 - **NetworkGuard**: `data:` URI dangerous MIME type detection (high).

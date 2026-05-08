@@ -415,7 +415,8 @@ cd carapace && npm install && npm run build
 - **v0.7** — Docker 支持、demo/dashboard/test-rule CLI 命令、GHCR 镜像发布、docker-compose、动态版本管理
 - **v0.8** — SIEM SSRF 加固、ReDoS 校验器、SQLite 存储改进、ExecGuard 标志重排检测、NetworkGuard 误报减少、CLI/Dashboard/适配器安全修复
 - **v0.9** — 安全绕过修复（双重编码、反斜杠续行、通配符驳回）、busybox/Python 内联检测、CLI 参数解析修复、demo SSE 广播修复
-- **v0.10**（当前）— 139 条 ExecGuard 模式（含 shell 归一化）、75 条 PathGuard 路径、43 条 NetworkGuard 模式、58 条 DataExfil 模式、Dashboard API 认证、SSRF 编码检测、数据外泄加固、1928 个测试
+- **v0.10** — 112 条 ExecGuard 模式、64 条 PathGuard 路径、38 条 NetworkGuard 模式、48 条 DataExfil 模式、Dashboard API 认证、SSRF 编码检测、数据外泄加固、1736 个测试
+- **v0.11**（当前）— 139 条 ExecGuard 模式（含 shell 归一化）、75 条 PathGuard 路径、43 条 NetworkGuard 模式、58 条 DataExfil 模式、容器逃逸与供应链检测、env -S / IPv6-mapped / file:// 绕过修复、1928 个测试
 
 ## 贡献
 
