@@ -37,6 +37,7 @@ function normalizeCommand(text: string): string {
     .replace(/\$[@*_]/g, "") // Strip $@, $*, $_ special variables (expand to empty in non-function context)
     .replace(/'([a-zA-Z0-9]+)'/g, "$1") // Strip shell single-quoted alphanumeric segments ('cu''rl' → curl)
     .replace(/"([a-zA-Z0-9]+)"/g, "$1") // Strip shell double-quoted alphanumeric segments ("cu""rl" → curl)
+    .replace(/\benv\s+(-\S+\s+)*-S\s+["']([^"']+)["']/g, "$2") // Inline env -S "cmd" → cmd
     .replace(/\$\{IFS[^}]*\}|\$IFS\b/g, " ") // Normalize $IFS and variants (${IFS:0:1}, ${IFS%%?}, etc.) to space
     .replace(/\$\{[^}]*:-([^}]+)\}/g, "$1") // Decode ${x:-default} parameter expansion
     .replace(/\$\{[^}]*:=([^}]+)\}/g, "$1") // Decode ${x:=val} assignment expansion (expands to val)

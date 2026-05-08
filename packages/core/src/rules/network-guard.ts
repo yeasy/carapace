@@ -68,7 +68,7 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "连接到裸 IP 地址而非域名——可能是 C2 通信。",
   },
   {
-    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/\[[0-9a-fA-F:]+\]/i,
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/\[[0-9a-fA-F:.]+\]/i,
     severity: "medium",
     title: "IPv6 直接地址连接",
     description: "连接到裸 IPv6 地址而非域名——可能是 C2 通信。",
@@ -300,6 +300,12 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     severity: "medium",
     title: "IPv6 本地回环地址访问",
     description: "连接到 IPv6 localhost (::1)——可能是 SSRF 攻击。",
+  },
+  {
+    pattern: /(?:https?|ftp|wss?|gopher|ldap|dict|sftp|telnet|tftp):\/\/\[(?:::ffff:|(?:0{1,4}:){5}ffff:)127\.\d{1,3}\.\d{1,3}\.\d{1,3}\]/i,
+    severity: "medium",
+    title: "IPv6 映射回环地址访问",
+    description: "通过 IPv6-mapped 地址连接到 127.x.x.x 回环地址——SSRF 绕过手法。",
   },
 ];
 
