@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **NetworkGuard**: IPv6-mapped loopback address (`[::ffff:127.0.0.1]`) SSRF detection (medium).
 - **NetworkGuard**: `data:` URI dangerous MIME type detection (high).
 - **NetworkGuard**: `data:` URI large base64 payload detection (>1KB) (medium).
 - **ExecGuard**: `source`/dot loading from temp directories (`/tmp`, `/dev/shm`, `/var/tmp`) detection (high).
@@ -55,6 +56,8 @@ All notable changes to this project will be documented in this file.
 - **Dashboard**: SSE endpoint (`/api/events/stream`) auth removed for EventSource compatibility (read-only stream, rate-limited to 50 clients).
 - **CLI `status`**: Version read wrapped in try/catch for bundled builds where `package.json` is unavailable.
 - **CLI `trust`**: `DANGEROUS_KEYS` Set moved to module level; key filtering uses `Set.has()` instead of inline comparison.
+- **ExecGuard**: `env -S` quoted argument bypass — `normalizeCommand` now inlines `env -S "cmd"` before pattern matching.
+- **NetworkGuard**: Generic IPv6 pattern now includes dotted-decimal notation (`[::ffff:x.x.x.x]`).
 
 ### Changed
 - ESLint `no-console` rule scoped — `"error"` globally, `"off"` for CLI package only.
@@ -63,9 +66,9 @@ All notable changes to this project will be documented in this file.
 - ExecGuard pattern count: 112 → 139 (+27 patterns).
 - DataExfil pattern count: 48 → 58 (+10 patterns).
 - PathGuard pattern count: 64 → 75 (+11 patterns).
-- NetworkGuard pattern count: 38 → 42 (+4 patterns).
+- NetworkGuard pattern count: 38 → 43 (+5 patterns).
 - PromptInjection pattern count: 36 → 37 (+1 pattern).
-- 187 new tests (1923 total).
+- 192 new tests (1928 total).
 
 ## [0.10.6] - 2026-04-18
 
