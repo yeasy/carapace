@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **ExecGuard**: `dd if=/dev/zero of=/` destructive overwrite detection (high).
+- **ExecGuard**: `truncate --size=0` file zeroing detection (critical).
+- **ExecGuard**: `shred` secure file erasure detection (critical).
+- **ExecGuard**: `tee` to `/etc/ld.so.preload` injection detection (critical).
+- **DataExfil**: `curl --data-urlencode` file upload detection (high).
+- **DataExfil**: `wget --post-data` command substitution exfiltration detection (high).
+- **DataExfil**: DNS variable expansion (`${VAR}`) exfiltration detection (critical).
+- **DataExfil**: `base32` encoding added to all pipe-exfil patterns.
+
+### Fixed
+- **ExecGuard**: ANSI-C `$'...'` quoting now decodes `\a`, `\b`, `\v`, `\e`/`\E`, `\f` escape sequences.
+- **ExecGuard**: ASCII control characters (SOH, BEL, BS, etc.) stripped after ANSI-C decode, preventing bypass.
+- **ExecGuard**: Heredoc patterns now detect `<<-` (tab-strip) variant.
+- **NetworkGuard**: Hex metadata IP pattern now matches dotted-hex form (`0xa9.0xfe.0xa9.0xfe`).
+- **NetworkGuard**: IPv6 mapped hex pattern now handles zero-padded groups (`0000:` instead of `0:`).
+- **NetworkGuard**: DNS wildcard services (nip.io/sslip.io/xip.io) broadened to detect any embedded IP (SSRF bypass).
+- **NetworkGuard**: Additional DNS rebinding domains added (`traefik.me`, `rbndr.us`, `1u.ms`, `rebind.network`).
+- **BaselineDrift**: Skill names now NFKC-normalized with invisible character stripping (matching tool name normalization).
+
+### Changed
+- ExecGuard pattern count: 138 → 142 (+4 patterns).
+- DataExfil pattern count: 57 → 60 (+3 patterns).
+- 22 new tests (1950 total).
+
 ## [0.11.0] - 2026-05-08
 
 ### Added
@@ -65,11 +90,10 @@ All notable changes to this project will be documented in this file.
 - ESLint `no-console` rule scoped — `"error"` globally, `"off"` for CLI package only.
 - `.gitignore` expanded for temp scripts (`_*.sh`, `_*.txt`) and agent working directories (`.agent/`, `.claude/`).
 - Design docs updated with `gateway_stop` hook documentation.
-- ExecGuard pattern count: 112 → 139 (+27 patterns).
-- DataExfil pattern count: 48 → 58 (+10 patterns).
-- PathGuard pattern count: 64 → 75 (+11 patterns).
-- NetworkGuard pattern count: 38 → 43 (+5 patterns).
-- PromptInjection pattern count: 36 → 37 (+1 pattern).
+- ExecGuard pattern count: 112 → 138 (+26 patterns).
+- DataExfil pattern count: 48 → 57 (+9 patterns).
+- PathGuard pattern count: 64 → 73 (+9 paths).
+- NetworkGuard pattern count: 38 → 41 (+3 patterns).
 - 192 new tests (1928 total).
 
 ## [0.10.6] - 2026-04-18
