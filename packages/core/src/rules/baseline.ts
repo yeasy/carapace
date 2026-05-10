@@ -152,8 +152,9 @@ export function createBaselineDriftRule(config?: BaselineConfig): {
       const skillName = ctx.skillName;
       if (!skillName) return { triggered: false };
 
+      const normalizedSkill = skillName.normalize("NFKC").replace(INVISIBLE_CHARS_RE, "");
       const normalizedTool = ctx.toolName.normalize("NFKC").replace(INVISIBLE_CHARS_RE, "");
-      const { isNovel, profile } = tracker.recordCall(skillName, normalizedTool);
+      const { isNovel, profile } = tracker.recordCall(normalizedSkill, normalizedTool);
 
       // 仍在学习阶段，只记录不告警
       if (!profile.learned) {

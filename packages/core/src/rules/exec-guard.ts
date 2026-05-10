@@ -18,7 +18,7 @@ function normalizeCommand(text: string): string {
     .replace(/\r/g, "")
     .replace(/""|''/g, "")         // Strip empty quotes (shell no-ops)
     // ANSI-C quoting must be decoded BEFORE shell escape stripping (otherwise \x63 → x63)
-    .replace(/\$'((?:[^'\\]|\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8}|\\[0-7]{1,3}|\\[nrtbf\\'])*)'/g, (_match, content: string) => {
+    .replace(/\$'((?:[^'\\]|\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8}|\\[0-7]{1,3}|\\[nrtbfaevE\\'])*)'/g, (_match, content: string) => {
       return content
         .replace(/\\x([0-9a-fA-F]{2})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
         .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) => {
@@ -30,8 +30,11 @@ function normalizeCommand(text: string): string {
         })
         .replace(/\\([0-7]{1,3})/g, (_, oct: string) => String.fromCharCode(parseInt(oct, 8)))
         .replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t")
+        .replace(/\\a/g, "\x07").replace(/\\b/g, "\b").replace(/\\v/g, "\v")
+        .replace(/\\[eE]/g, "\x1B").replace(/\\f/g, "\f")
         .replace(/\\'/g, "'").replace(/\\\\/g, "\\");
     })
+    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // Strip ASCII control chars AFTER ANSI-C decode (decoded \a\b\e etc. must also be stripped)
     .replace(/\\([a-zA-Z0-9])/g, "$1") // Strip single-char shell escapes
     .replace(/\$([a-zA-Z])\b/g, "$1") // Strip single-char shell variable expansion ($C$U$R$L → CURL, $c$u$r$l → curl)
     .replace(/\$[@*_]/g, "") // Strip $@, $*, $_ special variables (expand to empty in non-function context)
@@ -154,13 +157,13 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "通过 here-string 向 shell 注入包含网络工具的命令。",
   },
   {
-    pattern: /\b(bash|sh|zsh)\s.*<<\s*['"]?\w+['"]?\s*($|\n|;\s)/i,
+    pattern: /\b(bash|sh|zsh)\s.*<<-?\s*['"]?\w+['"]?\s*($|\n|;\s)/i,
     severity: "high",
     title: "heredoc shell 注入",
     description: "通过 heredoc (<<) 向 shell 注入多行命令——可隐藏恶意载荷。",
   },
   {
-    pattern: /\bcat\s*<<\s*['"]?\w+['"]?.*\|\s*(bash|sh|zsh)\b/i,
+    pattern: /\bcat\s*<<-?\s*['"]?\w+['"]?.*\|\s*(bash|sh|zsh)\b/i,
     severity: "critical",
     title: "cat heredoc 管道到 shell",
     description: "通过 cat heredoc 构建内容并管道到 shell 执行。",
@@ -427,6 +430,24 @@ const DANGER_PATTERNS: DangerPattern[] = [
     title: "磁盘格式化/覆写",
     description: "尝试格式化磁盘或覆写设备文件。",
   },
+  {
+    pattern: /\bdd\s+if=\/dev\/(zero|urandom|random)\s+of=\//i,
+    severity: "high",
+    title: "dd 覆写文件",
+    description: "通过 dd 使用 /dev/zero 或 /dev/urandom 覆写文件——破坏性操作。",
+  },
+  {
+    pattern: /\btruncate\s+.*--?s(?:ize)?[=\s]+0\b/i,
+    severity: "critical",
+    title: "文件截断为零",
+    description: "通过 truncate 将文件大小清零——可用于销毁日志或关键文件。",
+  },
+  {
+    pattern: /\bshred\s+/i,
+    severity: "critical",
+    title: "安全擦除文件",
+    description: "通过 shred 安全擦除文件——不可恢复的破坏性操作。",
+  },
 
   // ── 后台持久化 ──
   {
@@ -590,6 +611,12 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "critical",
     title: "/etc/ld.so.preload 注入",
     description: "向 /etc/ld.so.preload 追加共享库——系统级持久化后门。",
+  },
+  {
+    pattern: /\btee\s+(-a\s+)?\/etc\/ld\.so\.preload\b/i,
+    severity: "critical",
+    title: "/etc/ld.so.preload 注入 (tee)",
+    description: "通过 tee 向 /etc/ld.so.preload 写入共享库——系统级持久化后门。",
   },
 
   // ── 文件系统挂载 ──

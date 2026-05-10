@@ -159,7 +159,7 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "十进制编码访问云元数据端点 (169.254.169.254)。",
   },
   {
-    pattern: /0xa9[.]?fe[.]?a9[.]?fe|0xa9fea9fe/i,
+    pattern: /0xa9[.]?fe[.]?a9[.]?fe|0xa9fea9fe|0xa9\.0xfe\.0xa9\.0xfe/i,
     severity: "critical",
     title: "云元数据访问（十六进制 IP）",
     description: "十六进制编码访问云元数据端点 (169.254.169.254)。",
@@ -177,7 +177,7 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "IPv6 映射地址访问云元数据端点 (169.254.169.254)。",
   },
   {
-    pattern: /\[(?:0:){5}ffff:a9fe:a9fe\]/i,
+    pattern: /\[(?:0{1,4}:){5}ffff:a9fe:a9fe\]/i,
     severity: "critical",
     title: "云元数据访问（IPv6 映射 - hex）",
     description: "IPv6 全零展开形式访问云元数据端点。",
@@ -217,12 +217,12 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "访问腾讯云 CVM 元数据服务 (metadata.tencentyun.com)。",
   },
 
-  // DNS wildcard services that resolve to embedded IPs (metadata bypass)
+  // DNS wildcard services that resolve to embedded IPs (SSRF bypass)
   {
-    pattern: /169\.254\.169\.254\.(?:nip|sslip|xip)\.io/i,
-    severity: "critical",
-    title: "DNS 通配符元数据绕过",
-    description: "通过 DNS 通配符服务 (nip.io/sslip.io) 访问云元数据——绕过域名检测。",
+    pattern: /\b\d{1,3}(?:\.\d{1,3}){3}\.(?:nip|sslip|xip)\.io\b/i,
+    severity: "high",
+    title: "DNS 通配符服务 IP 解析",
+    description: "通过 DNS 通配符服务 (nip.io/sslip.io/xip.io) 解析 IP 地址——可绕过域名检测进行 SSRF。",
   },
 
   // Alibaba Cloud metadata
@@ -268,7 +268,7 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
 
   // DNS rebinding domains (resolve to 127.0.0.1)
   {
-    pattern: /\b(localtest\.me|lvh\.me|vcap\.me|lacolhost\.com)\b/i,
+    pattern: /\b(localtest\.me|lvh\.me|vcap\.me|lacolhost\.com|traefik\.me|rbndr\.us|1u\.ms|rebind\.network)\b/i,
     severity: "medium",
     title: "DNS 重绑定域名访问",
     description: "使用已知 DNS 重绑定域名（解析为 127.0.0.1）——可能是 SSRF 绕过。",
