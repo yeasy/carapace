@@ -15,6 +15,14 @@ All notable changes to this project will be documented in this file.
 - **DataExfil**: `base32` encoding added to all pipe-exfil patterns.
 
 ### Fixed
+- **ExecGuard**: `dd` destructive patterns now detect arguments in any order (`dd of=/boot/vmlinuz if=/dev/zero`).
+- **ExecGuard**: `tee` persistence patterns now absorb arbitrary flags (`tee -i -a`, `tee --append`).
+- **ExecGuard**: `shred` pattern now requires path argument, reducing false positives.
+- **ExecGuard**: `base64`/`base32` decode-to-shell patterns unified (`base32 -d | sh` now detected).
+- **ExecGuard**: `env --split-string` normalization added alongside `env -S`.
+- **PathGuard**: `/proc/thread-self/` paths now detected alongside `/proc/self/`.
+- **PromptInjection**: JSON role injection now matches single-quoted variants (`'role': 'system'`).
+- **PromptInjection**: Anthropic conversation delimiter injection (`\n\nHuman:`, `\n\nAssistant:`) detected.
 - **ExecGuard**: ANSI-C `$'...'` quoting now decodes `\a`, `\b`, `\v`, `\e`/`\E`, `\f` escape sequences.
 - **ExecGuard**: ASCII control characters (SOH, BEL, BS, etc.) stripped after ANSI-C decode, preventing bypass.
 - **ExecGuard**: Heredoc patterns now detect `<<-` (tab-strip) variant.
@@ -27,7 +35,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - ExecGuard pattern count: 138 → 142 (+4 patterns).
 - DataExfil pattern count: 57 → 60 (+3 patterns).
-- 22 new tests (1950 total).
+- PromptInjection pattern count: 36 → 37 (+1 pattern).
+- 40 new tests (1968 total).
 
 ## [0.11.0] - 2026-05-08
 
