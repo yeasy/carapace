@@ -72,9 +72,9 @@ const SENSITIVE_PATHS: SensitivePath[] = [
   { pattern: /[/\\](?:Library|Caches)[/\\].*?Cookies\.binarycookies\b/i, severity: "critical", title: "macOS Cookie 数据库访问", category: "browser" },
 
   // Linux procfs (environment variables, memory, command line, root filesystem traversal)
-  { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\](environ|mem|cmdline)/i, severity: "critical", title: "Linux /proc 敏感文件访问", category: "system" },
-  { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\]root[/\\]/i, severity: "critical", title: "Linux /proc/root 文件系统遍历", category: "system" },
-  { pattern: /[/\\]proc[/\\](?:self|\d+)[/\\](fd|maps|smaps|status|stat|io|net|cwd|exe)\b/i, severity: "high", title: "Linux /proc 信息泄露", category: "system" },
+  { pattern: /[/\\]proc[/\\](?:self|thread-self|\d+)[/\\](environ|mem|cmdline)/i, severity: "critical", title: "Linux /proc 敏感文件访问", category: "system" },
+  { pattern: /[/\\]proc[/\\](?:self|thread-self|\d+)[/\\]root[/\\]/i, severity: "critical", title: "Linux /proc/root 文件系统遍历", category: "system" },
+  { pattern: /[/\\]proc[/\\](?:self|thread-self|\d+)[/\\](fd|maps|smaps|status|stat|io|net|cwd|exe)\b/i, severity: "high", title: "Linux /proc 信息泄露", category: "system" },
 
   // 系统认证
   { pattern: /[/\\]etc[/\\](passwd|shadow|sudoers|master\.passwd)/i, severity: "high", title: "系统认证文件访问", category: "system" },

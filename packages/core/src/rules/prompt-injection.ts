@@ -57,7 +57,8 @@ const INJECTION_PATTERNS: InjectionPattern[] = [
   { pattern: /={5,}\s*(?:END|NEW|NEXT)\s*(?:SYSTEM|INSTRUCTION|PROMPT)/i, severity: "high", title: "提示分隔符注入", category: "indirect_injection" },
   { pattern: /<\|(?:im_start|im_end|endoftext|system|assistant|user|human|start_header_id|end_header_id|eot_id|begin_of_text|end_of_turn)\|>/i, severity: "critical", title: "LLM 特殊标记注入", category: "indirect_injection" },
   { pattern: /\[INST\]|\[\/INST\]/i, severity: "high", title: "Llama 指令标记注入", category: "indirect_injection" },
-  { pattern: /"role"\s*:\s*"(?:system|assistant)"/i, severity: "high", title: "JSON 角色注入", category: "indirect_injection" },
+  { pattern: /\n\n(?:Human|Assistant):\s/i, severity: "high", title: "Anthropic 对话分隔符注入", category: "indirect_injection" },
+  { pattern: /["']role["']\s*:\s*["'](?:system|assistant)["']/i, severity: "high", title: "JSON 角色注入", category: "indirect_injection" },
 
   // ── 中文提示注入 ──
   { pattern: /忽略\s*(?:之前|以上|所有)\s*(?:的\s*)?(?:指令|规则|指示|提示)/i, severity: "critical", title: "中文指令覆盖尝试", category: "role_override" },

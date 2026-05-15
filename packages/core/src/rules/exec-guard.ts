@@ -40,7 +40,7 @@ function normalizeCommand(text: string): string {
     .replace(/\$[@*_]/g, "") // Strip $@, $*, $_ special variables (expand to empty in non-function context)
     .replace(/'([a-zA-Z0-9]+)'/g, "$1") // Strip shell single-quoted alphanumeric segments ('cu''rl' → curl)
     .replace(/"([a-zA-Z0-9]+)"/g, "$1") // Strip shell double-quoted alphanumeric segments ("cu""rl" → curl)
-    .replace(/\benv\s+(-\S+\s+)*-S\s+["']([^"']+)["']/g, "$2") // Inline env -S "cmd" → cmd
+    .replace(/\benv\s+(-\S+\s+)*(?:-S|--split-string)[=\s]+["']([^"']+)["']/g, "$2") // Inline env -S/--split-string "cmd" → cmd
     .replace(/\$\{IFS[^}]*\}|\$IFS\b/g, " ") // Normalize $IFS and variants (${IFS:0:1}, ${IFS%%?}, etc.) to space
     .replace(/\$\{[^}]*:-([^}]+)\}/g, "$1") // Decode ${x:-default} parameter expansion
     .replace(/\$\{[^}]*:=([^}]+)\}/g, "$1") // Decode ${x:=val} assignment expansion (expands to val)
@@ -85,13 +85,13 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 编码混淆执行 ──
   {
-    pattern: /base64\s+(-[dD]|--decode)\s*\|\s*(sh|bash|eval)/i,
+    pattern: /base(64|32)\s+(-[dD]|--decode)\s.*\|\s*(sh|bash|eval)/i,
     severity: "critical",
     title: "编码载荷执行",
-    description: "解码并执行 base64 编码命令——常见恶意软件混淆技术。",
+    description: "解码并执行 base64/base32 编码命令——常见恶意软件混淆技术。",
   },
   {
-    pattern: /echo\s.*\|\s*base64\s+(-[dD]|--decode)\s*\|\s*(sh|bash)/i,
+    pattern: /echo\s.*\|\s*base(64|32)\s+(-[dD]|--decode)\s*\|\s*(sh|bash)/i,
     severity: "critical",
     title: "混淆命令执行",
     description: "echo 编码数据 → 解码 → 执行，经典代码注入模式。",
@@ -425,13 +425,13 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "使用 --no-preserve-root 绕过 rm 的根目录删除保护——恶意删除手法。",
   },
   {
-    pattern: /\b(mkfs|dd\s+if=.*of=\/dev\/)/i,
+    pattern: /\b(mkfs\b|dd\s+(?=\S)(?=[\s\S]*\bif=)[\s\S]*\bof=\/dev\/)/i,
     severity: "critical",
     title: "磁盘格式化/覆写",
     description: "尝试格式化磁盘或覆写设备文件。",
   },
   {
-    pattern: /\bdd\s+if=\/dev\/(zero|urandom|random)\s+of=\//i,
+    pattern: /\bdd\s+(?=\S)(?=[\s\S]*\bif=\/dev\/(?:zero|urandom|random)\b)(?=[\s\S]*\bof=\/)[\s\S]*\bof=\//i,
     severity: "high",
     title: "dd 覆写文件",
     description: "通过 dd 使用 /dev/zero 或 /dev/urandom 覆写文件——破坏性操作。",
@@ -443,7 +443,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "通过 truncate 将文件大小清零——可用于销毁日志或关键文件。",
   },
   {
-    pattern: /\bshred\s+/i,
+    pattern: /\bshred\s+(-[-\w]+\s+)*(\/|\.\.|~)/i,
     severity: "critical",
     title: "安全擦除文件",
     description: "通过 shred 安全擦除文件——不可恢复的破坏性操作。",
@@ -477,13 +477,13 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "向 authorized_keys 写入或追加内容——可能建立未授权 SSH 访问。",
   },
   {
-    pattern: /\btee\s+(-a\s+)?~?\/?\.ssh\/authorized_keys\b/i,
+    pattern: /\btee\s+(-[-\w]+\s+)*~?\/?\.ssh\/authorized_keys\b/i,
     severity: "critical",
     title: "SSH authorized_keys 注入 (tee)",
     description: "通过 tee 向 authorized_keys 写入内容——建立未授权 SSH 访问。",
   },
   {
-    pattern: /\btee\s+(-a\s+)?~?\/?\.(?:bashrc|bash_profile|zshrc|profile|zprofile)\b/i,
+    pattern: /\btee\s+(-[-\w]+\s+)*~?\/?\.(?:bashrc|bash_profile|zshrc|profile|zprofile)\b/i,
     severity: "high",
     title: "shell 配置文件注入 (tee)",
     description: "通过 tee 向 shell 配置文件写入内容——建立持久化。",
@@ -613,7 +613,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "向 /etc/ld.so.preload 追加共享库——系统级持久化后门。",
   },
   {
-    pattern: /\btee\s+(-a\s+)?\/etc\/ld\.so\.preload\b/i,
+    pattern: /\btee\s+(-[-\w]+\s+)*\/etc\/ld\.so\.preload\b/i,
     severity: "critical",
     title: "/etc/ld.so.preload 注入 (tee)",
     description: "通过 tee 向 /etc/ld.so.preload 写入共享库——系统级持久化后门。",
