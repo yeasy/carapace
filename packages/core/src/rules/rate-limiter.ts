@@ -92,6 +92,13 @@ export function createRateLimiterRule(maxCallsPerMinute: number = 60): SecurityR
         record.timestamps.splice(insertIdx, 0, now);
       }
       cleanup(record, now);
+
+      // Cap array size to prevent unbounded growth under flood conditions
+      const hardLimit = maxCallsPerMinute * 10;
+      if (record.timestamps.length > hardLimit) {
+        record.timestamps = record.timestamps.slice(-maxCallsPerMinute * 2);
+      }
+
       cleanupSessions(now);
 
       // 计算最近 60 秒内的调用数

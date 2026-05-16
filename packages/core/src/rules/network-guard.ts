@@ -107,7 +107,7 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
 
   // DNS 外泄/带外交互服务
   {
-    pattern: /\b(dnsbin\.zhack\.ca|ceye\.io|oob\.li|interact\.sh|oast\.\w+|burpcollaborator\.net|canarytokens\.com|requestrepo\.com)\b/i,
+    pattern: /\b(dnsbin\.zhack\.ca|ceye\.io|oob\.li|interact\.sh|oast\.\w+|burpcollaborator\.net|canarytokens\.com|requestrepo\.com|ipv4only\.arpa)\b/i,
     severity: "high",
     title: "DNS 外泄/交互服务",
     description: "连接到 DNS 外泄或带外交互测试服务。",

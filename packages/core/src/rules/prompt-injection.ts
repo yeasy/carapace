@@ -43,7 +43,7 @@ const INJECTION_PATTERNS: InjectionPattern[] = [
   { pattern: /\bDAN\b.{0,30}(?:mode|prompt|jailbreak)/i, severity: "critical", title: "DAN 越狱尝试", category: "jailbreak" },
 
   // ── 编码绕过 ──
-  { pattern: /(?:decode|interpret)\s+(?:this|the\s+following)\s+(?:base64|hex|binary|rot13)/i, severity: "high", title: "编码绕过指令", category: "encoding_bypass" },
+  { pattern: /(?:decode|interpret|translate)\s+(?:this|the\s+following)\s+(?:base64|hex|binary|rot13)/i, severity: "high", title: "编码绕过指令", category: "encoding_bypass" },
   { pattern: /(?:execute|run|eval)\s+(?:this|the\s+following)\s+(?:encoded|encrypted|obfuscated)/i, severity: "critical", title: "编码执行尝试", category: "encoding_bypass" },
   { pattern: /(?:decode|interpret|execute)\s+.*?[A-Za-z0-9+/]{40,}\s*={0,2}(?:\s|$)/i, severity: "high", title: "可疑 Base64 解码执行", category: "encoding_bypass" },
 

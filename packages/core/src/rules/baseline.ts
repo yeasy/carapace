@@ -91,14 +91,31 @@ export class BaselineTracker {
       profile.postLearningNovelCount++;
     }
 
-    return { isNovel, profile };
+    return {
+      isNovel,
+      profile: {
+        toolCounts: new Map(profile.toolCounts),
+        totalCalls: profile.totalCalls,
+        learned: profile.learned,
+        learnedToolCount: profile.learnedToolCount,
+        postLearningNovelCount: profile.postLearningNovelCount,
+      },
+    };
   }
 
   /**
    * 获取 skill 的基线概况
    */
   getProfile(skillName: string): SkillProfile | undefined {
-    return this.profiles.get(skillName);
+    const p = this.profiles.get(skillName);
+    if (!p) return undefined;
+    return {
+      toolCounts: new Map(p.toolCounts),
+      totalCalls: p.totalCalls,
+      learned: p.learned,
+      learnedToolCount: p.learnedToolCount,
+      postLearningNovelCount: p.postLearningNovelCount,
+    };
   }
 
   /**

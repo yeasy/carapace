@@ -257,7 +257,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 替代凭证读取手段 ──
   {
-    pattern: /(?:\/[\w.+-]+\/)*dd\s+if=.*~?\/?\.ssh\//i,
+    pattern: /\bdd\s+(?=\S)(?=[\s\S]*\bif=\S*~?\/?\.ssh\/)[\s\S]*\.ssh\//i,
     severity: "critical",
     title: "dd 读取 SSH 密钥",
     description: "通过 dd 读取 SSH 密钥文件——绕过常规文件读取检测。",
@@ -269,7 +269,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "通过 tar 打包 SSH 密钥目录——批量凭证外泄。",
   },
   {
-    pattern: /(?:\/[\w.+-]+\/)*dd\s+if=.*~?\/?\.aws\//i,
+    pattern: /\bdd\s+(?=\S)(?=[\s\S]*\bif=\S*~?\/?\.aws\/)[\s\S]*\.aws\//i,
     severity: "critical",
     title: "dd 读取 AWS 凭证",
     description: "通过 dd 读取 AWS 凭证文件。",

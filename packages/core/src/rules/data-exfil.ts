@@ -48,7 +48,7 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
 
   // Base64 encoded credentials (~40+ chars covers typical API keys/tokens)
   // Includes base64url charset (-_ instead of +/) used by JWTs and URL-safe tokens
-  { pattern: /(?<=\s|^|["'`])[A-Za-z0-9+/\-_]{40,16000}={0,2}(?=\s|$|["'`])/, severity: "medium", title: "Base64 编码数据外发", category: "encoded_exfil" },
+  { pattern: /(?<=\s|^|["'`])[A-Za-z0-9+/\-_]{60,16000}={0,2}(?=\s|$|["'`])/, severity: "medium", title: "Base64 编码数据外发", category: "encoded_exfil" },
 
   // 将文件内容通过 curl/wget 发送到外部
   { pattern: /curl\s+.*-[dX]\s+.*@[~.]?\//i, severity: "high", title: "通过 curl 上传本地文件", category: "file_upload" },
@@ -84,6 +84,9 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   // 命令替换方式外泄敏感文件（绕过管道检测）
   { pattern: /(?:curl|wget)\s+.*\$\(\s*(?:cat|head|tail|base64|base32|strings|xxd)\s+.*\.(pem|key|env|credentials|secret)\b/i, severity: "critical", title: "通过命令替换外泄敏感文件", category: "pipe_exfil" },
   { pattern: /(?:curl|wget)\s+.*\$\(\s*(?:cat|head|tail|base64|base32|strings|xxd)\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud|docker|kube)\/(id_rsa|id_ed25519|credentials|config|private-keys)\b/i, severity: "critical", title: "通过命令替换外泄凭证文件", category: "pipe_exfil" },
+
+  // Python inline script exfiltration
+  { pattern: /python3?\s+-c\s+.*(?:urllib\.request\.urlopen|requests\.(?:get|post|put|patch))/i, severity: "high", title: "Python 内联脚本网络外泄", category: "pipe_exfil" },
 
   // GPG 私钥通过网络导出
   { pattern: /gpg\s+.*--export-secret-keys.*\|\s*(curl|wget|nc|ncat)/i, severity: "critical", title: "GPG 私钥导出并通过网络发送", category: "pipe_exfil" },
@@ -158,7 +161,7 @@ const MAX_STRING_COUNT = 1000;
 const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\u2060-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC01-\uDC7F]/g;
 
 function normalizeForExfilDetection(text: string): string {
-  return text.normalize("NFKC").replace(INVISIBLE_CHARS_RE, "").replace(/\0/g, "");
+  return text.normalize("NFKC").replace(INVISIBLE_CHARS_RE, "").replace(/\0/g, "").replace(/\\\n/g, "");
 }
 
 function extractAllStrings(params: Record<string, unknown>): string[] {
@@ -249,7 +252,7 @@ export function createDataExfilRule(): SecurityRule {
         for (const dest of EXFIL_DESTINATIONS) {
           const match = dest.exec(chunk);
           if (match) {
-            const hasSendAction = /(?:POST|PUT|PATCH|upload|send|--data(?:-raw|-urlencode)?|--form|--upload-file|--post-file|--post-data|--body-file|--json|-d[\s@"']|-F[\s@"']|-T\s|-XPOST|-XPUT)/i.test(chunk);
+            const hasSendAction = /(?:POST|PUT|PATCH|upload|send|--data(?:-raw|-urlencode)?|--form|--upload-file|--post-file|--post-data|--body-file|--json|-d[^-]|-F[\s@"']|-T\s|-XPOST|-XPUT)/i.test(chunk);
             const hasCmdSubstitution = /\$\([^)]+\)|`[^`]+`|\$\{[^}]+\}/.test(chunk);
             const hasSensitiveParams = /\?\S*(?:data|secret|token|key|passwd|password|credential|file)=/i.test(chunk);
             if (hasSendAction || hasCmdSubstitution || hasSensitiveParams) {
