@@ -13,9 +13,13 @@ All notable changes to this project will be documented in this file.
 - **DataExfil**: `wget --post-data` command substitution exfiltration detection (high).
 - **DataExfil**: DNS variable expansion (`${VAR}`) exfiltration detection (critical).
 - **DataExfil**: `base32` encoding added to all pipe-exfil patterns.
+- **DataExfil**: Python inline script exfiltration detection (`python3 -c urllib.request.urlopen`).
+- **NetworkGuard**: `ipv4only.arpa` DNS bypass domain detection.
+- **PromptInjection**: `translate` added as encoding bypass trigger verb.
 
 ### Fixed
 - **ExecGuard**: `dd` destructive patterns now detect arguments in any order (`dd of=/boot/vmlinuz if=/dev/zero`).
+- **ExecGuard**: `dd` credential-reading patterns now detect arguments in any order (`dd of=/tmp/stolen if=~/.ssh/id_rsa`).
 - **ExecGuard**: `tee` persistence patterns now absorb arbitrary flags (`tee -i -a`, `tee --append`).
 - **ExecGuard**: `shred` pattern now requires path argument, reducing false positives.
 - **ExecGuard**: `base64`/`base32` decode-to-shell patterns unified (`base32 -d | sh` now detected).
@@ -23,6 +27,11 @@ All notable changes to this project will be documented in this file.
 - **PathGuard**: `/proc/thread-self/` paths now detected alongside `/proc/self/`.
 - **PromptInjection**: JSON role injection now matches single-quoted variants (`'role': 'system'`).
 - **PromptInjection**: Anthropic conversation delimiter injection (`\n\nHuman:`, `\n\nAssistant:`) detected.
+- **DataExfil**: Base64 blob threshold raised from 40 to 60 chars to reduce SHA-256/UUID false positives.
+- **DataExfil**: `curl -d` now detects no-separator form (`-dplaintext`).
+- **DataExfil**: Backslash-newline sequences stripped in normalization, preventing command splitting bypass.
+- **RateLimiter**: Timestamp array capped to prevent unbounded memory growth under flood conditions.
+- **BaselineTracker**: `recordCall` and `getProfile` now return defensive copies, preventing internal state corruption.
 - **ExecGuard**: ANSI-C `$'...'` quoting now decodes `\a`, `\b`, `\v`, `\e`/`\E`, `\f` escape sequences.
 - **ExecGuard**: ASCII control characters (SOH, BEL, BS, etc.) stripped after ANSI-C decode, preventing bypass.
 - **ExecGuard**: Heredoc patterns now detect `<<-` (tab-strip) variant.
@@ -33,10 +42,12 @@ All notable changes to this project will be documented in this file.
 - **BaselineDrift**: Skill names now NFKC-normalized with invisible character stripping (matching tool name normalization).
 
 ### Changed
-- ExecGuard pattern count: 138 → 142 (+4 patterns).
-- DataExfil pattern count: 57 → 60 (+3 patterns).
-- PromptInjection pattern count: 36 → 37 (+1 pattern).
-- 40 new tests (1968 total).
+- ExecGuard pattern count: 138 → 143 (+5 patterns).
+- PathGuard pattern count: 70 → 75 (+5 patterns).
+- NetworkGuard pattern count: 38 → 43 (+5 patterns).
+- DataExfil pattern count: 57 → 62 (+5 patterns).
+- PromptInjection pattern count: 36 → 38 (+2 patterns).
+- 54 new tests (1982 total).
 
 ## [0.11.0] - 2026-05-08
 
