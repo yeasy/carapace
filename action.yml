@@ -29,19 +29,16 @@ runs:
 
     - name: Install dependencies
       shell: bash
+      working-directory: ${{ github.action_path }}
       run: npm install
 
     - name: Build
       shell: bash
+      working-directory: ${{ github.action_path }}
       run: npm run build
 
     - name: Run Carapace Scan
       shell: bash
+      working-directory: ${{ inputs.scan-path }}
       run: |
-        node packages/cli/dist/index.js scan --config ${{ inputs.config-path }}
-
-    - name: Check for critical findings
-      if: inputs.block-on-critical == 'true'
-      shell: bash
-      run: |
-        echo "Critical security check enabled"
+        node ${{ github.action_path }}/packages/cli/dist/index.js scan --config ${{ inputs.config-path }}
