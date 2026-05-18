@@ -416,7 +416,8 @@ cd carapace && npm install && npm run build
 - **v0.8** — SIEM SSRF 加固、ReDoS 校验器、SQLite 存储改进、ExecGuard 标志重排检测、NetworkGuard 误报减少、CLI/Dashboard/适配器安全修复
 - **v0.9** — 安全绕过修复（双重编码、反斜杠续行、通配符驳回）、busybox/Python 内联检测、CLI 参数解析修复、demo SSE 广播修复
 - **v0.10** — 112 条 ExecGuard 模式、64 条 PathGuard 路径、38 条 NetworkGuard 模式、48 条 DataExfil 模式、Dashboard API 认证、SSRF 编码检测、数据外泄加固、1736 个测试
-- **v0.11**（当前）— 143 条 ExecGuard 模式（含 shell 归一化）、75 条 PathGuard 路径、43 条 NetworkGuard 模式、38 条 PromptInjection 模式、62 条 DataExfil 模式、容器逃逸与供应链检测、env -S / IPv6-mapped / file:// 绕过修复、1982 个测试
+- **v0.11** — 143 条 ExecGuard 模式（含 shell 归一化）、75 条 PathGuard 路径、43 条 NetworkGuard 模式、38 条 PromptInjection 模式、62 条 DataExfil 模式、容器逃逸与供应链检测、env -S / IPv6-mapped / file:// 绕过修复、1982 个测试
+- **v0.12**（当前）— dd/truncate/shred 破坏检测、tee preload 注入、curl/wget/DNS 外泄模式、base32 管道外泄、ANSI-C 转义绕过修复、BaselineDrift 归一化、GitHub Action 跨仓库修复、1982 个测试
 
 ## 贡献
 

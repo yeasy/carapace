@@ -416,7 +416,8 @@ cd carapace && npm install && npm run build
 - **v0.8** — SIEM SSRF hardening, ReDoS validator, SQLite store improvements, ExecGuard flag-reorder detection, NetworkGuard false-positive reduction, security fixes across CLI/dashboard/adapters
 - **v0.9** — Security bypass fixes (double-encoding, backslash-continuation, wildcard dismissal), busybox/Python inline detection, CLI parseArgs fix, demo SSE broadcast fix
 - **v0.10** — 112 ExecGuard patterns, 64 PathGuard paths, 38 NetworkGuard patterns, 48 DataExfil patterns, dashboard API auth, SSRF encoding detection, data exfil hardening, 1736 tests
-- **v0.11** (current) — 143 ExecGuard patterns with shell normalization, 75 PathGuard paths, 43 NetworkGuard patterns, 38 PromptInjection patterns, 62 DataExfil patterns, container escape & supply chain detection, env -S / IPv6-mapped / file:// bypass fixes, 1982 tests
+- **v0.11** — 143 ExecGuard patterns with shell normalization, 75 PathGuard paths, 43 NetworkGuard patterns, 38 PromptInjection patterns, 62 DataExfil patterns, container escape & supply chain detection, env -S / IPv6-mapped / file:// bypass fixes, 1982 tests
+- **v0.12** (current) — dd/truncate/shred destructive detection, tee preload injection, curl/wget/DNS exfil patterns, base32 pipe-exfil, ANSI-C escape bypass fixes, BaselineDrift normalization, GitHub Action cross-repo fix, 1982 tests
 
 ## Contributing
 

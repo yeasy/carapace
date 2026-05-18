@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-05-17
+
 ### Added
 - **ExecGuard**: `dd if=/dev/zero of=/` destructive overwrite detection (high).
 - **ExecGuard**: `truncate --size=0` file zeroing detection (critical).
@@ -40,6 +42,7 @@ All notable changes to this project will be documented in this file.
 - **NetworkGuard**: DNS wildcard services (nip.io/sslip.io/xip.io) broadened to detect any embedded IP (SSRF bypass).
 - **NetworkGuard**: Additional DNS rebinding domains added (`traefik.me`, `rbndr.us`, `1u.ms`, `rebind.network`).
 - **BaselineDrift**: Skill names now NFKC-normalized with invisible character stripping (matching tool name normalization).
+- **GitHub Action**: `scan-path` input now applied via `working-directory`; install/build steps use `github.action_path` for cross-repo compatibility.
 
 ### Changed
 - ExecGuard pattern count: 138 → 143 (+5 patterns).
