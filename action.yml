@@ -40,5 +40,8 @@ runs:
     - name: Run Carapace Scan
       shell: bash
       working-directory: ${{ inputs.scan-path }}
+      env:
+        CONFIG_PATH: ${{ inputs.config-path }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
-        node ${{ github.action_path }}/packages/cli/dist/index.js scan --config ${{ inputs.config-path }}
+        node "$ACTION_PATH/packages/cli/dist/index.js" scan --config "$CONFIG_PATH"
