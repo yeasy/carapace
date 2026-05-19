@@ -108,6 +108,12 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /(socat|openssl\s+s_client)\s+.*<\s*.*\.(pem|key|env|credentials|secret)/i, severity: "critical", title: "将敏感文件重定向到 socat/openssl", category: "pipe_exfil" },
   { pattern: /(?:cat|head|tail|dd|strings|base64|base32|xxd|tac|nl|less|more)\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud|docker|kube)\/(id_rsa|id_ed25519|credentials|config|private-keys).*\|\s*(socat|openssl)/i, severity: "critical", title: "通过 socat/openssl 外泄凭证文件", category: "pipe_exfil" },
 
+  // tee + 进程替换外泄
+  { pattern: /\btee\s+.*>\(\s*(nc|ncat|curl|wget|socat)\b/i, severity: "critical", title: "通过 tee 进程替换外泄数据", category: "pipe_exfil" },
+
+  // Ruby 内联网络外泄
+  { pattern: /ruby\s+.*?-e\s+.*\b(?:Net::HTTP|URI\.open|open-uri|Net::FTP)\b/i, severity: "high", title: "Ruby 内联脚本网络外泄", category: "pipe_exfil" },
+
   // /dev/tcp and /dev/udp data exfiltration (non-shell redirect)
   { pattern: />\s*\/dev\/(?:tcp|udp)\/\S+\/\d+/i, severity: "critical", title: "通过 /dev/tcp|udp 外泄数据", category: "pipe_exfil" },
 

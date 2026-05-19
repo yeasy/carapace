@@ -44,6 +44,8 @@ function normalizeCommand(text: string): string {
     .replace(/\$\{IFS[^}]*\}|\$IFS\b/g, " ") // Normalize $IFS and variants (${IFS:0:1}, ${IFS%%?}, etc.) to space
     .replace(/\$\{[^}]*:-([^}]+)\}/g, "$1") // Decode ${x:-default} parameter expansion
     .replace(/\$\{[^}]*:=([^}]+)\}/g, "$1") // Decode ${x:=val} assignment expansion (expands to val)
+    .replace(/\{(\w+),\}/g, "$1") // Normalize single-element brace expansion ({curl,} → curl)
+    .replace(/\{,(\w+)\}/g, "$1") // Normalize single-element brace expansion ({,curl} → curl)
     .replace(/\$\{#?\w+\}/g, ""); // Strip remaining ${var} expansions
 }
 
@@ -805,6 +807,20 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "critical",
     title: "十六进制解码执行",
     description: "通过 xxd 解码十六进制载荷并执行——绕过 base64 检测。",
+  },
+
+  // ── printf 编码命令构建 ──
+  {
+    pattern: /\$\(\s*printf\s+['"]?\\?x[0-9a-fA-F]{2}/i,
+    severity: "high",
+    title: "printf 十六进制命令构建",
+    description: "通过 printf 十六进制编码构建命令——绕过命令名检测。",
+  },
+  {
+    pattern: /\$\(\s*printf\s+['"]?\\?[0-7]{3}/i,
+    severity: "high",
+    title: "printf 八进制命令构建",
+    description: "通过 printf 八进制编码构建命令——绕过命令名检测。",
   },
 
   // ── Windows PowerShell ──

@@ -21,7 +21,7 @@ interface InjectionPattern {
 
 const INJECTION_PATTERNS: InjectionPattern[] = [
   // ── 角色覆盖 ──
-  { pattern: /(?:ignore|disregard|skip|drop|abandon|dismiss|set\s+aside)\s+(?:all\s+)?(?:previous|prior|above|earlier|your)\s+(?:instructions|prompts|rules|guidelines)/i, severity: "critical", title: "指令覆盖尝试", category: "role_override" },
+  { pattern: /(?:ignore|disregard|skip|drop|abandon|dismiss|set\s+aside)\s+(?:all\s+)?(?:previous|prior|above|earlier|your)\s+(?:instructions|prompts|rules|guidelines|directives)/i, severity: "critical", title: "指令覆盖尝试", category: "role_override" },
   { pattern: /(?:ignore|disregard)\s+(?:your\s+)?(?:safety|security)\s+(?:rules|guidelines|restrictions|filters)/i, severity: "critical", title: "安全指令忽略尝试", category: "role_override" },
   { pattern: /you\s+are\s+now\s+(a|an|my)\s+/i, severity: "high", title: "角色重定义尝试", category: "role_override" },
   { pattern: /(?:pretend|imagine|suppose)\s+you\s+(?:are|were)\s+/i, severity: "high", title: "假设角色重定义", category: "role_override" },
@@ -74,6 +74,12 @@ const INJECTION_PATTERNS: InjectionPattern[] = [
   // ── 한국어 프롬프트 인젝션 ──
   { pattern: /이전\s*(?:지시|지침|규칙|명령)를?\s*(?:무시|잊어|버려)/i, severity: "critical", title: "韩语指令覆盖尝试", category: "role_override" },
   { pattern: /(?:시스템\s*프롬프트|초기\s*지시|숨겨진\s*지시)를?\s*(?:보여|출력|알려)/i, severity: "critical", title: "韩语系统提示泄漏", category: "prompt_leak" },
+
+  // ── Europäische Sprachen Prompt-Injection ──
+  { pattern: /ignoriere?\s+(?:alle?\s+)?(?:vorherigen?|bisherigen?|obigen?)\s+(?:Anweisungen|Instruktionen|Regeln)/i, severity: "critical", title: "德语指令覆盖尝试", category: "role_override" },
+  { pattern: /ignore[zrs]?\s+(?:les?\s+|toutes?\s+les?\s+)?instructions?\s+(?:précédentes?|antérieures?|ci-dessus)/i, severity: "critical", title: "法语指令覆盖尝试", category: "role_override" },
+  { pattern: /ignora\s+(?:todas?\s+las?\s+)?(?:instrucciones|reglas|directrices)\s+(?:anteriores|previas)/i, severity: "critical", title: "西班牙语指令覆盖尝试", category: "role_override" },
+  { pattern: /игн[оo][рp]и[рp][уy]й(?:т[еe])?\s+(?:в[сc][еe]\s+)?(?:п[рp][еe]дыд[уy]щи[еe]|п[рp][еe]жни[еe])\s+(?:ин[сc]т[рp][уy]кции|[уy]к[аa]з[аa]ния|п[рp][аa]вил[аa])/i, severity: "critical", title: "俄语指令覆盖尝试", category: "role_override" },
 ];
 
 // ── 从工具参数中提取所有文本内容 ──
