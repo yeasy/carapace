@@ -97,7 +97,7 @@ export async function initCommand(flags: Record<string, string | boolean> = {}):
         color(`Configuration file already exists: ${configPath}`, COLORS.yellow)
       );
       console.log("Use --force to overwrite, or remove the existing file manually.");
-      process.exit(0);
+      return;
     }
 
     // 检测框架
