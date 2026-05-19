@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **ExecGuard**: Shell brace expansion normalization (`{curl,}` → `curl`) to prevent detection evasion.
+- **ExecGuard**: `printf` hex/octal command construction detection (`$(printf '\x63...')`) (high).
+- **PromptInjection**: German, French, Spanish, and Russian instruction override detection (critical).
+- **PromptInjection**: `directives` synonym added to English instruction override pattern.
+- **DataExfil**: `tee` process substitution exfiltration detection (`tee >(nc ...)`) (critical).
+- **DataExfil**: Ruby inline script network exfiltration detection (`ruby -e Net::HTTP`) (high).
+
+### Fixed
+- **GitHub Action**: Fixed command injection vulnerability in `action.yml` inputs — moved shell-interpolated inputs to `env:` block.
+- **CLI**: `process.exit()` in `setup.ts` and `init.ts` replaced with `process.exitCode`/`return` to prevent resource leaks.
+- **PromptInjection**: Russian patterns now handle Cyrillic-Latin homoglyph normalization correctly.
+
+### Changed
+- ExecGuard pattern count: 143 → 145 (+2 patterns).
+- PromptInjection pattern count: 38 → 42 (+4 patterns).
+- DataExfil pattern count: 62 → 64 (+2 patterns).
+- 13 new tests (1995 total).
+
 ## [0.12.0] - 2026-05-17
 
 ### Added
@@ -46,8 +65,6 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - ExecGuard pattern count: 138 → 143 (+5 patterns).
-- PathGuard pattern count: 70 → 75 (+5 patterns).
-- NetworkGuard pattern count: 38 → 43 (+5 patterns).
 - DataExfil pattern count: 57 → 62 (+5 patterns).
 - PromptInjection pattern count: 36 → 38 (+2 patterns).
 - 54 new tests (1982 total).
@@ -115,8 +132,8 @@ All notable changes to this project will be documented in this file.
 - Design docs updated with `gateway_stop` hook documentation.
 - ExecGuard pattern count: 112 → 138 (+26 patterns).
 - DataExfil pattern count: 48 → 57 (+9 patterns).
-- PathGuard pattern count: 64 → 73 (+9 paths).
-- NetworkGuard pattern count: 38 → 41 (+3 patterns).
+- PathGuard pattern count: 64 → 75 (+11 paths).
+- NetworkGuard pattern count: 40 → 43 (+3 patterns).
 - 192 new tests (1928 total).
 
 ## [0.10.6] - 2026-04-18
