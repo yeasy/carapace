@@ -7,21 +7,26 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **ExecGuard**: Shell brace expansion normalization (`{curl,}` → `curl`) to prevent detection evasion.
 - **ExecGuard**: `printf` hex/octal command construction detection (`$(printf '\x63...')`) (high).
+- **ExecGuard**: `ncat --sh-exec` reverse shell detection (critical).
+- **ExecGuard**: `basenc` decode-to-shell detection bypassing base64/base32 checks (critical).
 - **PromptInjection**: German, French, Spanish, and Russian instruction override detection (critical).
+- **PromptInjection**: Portuguese and Italian instruction override detection (critical).
 - **PromptInjection**: `directives` synonym added to English instruction override pattern.
 - **DataExfil**: `tee` process substitution exfiltration detection (`tee >(nc ...)`) (critical).
 - **DataExfil**: Ruby inline script network exfiltration detection (`ruby -e Net::HTTP`) (high).
+- **DataExfil**: DNS tunneling via `ping` command substitution detection (high).
 
 ### Fixed
 - **GitHub Action**: Fixed command injection vulnerability in `action.yml` inputs — moved shell-interpolated inputs to `env:` block.
-- **CLI**: `process.exit()` in `setup.ts` and `init.ts` replaced with `process.exitCode`/`return` to prevent resource leaks.
+- **CLI**: All `process.exit(1)` calls replaced with `process.exitCode = 1` to prevent resource leaks (13 instances across 7 files).
 - **PromptInjection**: Russian patterns now handle Cyrillic-Latin homoglyph normalization correctly.
+- **CI**: Added npm cache to workflow, removed dead Docker Hub steps.
 
 ### Changed
-- ExecGuard pattern count: 143 → 145 (+2 patterns).
-- PromptInjection pattern count: 38 → 42 (+4 patterns).
-- DataExfil pattern count: 62 → 64 (+2 patterns).
-- 13 new tests (1995 total).
+- ExecGuard pattern count: 144 → 147 (+3 patterns).
+- PromptInjection pattern count: 39 → 45 (+6 patterns).
+- DataExfil pattern count: 64 → 67 (+3 patterns).
+- 19 new tests (2001 total).
 
 ## [0.12.0] - 2026-05-17
 

@@ -52,7 +52,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   encoded PowerShell  crypto wallets       raw IP connections
   eval / subprocess   /etc/shadow          mining pools
   heredoc injection   /proc/self/*         decimal/octal/hex IP
-  ...145 patterns      ...75 patterns       ...43 patterns
+  ...147 patterns      ...76 patterns       ...44 patterns
 
   PromptInjection     DataExfil            BaselineDrift
   ───────────────     ─────────            ─────────────
@@ -62,7 +62,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   fake system tags    curl file upload     novelty ratio alert
   encoding bypass     pipe exfil chains
   hidden injections   env var leak
-  ...42 patterns      ...64 patterns       configurable threshold
+  ...45 patterns      ...67 patterns       configurable threshold
 ```
 
 ## Key Features
@@ -71,12 +71,12 @@ AI agents can execute shell commands, read any file, and make network requests �
 mindmap
   root((🛡️ Carapace))
     7 Built-in Rules
-      ExecGuard (145 patterns)
-      PathGuard (75 patterns)
-      NetworkGuard (43 patterns)
+      ExecGuard (147 patterns)
+      PathGuard (76 patterns)
+      NetworkGuard (44 patterns)
       RateLimiter
-      PromptInjection (42 patterns)
-      DataExfil (64 patterns)
+      PromptInjection (45 patterns)
+      DataExfil (67 patterns)
       BaselineDrift (anomaly detection)
     Smart Alert Routing
       5-min dedup window
@@ -416,8 +416,8 @@ cd carapace && npm install && npm run build
 - **v0.8** — SIEM SSRF hardening, ReDoS validator, SQLite store improvements, ExecGuard flag-reorder detection, NetworkGuard false-positive reduction, security fixes across CLI/dashboard/adapters
 - **v0.9** — Security bypass fixes (double-encoding, backslash-continuation, wildcard dismissal), busybox/Python inline detection, CLI parseArgs fix, demo SSE broadcast fix
 - **v0.10** — 112 ExecGuard patterns, 64 PathGuard paths, 38 NetworkGuard patterns, 48 DataExfil patterns, dashboard API auth, SSRF encoding detection, data exfil hardening, 1736 tests
-- **v0.11** — 138 ExecGuard patterns with shell normalization, 75 PathGuard paths, 43 NetworkGuard patterns, 38 PromptInjection patterns, 57 DataExfil patterns, container escape & supply chain detection, env -S / IPv6-mapped / file:// bypass fixes, 1928 tests
-- **v0.12** (current) — 145 ExecGuard, 42 PromptInjection, 64 DataExfil patterns, brace expansion/printf bypass detection, European language prompt injection, tee/Ruby exfil detection, ANSI-C escape fixes, GitHub Action security fix, 1995 tests
+- **v0.11** — 140 ExecGuard patterns with shell normalization, 76 PathGuard paths, 44 NetworkGuard patterns, 38 PromptInjection patterns, 60 DataExfil patterns, container escape & supply chain detection, env -S / IPv6-mapped / file:// bypass fixes, 1928 tests
+- **v0.12** (current) — 147 ExecGuard, 45 PromptInjection, 67 DataExfil patterns, brace expansion/printf/basenc bypass detection, European language prompt injection, tee/Ruby/ping exfil detection, ncat --sh-exec detection, ANSI-C escape fixes, GitHub Action security fix, CLI process.exit cleanup, 2001 tests
 
 ## Contributing
 

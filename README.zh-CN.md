@@ -52,7 +52,7 @@ AI Agent 可以执行 shell 命令、读写任意文件、发起网络请求—�
   编码 PowerShell     加密货币钱包          裸 IP 连接
   eval / subprocess   /etc/shadow           挖矿池
   heredoc 注入        /proc/self/*          十进制/八进制/十六进制 IP
-  ...145 种模式        ...75 种模式          ...43 种模式
+  ...147 种模式        ...76 种模式          ...44 种模式
 
   PromptInjection     DataExfil            BaselineDrift
   ───────────────     ─────────            ─────────────
@@ -62,7 +62,7 @@ AI Agent 可以执行 shell 命令、读写任意文件、发起网络请求—�
   伪造系统标签        curl 文件上传         新颖度比例告警
   编码绕过            管道外泄链
   隐藏注入指令        环境变量泄漏
-  ...42 种模式        ...64 种模式          可配置阈值
+  ...45 种模式        ...67 种模式          可配置阈值
 ```
 
 ## 核心特性
@@ -71,12 +71,12 @@ AI Agent 可以执行 shell 命令、读写任意文件、发起网络请求—�
 mindmap
   root((🛡️ Carapace))
     7 条内置规则
-      ExecGuard（145 种模式）
-      PathGuard（75 种模式）
-      NetworkGuard（43 种模式）
+      ExecGuard（147 种模式）
+      PathGuard（76 种模式）
+      NetworkGuard（44 种模式）
       RateLimiter
-      PromptInjection（42 种模式）
-      DataExfil（64 种模式）
+      PromptInjection（45 种模式）
+      DataExfil（67 种模式）
       BaselineDrift（异常检测）
     智能告警路由
       5 分钟去重窗口
@@ -416,8 +416,8 @@ cd carapace && npm install && npm run build
 - **v0.8** — SIEM SSRF 加固、ReDoS 校验器、SQLite 存储改进、ExecGuard 标志重排检测、NetworkGuard 误报减少、CLI/Dashboard/适配器安全修复
 - **v0.9** — 安全绕过修复（双重编码、反斜杠续行、通配符驳回）、busybox/Python 内联检测、CLI 参数解析修复、demo SSE 广播修复
 - **v0.10** — 112 条 ExecGuard 模式、64 条 PathGuard 路径、38 条 NetworkGuard 模式、48 条 DataExfil 模式、Dashboard API 认证、SSRF 编码检测、数据外泄加固、1736 个测试
-- **v0.11** — 138 条 ExecGuard 模式（含 shell 归一化）、75 条 PathGuard 路径、43 条 NetworkGuard 模式、38 条 PromptInjection 模式、57 条 DataExfil 模式、容器逃逸与供应链检测、env -S / IPv6-mapped / file:// 绕过修复、1928 个测试
-- **v0.12**（当前）— 145 条 ExecGuard、42 条 PromptInjection、64 条 DataExfil 模式、花括号展开/printf 绕过检测、欧洲语言提示注入、tee/Ruby 外泄检测、ANSI-C 转义修复、GitHub Action 安全修复、1995 个测试
+- **v0.11** — 140 条 ExecGuard 模式（含 shell 归一化）、76 条 PathGuard 路径、44 条 NetworkGuard 模式、38 条 PromptInjection 模式、60 条 DataExfil 模式、容器逃逸与供应链检测、env -S / IPv6-mapped / file:// 绕过修复、1928 个测试
+- **v0.12**（当前）— 147 条 ExecGuard、45 条 PromptInjection、67 条 DataExfil 模式、花括号展开/printf/basenc 绕过检测、欧洲语言提示注入、tee/Ruby/ping 外泄检测、ncat --sh-exec 检测、ANSI-C 转义修复、GitHub Action 安全修复、CLI process.exit 清理、2001 个测试
 
 ## 贡献
 
