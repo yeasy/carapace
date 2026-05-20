@@ -174,7 +174,7 @@ async function main(): Promise<void> {
           console.error(
             `Run '${color("carapace help", COLORS.cyan)}' for usage information`
           );
-          process.exit(1);
+          process.exitCode = 1;
         } else {
           printHelp();
         }
@@ -186,7 +186,7 @@ async function main(): Promise<void> {
         COLORS.red
       )
     );
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
@@ -194,5 +194,5 @@ main().catch((err) => {
   console.error(
     color(`Fatal Error: ${err instanceof Error ? err.message : String(err)}`, COLORS.red)
   );
-  process.exit(1);
+  process.exitCode = 1;
 });

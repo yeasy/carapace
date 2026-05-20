@@ -77,6 +77,7 @@ export async function statusCommand(): Promise<void> {
     console.error(
       color(`Error: ${err instanceof Error ? err.message : String(err)}`, COLORS.red)
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 }

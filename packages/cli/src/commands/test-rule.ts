@@ -229,6 +229,7 @@ export async function testRuleCommand(args: string[]): Promise<void> {
         COLORS.red
       )
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 }

@@ -24,7 +24,8 @@ export async function trustCommand(
           COLORS.red
         )
       );
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
 
     // Load existing config from ~/.carapace/config.json
@@ -46,7 +47,8 @@ export async function trustCommand(
 
     if (DANGEROUS_KEYS.has(skillName) || !skillName.trim() || !/^[\w.@/-]+$/.test(skillName.trim())) {
       console.error(color(`Error: Invalid skill name: "${skillName}". Must be non-empty and contain only letters, digits, dots, hyphens, underscores, slashes, or @.`, COLORS.red));
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
 
     if (action === "trust") {
@@ -108,6 +110,7 @@ export async function trustCommand(
     console.error(
       color(`Error: ${err instanceof Error ? err.message : String(err)}`, COLORS.red)
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 }

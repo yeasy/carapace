@@ -150,6 +150,7 @@ export async function initCommand(flags: Record<string, string | boolean> = {}):
     console.error(
       color(`Error: ${err instanceof Error ? err.message : String(err)}`, COLORS.red)
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 }
