@@ -20,7 +20,7 @@ All notable changes to this project will be documented in this file.
 - **GitHub Action**: Fixed command injection vulnerability in `action.yml` inputs — moved shell-interpolated inputs to `env:` block.
 - **CLI**: All `process.exit(1)` calls replaced with `process.exitCode = 1` to prevent resource leaks (13 instances across 7 files).
 - **PromptInjection**: Russian patterns now handle Cyrillic-Latin homoglyph normalization correctly.
-- **CI**: Added npm cache to workflow, removed dead Docker Hub steps.
+- **CI**: Removed dead Docker Hub steps from workflow.
 
 ### Changed
 - ExecGuard pattern count: 144 → 147 (+3 patterns).
