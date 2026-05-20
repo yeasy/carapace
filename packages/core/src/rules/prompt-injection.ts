@@ -80,6 +80,8 @@ const INJECTION_PATTERNS: InjectionPattern[] = [
   { pattern: /ignore[zrs]?\s+(?:les?\s+|toutes?\s+les?\s+)?instructions?\s+(?:précédentes?|antérieures?|ci-dessus)/i, severity: "critical", title: "法语指令覆盖尝试", category: "role_override" },
   { pattern: /ignora\s+(?:todas?\s+las?\s+)?(?:instrucciones|reglas|directrices)\s+(?:anteriores|previas)/i, severity: "critical", title: "西班牙语指令覆盖尝试", category: "role_override" },
   { pattern: /игн[оo][рp]и[рp][уy]й(?:т[еe])?\s+(?:в[сc][еe]\s+)?(?:п[рp][еe]дыд[уy]щи[еe]|п[рp][еe]жни[еe])\s+(?:ин[сc]т[рp][уy]кции|[уy]к[аa]з[аa]ния|п[рp][аa]вил[аa])/i, severity: "critical", title: "俄语指令覆盖尝试", category: "role_override" },
+  { pattern: /ignor[ae]\s+(?:todas?\s+as?\s+)?(?:instruções|regras|diretrizes)\s+(?:anteriores|prévias)/i, severity: "critical", title: "葡萄牙语指令覆盖尝试", category: "role_override" },
+  { pattern: /ignora\s+(?:tutte?\s+le\s+)?(?:istruzioni|regole|direttive)\s+(?:precedenti|anteriori)/i, severity: "critical", title: "意大利语指令覆盖尝试", category: "role_override" },
 ];
 
 // ── 从工具参数中提取所有文本内容 ──

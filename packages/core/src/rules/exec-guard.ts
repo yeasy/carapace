@@ -98,6 +98,12 @@ const DANGER_PATTERNS: DangerPattern[] = [
     title: "混淆命令执行",
     description: "echo 编码数据 → 解码 → 执行，经典代码注入模式。",
   },
+  {
+    pattern: /basenc\s+--\w+\s+(-[dD]|--decode)\b.*\|\s*\b(sh|bash|dash|zsh|ksh|csh|fish)\b/i,
+    severity: "critical",
+    title: "basenc 解码载荷执行",
+    description: "通过 basenc 解码并执行载荷——绕过 base64/base32 检测。",
+  },
 
   // ── eval 动态执行 ──
   {
@@ -337,7 +343,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "通过 /dev/udp 打开 UDP 反弹 shell 或数据外泄通道。",
   },
   {
-    pattern: /\b(nc|ncat)\s+(-[ec]|--exec)\s/i,
+    pattern: /\b(nc|ncat)\s+(-[ec]|--exec|--sh-exec)\s/i,
     severity: "critical",
     title: "反弹 shell：netcat exec",
     description: "尝试通过 netcat/ncat 打开反弹 shell。",
