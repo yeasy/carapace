@@ -661,4 +661,21 @@ match:
       expect(result.allowed).toBeDefined();
     });
   });
+
+  // ── extractStringContent: structured MCP responses ──
+
+  describe("interceptResponse with structured MCP content", () => {
+    it("scans structured { content: [{ type: 'text', text: ... }] } responses for credentials", () => {
+      const proxy = createMcpProxy();
+      const events = proxy.interceptResponse("bash", {
+        content: [
+          {
+            type: "text",
+            text: "Here is the credential output from the server: AKIAIOSFODNN7EXAMPLE and some more text to pad the length beyond minimum threshold",
+          },
+        ],
+      });
+      expect(events.length).toBeGreaterThan(0);
+    });
+  });
 });

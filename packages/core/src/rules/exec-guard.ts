@@ -386,6 +386,20 @@ const DANGER_PATTERNS: DangerPattern[] = [
     title: "反弹 shell：awk inet/tcp",
     description: "通过 awk 的 /inet/tcp 特性打开网络连接——反弹 shell 手法。",
   },
+  {
+    pattern: /\bawk\b.*\b(system|popen)\s*\(|\bawk\b.*\bprint\b.*\|\s*["'].*\b(sh|bash|ksh|zsh|dash)\b/i,
+    severity: "critical",
+    title: "命令执行：awk system/popen",
+    description: "通过 awk 的 system()/popen() 函数或 print 管道执行系统命令。",
+  },
+
+  // ── sed e 标志命令执行 ──
+  {
+    pattern: /\bsed\b.*\/[giIpw]*e/i,
+    severity: "high",
+    title: "命令执行：sed e 标志",
+    description: "GNU sed 的 e 标志将模式空间作为命令执行。",
+  },
 
   // ── 其他语言反弹 shell ──
   {

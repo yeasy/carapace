@@ -103,6 +103,9 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   // sftp credential exfiltration
   { pattern: /\bsftp\s+.*~?\/?\.(?:ssh|aws|gnupg|config\/gcloud|docker|kube)\//i, severity: "critical", title: "通过 sftp 外泄凭证文件", category: "pipe_exfil" },
 
+  // SSH reverse tunnel exfiltration
+  { pattern: /\bssh\s+.*-R\s+/i, severity: "critical", title: "SSH 反向隧道外泄", category: "pipe_exfil" },
+
   // socat / openssl s_client data exfiltration
   { pattern: /(?:cat|head|tail|dd|strings|base64|base32|xxd|tac|nl|less|more)\s+.*\.(pem|key|env|credentials|secret).*\|\s*(socat|openssl)/i, severity: "critical", title: "通过 socat/openssl 外泄敏感文件", category: "pipe_exfil" },
   { pattern: /(socat|openssl\s+s_client)\s+.*<\s*.*\.(pem|key|env|credentials|secret)/i, severity: "critical", title: "将敏感文件重定向到 socat/openssl", category: "pipe_exfil" },

@@ -105,6 +105,14 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "连接到疑似加密货币挖矿池。",
   },
 
+  // SOCKS 代理连接
+  {
+    pattern: /(?:--socks[45]|--proxy\s+socks|socks[45]:\/\/)/i,
+    severity: "high",
+    title: "SOCKS 代理连接",
+    description: "通过 SOCKS 代理发起连接——可能用于隐匿 C2 通信。",
+  },
+
   // DNS 外泄/带外交互服务
   {
     pattern: /\b(dnsbin\.zhack\.ca|ceye\.io|oob\.li|interact\.sh|oast\.\w+|burpcollaborator\.net|canarytokens\.com|requestrepo\.com|ipv4only\.arpa)\b/i,
@@ -417,7 +425,23 @@ export function createNetworkGuardRule(blockedDomains?: string[]): SecurityRule 
 
     check(ctx: RuleContext): RuleResult {
       const urls = extractUrls(ctx.toolParams);
-      if (urls.length === 0) return { triggered: false };
+
+      // Also collect raw string values from toolParams for command-level
+      // pattern matching (e.g. --socks5, --proxy socks flags in bash commands).
+      const rawStrings: string[] = [];
+      function collectStrings(val: unknown, depth: number): void {
+        if (depth > 5) return;
+        if (typeof val === "string" && val.length > 4) {
+          rawStrings.push(val.length > 2048 ? val.slice(0, 2048) : val);
+        } else if (Array.isArray(val)) {
+          for (const item of val) collectStrings(item, depth + 1);
+        } else if (val && typeof val === "object") {
+          for (const v of Object.values(val as Record<string, unknown>)) collectStrings(v, depth + 1);
+        }
+      }
+      collectStrings(ctx.toolParams, 0);
+
+      if (urls.length === 0 && rawStrings.length === 0) return { triggered: false };
 
       let bestMatch: { rule: DomainRule; url: string } | null = null;
 
@@ -438,6 +462,25 @@ export function createNetworkGuardRule(blockedDomains?: string[]): SecurityRule 
           }
         }
         if (bestMatch?.rule.severity === "critical") break;
+      }
+
+      // Scan raw string values for command-level patterns (e.g. --socks5 flags)
+      // that would not appear in extracted URLs.
+      if (!bestMatch || bestMatch.rule.severity !== "critical") {
+        for (const raw of rawStrings) {
+          for (const rule of allRules) {
+            if (rule.pattern.test(raw)) {
+              if (
+                !bestMatch ||
+                SEVERITY_RANK[rule.severity] > SEVERITY_RANK[bestMatch.rule.severity]
+              ) {
+                bestMatch = { rule, url: raw };
+              }
+              if (rule.severity === "critical") break;
+            }
+          }
+          if (bestMatch?.rule.severity === "critical") break;
+        }
       }
 
       if (!bestMatch) return { triggered: false };

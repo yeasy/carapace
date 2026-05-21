@@ -73,6 +73,26 @@ interface SessionStats {
   lastActivity: number;
 }
 
+// ── 结果提取辅助 ──
+
+function extractStringContent(result: unknown): string | null {
+  if (typeof result === "string") return result;
+  if (typeof result === "object" && result !== null && "content" in result) {
+    const obj = result as { content: unknown };
+    if (Array.isArray(obj.content)) {
+      const texts: string[] = [];
+      for (const item of obj.content) {
+        if (typeof item === "object" && item !== null && "text" in item) {
+          const val = (item as { text: unknown }).text;
+          if (typeof val === "string") texts.push(val);
+        }
+      }
+      return texts.length > 0 ? texts.join("\n") : null;
+    }
+  }
+  return null;
+}
+
 // ── 插件定义 ──
 
 const plugin = {
@@ -251,11 +271,12 @@ const plugin = {
           );
         }
 
-        // 检测响应中的数据外泄模式（当结果是字符串时）
-        if (event.result && typeof event.result === "string" && event.result.length > 16) {
+        // 检测响应中的数据外泄模式（当结果是字符串或结构化内容时）
+        const resultText = extractStringContent(event.result);
+        if (resultText && resultText.length > 16) {
           const resultCtx: RuleContext = {
             toolName: event.toolName,
-            toolParams: { _result: event.result },
+            toolParams: { _result: resultText },
             sessionId: _ctx.sessionId,
             agentId: _ctx.agentId,
             skillName: event.skillName,
