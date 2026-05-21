@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
 - **DataExfil**: `tee` process substitution exfiltration detection (`tee >(nc ...)`) (critical).
 - **DataExfil**: Ruby inline script network exfiltration detection (`ruby -e Net::HTTP`) (high).
 - **DataExfil**: DNS tunneling via `ping` command substitution detection (high).
+- **ExecGuard**: `awk` `system()`/`popen()` command execution detection (critical).
+- **ExecGuard**: GNU `sed` `/e` flag command execution detection (high).
+- **DataExfil**: SSH reverse tunnel (`ssh -R`) exfiltration detection (critical).
+- **NetworkGuard**: SOCKS proxy (`--socks4/5`, `socks5://`) connection detection (high).
 
 ### Fixed
 - **GitHub Action**: Fixed command injection vulnerability in `action.yml` inputs — moved shell-interpolated inputs to `env:` block.
@@ -23,10 +27,12 @@ All notable changes to this project will be documented in this file.
 - **CI**: Removed dead Docker Hub steps from workflow.
 
 ### Changed
-- ExecGuard pattern count: 144 → 147 (+3 patterns).
-- PromptInjection pattern count: 39 → 45 (+6 patterns).
-- DataExfil pattern count: 64 → 67 (+3 patterns).
-- 19 new tests (2001 total).
+- ExecGuard pattern count: 143 → 148 (+5 patterns).
+- PromptInjection pattern count: 38 → 44 (+6 patterns).
+- DataExfil pattern count: 62 → 66 (+4 patterns).
+- NetworkGuard pattern count: 43 → 44 (+1 pattern).
+- Adapter-MCP and adapter-openclaw now scan structured MCP responses (`content[].text`), not just plain strings.
+- 29 new tests (2011 total).
 
 ## [0.12.0] - 2026-05-17
 
