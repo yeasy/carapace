@@ -25,14 +25,17 @@ All notable changes to this project will be documented in this file.
 - **CLI**: All `process.exit(1)` calls replaced with `process.exitCode = 1` to prevent resource leaks (13 instances across 7 files).
 - **PromptInjection**: Russian patterns now handle Cyrillic-Latin homoglyph normalization correctly.
 - **CI**: Removed dead Docker Hub steps from workflow.
+- **ExecGuard**: `awk` patterns now detect `gawk`, `mawk`, `nawk` variants.
+- **Action**: Removed unused `block-on-critical` input from `action.yml`.
 
 ### Changed
-- ExecGuard pattern count: 143 → 148 (+5 patterns).
-- PromptInjection pattern count: 38 → 44 (+6 patterns).
-- DataExfil pattern count: 62 → 66 (+4 patterns).
-- NetworkGuard pattern count: 43 → 44 (+1 pattern).
+- ExecGuard pattern count: 147 → 152 (+5: git config hooks, alias/function evasion).
+- NetworkGuard pattern count: 42 → 43 (+1: URL shortener detection).
+- Adapter-langchain now scans tool responses for data exfiltration (`checkResponse` + `/check/response` endpoint).
 - Adapter-MCP and adapter-openclaw now scan structured MCP responses (`content[].text`), not just plain strings.
-- 29 new tests (2011 total).
+- Consolidated `INVISIBLE_CHARS_RE` from 6 rule files into shared `utils/normalize.ts`.
+- Consolidated `extractStringContent` from adapter-mcp and adapter-openclaw into `@carapace/core`.
+- 2032 tests (+21 new).
 
 ## [0.12.0] - 2026-05-17
 
