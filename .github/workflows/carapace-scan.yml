@@ -26,7 +26,6 @@ jobs:
       - name: Run Carapace Scan
         uses: ./
         with:
-          block-on-critical: 'true'
           config-path: '.carapace.yml'
           scan-path: ${{ github.event.inputs.scan-path || '.' }}
           node-version: '20'

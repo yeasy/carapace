@@ -2,10 +2,6 @@ name: 'Carapace Security Scan'
 description: 'Runtime security scanning for AI agent projects'
 
 inputs:
-  block-on-critical:
-    description: 'Block the build on critical security findings'
-    required: false
-    default: 'true'
   config-path:
     description: 'Path to .carapace.yml config file'
     required: false
