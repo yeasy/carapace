@@ -52,6 +52,14 @@ const SUSPICIOUS_DOMAINS: DomainRule[] = [
     description: "向隧道/端口转发服务发送数据——潜在外泄端点。",
   },
 
+  // URL 缩短服务（混淆/重定向风险）
+  {
+    pattern: /\b(bit\.ly|tinyurl\.com|t\.co|goo\.gl|is\.gd|tiny\.cc|ow\.ly|buff\.ly|v\.gd|rb\.gy|short\.cm|shorturl\.at|adf\.ly|cut\.ly)\b/i,
+    severity: "medium",
+    title: "URL 缩短服务访问",
+    description: "使用 URL 缩短服务——可能用于混淆恶意链接、隐匿真实目标或绕过域名检测。",
+  },
+
   // Tor / 匿名化
   {
     pattern: /\.onion\b/i,

@@ -8,9 +8,8 @@
 import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
 import { redactSensitiveValues } from "../utils/redact.js";
+import { INVISIBLE_CHARS_RE } from "../utils/normalize.js";
 
-// Strip invisible Unicode characters and apply NFKC normalization (matching prompt-injection)
-const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\u2060-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC01-\uDC7F]/g;
 function normalizeCommand(text: string): string {
   return text.normalize("NFKC")
     .replace(INVISIBLE_CHARS_RE, "")
@@ -381,13 +380,13 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── awk 网络反弹 shell ──
   {
-    pattern: /\bawk\b.*\binet\b.*\btcp\b/i,
+    pattern: /\b(?:g?awk|mawk|nawk)\b.*\binet\b.*\btcp\b/i,
     severity: "critical",
     title: "反弹 shell：awk inet/tcp",
     description: "通过 awk 的 /inet/tcp 特性打开网络连接——反弹 shell 手法。",
   },
   {
-    pattern: /\bawk\b.*\b(system|popen)\s*\(|\bawk\b.*\bprint\b.*\|\s*["'].*\b(sh|bash|ksh|zsh|dash)\b/i,
+    pattern: /\b(?:g?awk|mawk|nawk)\b.*\b(system|popen)\s*\(|\b(?:g?awk|mawk|nawk)\b.*\bprint\b.*\|\s*["'].*\b(sh|bash|ksh|zsh|dash)\b/i,
     severity: "critical",
     title: "命令执行：awk system/popen",
     description: "通过 awk 的 system()/popen() 函数或 print 管道执行系统命令。",
@@ -1051,6 +1050,40 @@ const DANGER_PATTERNS: DangerPattern[] = [
     severity: "high",
     title: "cargo 自定义 registry 安装",
     description: "使用自定义 registry/index 安装 cargo 包——可能从恶意源安装后门 crate。",
+  },
+
+  // ── git config 命令执行 hook ──
+  {
+    pattern: /\bgit\s+(?:-c\s+)?config\s+(?:--global\s+|--system\s+)?(?:core\.(?:pager|editor|(?:git)?proxy|askpass|sshCommand)|diff\.external|credential\.helper|filter\.\w+\.(?:clean|smudge|process)|remote\.\w+\.(?:uploadpack|receivepack))\b/i,
+    severity: "critical",
+    title: "Git config 命令执行 hook",
+    description: "设置 git config pager/editor/proxy/credential 等选项为任意命令——可能执行恶意代码。",
+  },
+  {
+    pattern: /\bgit\b.*-c\s+core\.(?:pager|editor|(?:git)?proxy|askpass|sshCommand)\s*=/i,
+    severity: "critical",
+    title: "Git -c 临时 config 命令执行",
+    description: "通过 git -c 临时设置 pager/editor 等选项——可绕过持久化 config 检测。",
+  },
+
+  // ── shell alias/function 命令替换 ──
+  {
+    pattern: /\balias\s+\w+=\s*['"]?(?:curl|wget|nc|ncat|bash|sh|zsh|dash|ksh|python[23]?|ruby|node|perl)\b/i,
+    severity: "high",
+    title: "Shell alias 命令替换",
+    description: "定义别名替换危险命令——规避 ExecGuard 检测的手法。",
+  },
+  {
+    pattern: /\bfunction\s+\w+\s*(?:\(\))?\s*\{[^}]*\b(?:curl|wget|nc|ncat|bash|sh|zsh|dash|ksh|python[23]?|ruby|node|perl)\b[^}]*\}/i,
+    severity: "high",
+    title: "Shell function 命令替换",
+    description: "定义函数包装危险命令——规避检测和隐藏恶意意图。",
+  },
+  {
+    pattern: /\w+\s*\(\s*\)\s*\{[^}]*\b(?:curl|wget|nc|ncat|bash|sh|zsh|dash|ksh|python[23]?|ruby|node|perl)\b[^}]*\}/i,
+    severity: "high",
+    title: "Shell POSIX function 命令替换",
+    description: "使用 POSIX 函数语法包装危险命令——规避检测。",
   },
 ];
 

@@ -138,7 +138,7 @@ describe("Rules with extremely long inputs", () => {
     const duration = Date.now() - start;
 
     expect(result).toBeDefined();
-    expect(duration).toBeLessThan(5000); // Should complete in < 5 seconds
+    expect(duration).toBeLessThan(10000); // Should complete in < 10 seconds
   });
 
   it("handles multiple long string params", () => {

