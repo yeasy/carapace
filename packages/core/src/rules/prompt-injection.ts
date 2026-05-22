@@ -11,6 +11,7 @@
 import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
 import { redactSensitiveValues } from "../utils/redact.js";
+import { INVISIBLE_CHARS_RE } from "../utils/normalize.js";
 
 interface InjectionPattern {
   pattern: RegExp;
@@ -90,16 +91,6 @@ const MAX_WALK_DEPTH = 10;
 const MAX_TEXT_LEN = 8192;
 const MAX_TEXT_COUNT = 1000;
 
-// Strip zero-width and invisible Unicode characters used to bypass pattern matching
-// Covers: soft hyphen (00AD), Hangul Choseong/Jungseong fillers (115F-1160),
-// Mongolian vowel separator (180E), zero-width space/joiner/non-joiner (200B-200D),
-// directional marks (200E-200F), line/paragraph separators (2028-2029),
-// directional formatting (202A-202E), word joiner (2060), invisible times/separator (2061-2064),
-// bidi isolate controls (2066-2069), Braille blank (2800),
-// Hangul fillers (3164, FFA0), variation selectors (FE00-FE0F),
-// zero-width no-break space / BOM (FEFF), interlinear annotation (FFF9-FFFB),
-// tag characters (E0001-E007F via surrogate pairs)
-const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\u2060-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC01-\uDC7F]/g;
 
 // Homoglyph-to-Latin confusable mapping (Cyrillic, Greek, Armenian)
 // Prevents bypass via lookalike characters that NFKC normalization does not collapse.

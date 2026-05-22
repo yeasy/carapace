@@ -37,6 +37,7 @@ import {
   createBaselineDriftRule,
   loadYamlRules,
   generateEventId,
+  extractStringContent,
   type CarapaceConfig,
   type RuleContext,
   type SecurityEvent,
@@ -248,22 +249,6 @@ export class McpProxy {
     return { allowed: true, events };
   }
 
-  private extractStringContent(result: unknown): string | null {
-    if (typeof result === "string") return result;
-    if (
-      result &&
-      typeof result === "object" &&
-      "content" in result &&
-      Array.isArray((result as { content: unknown }).content)
-    ) {
-      const parts = (result as { content: Array<{ text?: string }> }).content
-        .filter((c) => typeof c.text === "string")
-        .map((c) => c.text as string);
-      return parts.length > 0 ? parts.join("\n") : null;
-    }
-    return null;
-  }
-
   /**
    * 拦截工具调用结果（after_tool_call 阶段）
    */
@@ -272,7 +257,7 @@ export class McpProxy {
     result: unknown,
     skillName?: string
   ): SecurityEvent[] {
-    const text = this.extractStringContent(result);
+    const text = extractStringContent(result);
     if (!text || text.length < 16) {
       return [];
     }

@@ -11,6 +11,7 @@
 import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
 import { redactSensitiveValues } from "../utils/redact.js";
+import { INVISIBLE_CHARS_RE } from "../utils/normalize.js";
 
 interface ExfilPattern {
   pattern: RegExp;
@@ -167,8 +168,6 @@ const MAX_STRING_LEN = 8192;
 const MAX_TOTAL_LENGTH = 100_000;
 const MAX_STRING_COUNT = 1000;
 
-// Strip invisible Unicode characters (consistent with exec-guard and prompt-injection)
-const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\u2060-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC01-\uDC7F]/g;
 
 function normalizeForExfilDetection(text: string): string {
   return text.normalize("NFKC").replace(INVISIBLE_CHARS_RE, "").replace(/\0/g, "").replace(/\\\n/g, "");

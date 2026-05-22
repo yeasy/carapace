@@ -36,6 +36,8 @@ export { generateEventId } from "./utils/id.js";
 export { isRedosSafe } from "./utils/regex.js";
 export { redactSensitiveValues } from "./utils/redact.js";
 export { validatePublicUrl, PRIVATE_IP_PATTERNS } from "./utils/url-validator.js";
+export { INVISIBLE_CHARS_RE } from "./utils/normalize.js";
+export { extractStringContent } from "./utils/content.js";
 export {
   StorageBackend,
   MemoryBackend,

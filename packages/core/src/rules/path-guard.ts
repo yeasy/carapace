@@ -11,6 +11,7 @@ import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
 import { isRedosSafe } from "../utils/regex.js";
 import { redactSensitiveValues } from "../utils/redact.js";
+import { INVISIBLE_CHARS_RE } from "../utils/normalize.js";
 
 interface SensitivePath {
   pattern: RegExp;
@@ -221,7 +222,6 @@ const PATH_KEYS = new Set([
 const MAX_PATH_WALK_DEPTH = 10;
 const MAX_PATHS = 100;
 
-const INVISIBLE_CHARS_RE = /[\u00AD\u115F\u1160\u180E\u200B-\u200F\u2028-\u202F\u2060-\u2069\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC01-\uDC7F]/g;
 
 function extractPaths(params: Record<string, unknown>): string[] {
   const paths: string[] = [];
