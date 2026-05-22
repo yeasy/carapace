@@ -50,9 +50,12 @@ import {
   createDataExfilRule,
   createBaselineDriftRule,
   loadYamlRules,
+  generateEventId,
+  extractStringContent,
   type CarapaceConfig,
   type RuleContext,
   type SecurityRule,
+  type SecurityEvent,
 } from "@carapace/core";
 
 // ── 配置 ──
@@ -216,6 +219,59 @@ export class CarapaceBridge {
         ruleName: e.ruleName,
       })),
     };
+  }
+
+  checkResponse(toolName: string, result: unknown, skillName?: string): CheckResponse {
+    const text = extractStringContent(result);
+    if (!text || text.length < 16) {
+      return { block: false, events: [] };
+    }
+
+    if (skillName && this.engine.getTrustedSkills().has(skillName.trim().toLowerCase())) {
+      return { block: false, events: [] };
+    }
+
+    const resultCtx: RuleContext = {
+      toolName,
+      toolParams: { _result: text },
+      sessionId: "bridge-session",
+      skillName,
+      timestamp: Date.now(),
+    };
+
+    const dataExfilRule = this.engine.getRules().find((r) => r.name === "data-exfil");
+    if (!dataExfilRule) {
+      return { block: false, events: [] };
+    }
+
+    try {
+      const check = dataExfilRule.check(resultCtx);
+      if (check.triggered && check.event) {
+        const fullEvent: SecurityEvent = {
+          ...check.event,
+          id: generateEventId(),
+          timestamp: Date.now(),
+          action: "alert",
+          ruleName: "data-exfil",
+          title: `[响应] ${check.event.title}`,
+        };
+        this.stats.totalAlerts += 1;
+        this.alertRouter.send(fullEvent).catch(() => {});
+        return {
+          block: false,
+          events: [{
+            category: fullEvent.category,
+            severity: fullEvent.severity,
+            title: fullEvent.title,
+            description: fullEvent.description,
+            ruleName: fullEvent.ruleName,
+          }],
+        };
+      }
+    } catch {
+      // Don't break main flow
+    }
+    return { block: false, events: [] };
   }
 
   /**
@@ -395,6 +451,31 @@ export class CarapaceBridge {
             const results = checks.map((c) => this.check(c));
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify(results));
+          } catch {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Invalid JSON body" }));
+          }
+        });
+        return;
+      }
+
+      // POST /check/response
+      if (req.method === "POST" && urlPath === "/check/response") {
+        readBody(req, (body) => {
+          try {
+            const parsed = JSON.parse(body) as {
+              toolName: string;
+              result: unknown;
+              skillName?: string;
+            };
+            if (!parsed.toolName || typeof parsed.toolName !== "string") {
+              res.writeHead(400, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "Missing required field: toolName" }));
+              return;
+            }
+            const result = this.checkResponse(parsed.toolName, parsed.result, parsed.skillName);
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(result));
           } catch {
             res.writeHead(400, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Invalid JSON body" }));

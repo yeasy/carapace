@@ -976,4 +976,89 @@ describe("CarapaceBridge - Extra Tests", () => {
       expect(data.error).toContain("toolName");
     });
   });
+
+  // ── checkResponse 响应扫描 ──
+
+  describe("checkResponse", () => {
+    it("detects credential in response", () => {
+      bridge = createBridge();
+      const result = bridge.checkResponse("bash", "Here is the credential: AKIAIOSFODNN7EXAMPLE and some extra text padding to exceed minimum length");
+      expect(result.events.length).toBeGreaterThan(0);
+    });
+
+    it("ignores short strings", () => {
+      bridge = createBridge();
+      const result = bridge.checkResponse("bash", "ok");
+      expect(result.events).toHaveLength(0);
+    });
+
+    it("ignores clean output", () => {
+      bridge = createBridge();
+      const result = bridge.checkResponse("bash", "Command completed successfully with no sensitive data in this output string");
+      expect(result.events).toHaveLength(0);
+    });
+
+    it("never blocks responses", () => {
+      bridge = createBridge();
+      const result = bridge.checkResponse("bash", "AKIAIOSFODNN7EXAMPLE some extra text padding here to exceed the minimum threshold");
+      expect(result.block).toBe(false);
+    });
+
+    it("handles structured MCP content", () => {
+      bridge = createBridge();
+      const result = bridge.checkResponse("bash", {
+        content: [{ type: "text", text: "Found key AKIAIOSFODNN7EXAMPLE in output plus some extra text padding" }],
+      });
+      expect(result.events.length).toBeGreaterThan(0);
+    });
+
+    it("skips trusted skills", () => {
+      bridge = createBridge({ trustedSkills: ["trusted-tool"] });
+      const result = bridge.checkResponse("bash", "AKIAIOSFODNN7EXAMPLE and some more text padding to exceed the length threshold", "trusted-tool");
+      expect(result.events).toHaveLength(0);
+    });
+  });
+
+  describe("POST /check/response endpoint", () => {
+    it("detects credential via HTTP", async () => {
+      bridge = createBridge({ port: 0 });
+      await bridge.start();
+      const port = bridge.getPort();
+      const response = await fetch(`http://127.0.0.1:${port}/check/response`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toolName: "bash",
+          result: "Output with AWS key AKIAIOSFODNN7EXAMPLE in the middle and some more text",
+        }),
+      });
+      expect(response.status).toBe(200);
+      const data = (await response.json()) as any;
+      expect(data.events.length).toBeGreaterThan(0);
+    });
+
+    it("returns 400 for missing toolName", async () => {
+      bridge = createBridge({ port: 0 });
+      await bridge.start();
+      const port = bridge.getPort();
+      const response = await fetch(`http://127.0.0.1:${port}/check/response`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ result: "some output" }),
+      });
+      expect(response.status).toBe(400);
+    });
+
+    it("returns 400 for invalid JSON", async () => {
+      bridge = createBridge({ port: 0 });
+      await bridge.start();
+      const port = bridge.getPort();
+      const response = await fetch(`http://127.0.0.1:${port}/check/response`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "not json",
+      });
+      expect(response.status).toBe(400);
+    });
+  });
 });
