@@ -17,7 +17,7 @@ All notable changes to this project will be documented in this file.
 - **DataExfil**: DNS tunneling via `ping` command substitution detection (high).
 - **ExecGuard**: `awk` `system()`/`popen()` command execution detection (critical).
 - **ExecGuard**: GNU `sed` `/e` flag command execution detection (high).
-- **DataExfil**: SSH reverse tunnel (`ssh -R`) exfiltration detection (critical).
+- **DataExfil**: SSH reverse tunnel (`ssh -R`) exfiltration detection (high).
 - **NetworkGuard**: SOCKS proxy (`--socks4/5`, `socks5://`) connection detection (high).
 
 ### Fixed
@@ -28,6 +28,10 @@ All notable changes to this project will be documented in this file.
 - **ExecGuard**: `awk` patterns now detect `gawk`, `mawk`, `nawk` variants.
 - **Action**: Removed unused `block-on-critical` input from `action.yml`.
 - **NetworkGuard**: Added `INVISIBLE_CHARS_RE` stripping to `fullyDecodeURI` — zero-width characters (U+200B, U+200D, U+00AD, etc.) could bypass domain pattern matching.
+- **ExecGuard**: Broadened `${...}` stripping in `normalizeCommand` to catch substring expansion (`${var:0:1}`), pattern substitution, and case modification forms.
+- **ExecGuard**: `unshare` pattern now matches hyphenated long flags (`--map-root-user`).
+- **ExecGuard**: Process substitution pattern now includes `ksh` shell.
+- **DataExfil**: `ssh -R` severity reduced from critical to high to avoid false positives on legitimate reverse tunneling.
 
 ### Changed
 - ExecGuard pattern count: 147 → 152 (+5: git config hooks, alias/function evasion).
@@ -36,7 +40,7 @@ All notable changes to this project will be documented in this file.
 - Adapter-MCP and adapter-openclaw now scan structured MCP responses (`content[].text`), not just plain strings.
 - Consolidated `INVISIBLE_CHARS_RE` from 6 rule files into shared `utils/normalize.ts`.
 - Consolidated `extractStringContent` from adapter-mcp and adapter-openclaw into `@carapace/core`.
-- 2035 tests (+24 new).
+- 2038 tests (+27 new).
 
 ## [0.12.0] - 2026-05-17
 
