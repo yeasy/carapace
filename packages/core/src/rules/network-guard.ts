@@ -9,6 +9,7 @@ import { SEVERITY_RANK } from "../types.js";
 import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.js";
 import { isRedosSafe } from "../utils/regex.js";
 import { redactSensitiveValues } from "../utils/redact.js";
+import { INVISIBLE_CHARS_RE } from "../utils/normalize.js";
 
 interface DomainRule {
   pattern: RegExp;
@@ -345,7 +346,7 @@ function fullyDecodeURI(raw: string): string {
   // NFKC + strip null bytes + normalize Unicode dot variants that NFKC doesn't collapse
   // U+3002 (ideographic full stop) and U+FF61 (halfwidth ideographic full stop) resolve to "."
   // in URL contexts per WHATWG URL spec but are not normalized by NFKC.
-  let decoded = raw.normalize("NFKC").replace(/\0/g, "").replace(/[\u3002\uFF61]/g, ".");
+  let decoded = raw.normalize("NFKC").replace(INVISIBLE_CHARS_RE, "").replace(/\0/g, "").replace(/[\u3002\uFF61]/g, ".");
   for (let i = 0; i < MAX_DECODE_PASSES; i++) {
     let next: string;
     try {

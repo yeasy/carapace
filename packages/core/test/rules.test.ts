@@ -10509,6 +10509,25 @@ describe("NetworkGuard — URL shortener detection", () => {
   });
 });
 
+describe("NetworkGuard — invisible character bypass resistance", () => {
+  const rule = createNetworkGuardRule();
+
+  it("detects pastebin.com with zero-width space inserted", () => {
+    const result = rule.check(makeCtx("fetch", { url: "https://paste​bin.com/raw/abc" }));
+    expect(result.triggered).toBe(true);
+  });
+
+  it("detects transfer.sh with zero-width joiner inserted", () => {
+    const result = rule.check(makeCtx("web_fetch", { url: "https://trans‍fer.sh/abc" }));
+    expect(result.triggered).toBe(true);
+  });
+
+  it("detects .onion with soft hyphen inserted", () => {
+    const result = rule.check(makeCtx("fetch", { url: "http://example.on­ion/path" }));
+    expect(result.triggered).toBe(true);
+  });
+});
+
 describe("PromptInjection — translate encoding bypass", () => {
   const rule = createPromptInjectionRule();
 
