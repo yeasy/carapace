@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - **CI**: Removed dead Docker Hub steps from workflow.
 - **ExecGuard**: `awk` patterns now detect `gawk`, `mawk`, `nawk` variants.
 - **Action**: Removed unused `block-on-critical` input from `action.yml`.
+- **NetworkGuard**: Added `INVISIBLE_CHARS_RE` stripping to `fullyDecodeURI` — zero-width characters (U+200B, U+200D, U+00AD, etc.) could bypass domain pattern matching.
 
 ### Changed
 - ExecGuard pattern count: 147 → 152 (+5: git config hooks, alias/function evasion).
@@ -35,7 +36,7 @@ All notable changes to this project will be documented in this file.
 - Adapter-MCP and adapter-openclaw now scan structured MCP responses (`content[].text`), not just plain strings.
 - Consolidated `INVISIBLE_CHARS_RE` from 6 rule files into shared `utils/normalize.ts`.
 - Consolidated `extractStringContent` from adapter-mcp and adapter-openclaw into `@carapace/core`.
-- 2032 tests (+21 new).
+- 2035 tests (+24 new).
 
 ## [0.12.0] - 2026-05-17
 
