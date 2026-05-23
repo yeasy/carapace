@@ -45,7 +45,7 @@ function normalizeCommand(text: string): string {
     .replace(/\$\{[^}]*:=([^}]+)\}/g, "$1") // Decode ${x:=val} assignment expansion (expands to val)
     .replace(/\{(\w+),\}/g, "$1") // Normalize single-element brace expansion ({curl,} → curl)
     .replace(/\{,(\w+)\}/g, "$1") // Normalize single-element brace expansion ({,curl} → curl)
-    .replace(/\$\{#?\w+\}/g, ""); // Strip remaining ${var} expansions
+    .replace(/\$\{[^}]*\}/g, ""); // Strip remaining ${...} expansions (substring, pattern, case, etc.)
 }
 
 interface DangerPattern {
@@ -72,7 +72,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── 进程替换执行 ──
   {
-    pattern: /\b(bash|sh|zsh)\s*<\(\s*(curl|wget)\s/i,
+    pattern: /\b(bash|sh|zsh|ksh)\s*<\(\s*(curl|wget)\s/i,
     severity: "critical",
     title: "远程代码执行：进程替换",
     description: "通过进程替换下载并执行远程代码——绕过管道检测的常见手法。",
@@ -536,7 +536,7 @@ const DANGER_PATTERNS: DangerPattern[] = [
     description: "通过 chroot /proc/self/root 逃逸容器——获取宿主机文件系统访问。",
   },
   {
-    pattern: /\bunshare\s+(-[a-zA-Z]|--\w+)\s/i,
+    pattern: /\bunshare\s+(-[a-zA-Z]|--[\w-]+)\s/i,
     severity: "critical",
     title: "命名空间逃逸：unshare",
     description: "使用 unshare 创建新命名空间——潜在容器逃逸或特权提升。",
