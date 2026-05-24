@@ -221,7 +221,7 @@ export class CarapaceBridge {
     };
   }
 
-  checkResponse(toolName: string, result: unknown, skillName?: string): CheckResponse {
+  checkResponse(toolName: string, result: unknown, skillName?: string, sessionId?: string): CheckResponse {
     const text = extractStringContent(result);
     if (!text || text.length < 16) {
       return { block: false, events: [] };
@@ -234,7 +234,7 @@ export class CarapaceBridge {
     const resultCtx: RuleContext = {
       toolName,
       toolParams: { _result: text },
-      sessionId: "bridge-session",
+      sessionId: sessionId ?? "bridge-session",
       skillName,
       timestamp: Date.now(),
     };
@@ -467,13 +467,14 @@ export class CarapaceBridge {
               toolName: string;
               result: unknown;
               skillName?: string;
+              sessionId?: string;
             };
             if (!parsed.toolName || typeof parsed.toolName !== "string") {
               res.writeHead(400, { "Content-Type": "application/json" });
               res.end(JSON.stringify({ error: "Missing required field: toolName" }));
               return;
             }
-            const result = this.checkResponse(parsed.toolName, parsed.result, parsed.skillName);
+            const result = this.checkResponse(parsed.toolName, parsed.result, parsed.skillName, parsed.sessionId);
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify(result));
           } catch {
