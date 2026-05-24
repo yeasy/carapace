@@ -134,6 +134,7 @@ const EXFIL_PATTERNS: ExfilPattern[] = [
   { pattern: /(?:dig|nslookup|host)\s+.*\$\(.*\).*\.\S+/i, severity: "critical", title: "DNS 查询中嵌入命令替换（DNS 外泄）", category: "dns_exfil" },
   { pattern: /(?:dig|nslookup|host)\s+.*`[^`]+`.*\.\S+/i, severity: "critical", title: "DNS 查询中嵌入反引号命令替换（DNS 外泄）", category: "dns_exfil" },
   { pattern: /(?:dig|nslookup|host)\s+.*\$\{[^}]+\}.*\.\S+/i, severity: "critical", title: "DNS 查询中嵌入变量扩展（DNS 外泄）", category: "dns_exfil" },
+  { pattern: /(?:dig|nslookup|host)\s+.*\$[a-zA-Z_]\w*.*\.\S+/i, severity: "high", title: "DNS 查询中嵌入变量引用（DNS 外泄）", category: "dns_exfil" },
   { pattern: /\bping\s+.*\$\(.*\).*\./i, severity: "high", title: "通过 ping DNS 隧道外泄数据", category: "dns_exfil" },
 ];
 
