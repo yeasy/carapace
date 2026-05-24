@@ -778,16 +778,28 @@ const DANGER_PATTERNS: DangerPattern[] = [
 
   // ── deno / bun 运行时 ──
   {
-    pattern: /\bdeno\s+.*?(?:eval|run)\s/i,
+    pattern: /\bdeno\s+eval\s/i,
     severity: "high",
     title: "Deno 运行时代码执行",
-    description: "通过 Deno 运行时执行代码——可访问文件系统和网络。",
+    description: "通过 Deno eval 执行内联代码——可访问文件系统和网络。",
   },
   {
-    pattern: /\bbun\s+.*?(?:-e|eval|run)\s/i,
+    pattern: /\bdeno\s+run\s+(?:--|.*(?:https?:\/\/|\/tmp\/|\/var\/tmp\/))/i,
+    severity: "high",
+    title: "Deno 运行时远程/临时文件执行",
+    description: "通过 Deno run 从远程 URL 或临时目录执行代码。",
+  },
+  {
+    pattern: /\bbun\s+(?:-e|eval)\s/i,
     severity: "high",
     title: "Bun 运行时代码执行",
-    description: "通过 Bun 运行时执行代码——可访问文件系统和网络。",
+    description: "通过 Bun eval/-e 执行内联代码——可访问文件系统和网络。",
+  },
+  {
+    pattern: /\bbun\s+run\s+(?:--|.*(?:https?:\/\/|\/tmp\/|\/var\/tmp\/))/i,
+    severity: "high",
+    title: "Bun 运行时远程/临时文件执行",
+    description: "通过 Bun run 从远程 URL 或临时目录执行代码。",
   },
 
   // ── Lua 脚本执行 ──
