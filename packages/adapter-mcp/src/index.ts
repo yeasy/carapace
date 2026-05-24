@@ -101,6 +101,7 @@ export class McpProxy {
   private childProcess: ChildProcess | null = null;
   private stdinListeners: { event: string; handler: (...args: unknown[]) => void }[] = [];
   private sessionId: string;
+  private pendingToolCalls = new Map<string | number, string>();
   private stats = {
     totalRequests: 0,
     toolCalls: 0,
@@ -426,6 +427,11 @@ export class McpProxy {
           } else {
             // 放行：转发到实际 MCP server
             if (child.stdin?.writable) { child.stdin.write(line + "\n"); }
+            // Track tool call for response scanning
+            if (request.method === "tools/call" && request.id !== undefined) {
+              const params = request.params as Record<string, unknown> | undefined;
+              this.pendingToolCalls.set(request.id, (params?.name as string) ?? "unknown");
+            }
           }
         } catch {
           // Drop non-JSON lines — do not forward unvalidated content to child process
@@ -443,12 +449,38 @@ export class McpProxy {
       { event: "data", handler: onData as (...args: unknown[]) => void },
     ];
 
-    // 读取 child stdout（来自 MCP server）并转发到 stdout
+    // 读取 child stdout（来自 MCP server）并扫描后转发
     if (child.stdout) {
+      let stdoutBuffer = "";
+      const stdoutDecoder = new StringDecoder("utf-8");
       child.stdout.on("data", (chunk: Buffer) => {
-        process.stdout.write(chunk);
+        stdoutBuffer += stdoutDecoder.write(chunk);
+        const lines = stdoutBuffer.split(/\r?\n/);
+        stdoutBuffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) {
+            process.stdout.write("\n");
+            continue;
+          }
+          // Scan response for data exfiltration
+          try {
+            const response = JSON.parse(line) as { id?: string | number; result?: unknown; error?: unknown };
+            if (response.id !== undefined && response.result !== undefined) {
+              const toolName = this.pendingToolCalls.get(response.id) ?? "unknown";
+              this.pendingToolCalls.delete(response.id);
+              this.interceptResponse(toolName, response.result);
+            }
+          } catch {
+            // Non-JSON or malformed — forward as-is
+          }
+          process.stdout.write(line + "\n");
+        }
       });
       child.stdout.on("end", () => {
+        const remaining = stdoutBuffer + stdoutDecoder.end();
+        if (remaining.trim()) {
+          process.stdout.write(remaining + "\n");
+        }
         this.log("子进程 stdout 已关闭");
       });
     }
