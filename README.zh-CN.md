@@ -52,7 +52,7 @@ AI Agent 可以执行 shell 命令、读写任意文件、发起网络请求—�
   编码 PowerShell     加密货币钱包          裸 IP 连接
   eval / subprocess   /etc/shadow           挖矿池
   heredoc 注入        /proc/self/*          十进制/八进制/十六进制 IP
-  ...155 种模式        ...75 种模式          ...45 种模式
+  ...154 种模式        ...74 种模式          ...44 种模式
 
   PromptInjection     DataExfil            BaselineDrift
   ───────────────     ─────────            ─────────────
@@ -62,7 +62,7 @@ AI Agent 可以执行 shell 命令、读写任意文件、发起网络请求—�
   伪造系统标签        curl 文件上传         新颖度比例告警
   编码绕过            管道外泄链
   隐藏注入指令        环境变量泄漏
-  ...44 种模式        ...67 种模式          可配置阈值
+  ...43 种模式        ...66 种模式          可配置阈值
 ```
 
 ## 核心特性
@@ -71,12 +71,12 @@ AI Agent 可以执行 shell 命令、读写任意文件、发起网络请求—�
 mindmap
   root((🛡️ Carapace))
     7 条内置规则
-      ExecGuard（155 种模式）
-      PathGuard（75 种模式）
-      NetworkGuard（45 种模式）
+      ExecGuard（154 种模式）
+      PathGuard（74 种模式）
+      NetworkGuard（44 种模式）
       RateLimiter
-      PromptInjection（44 种模式）
-      DataExfil（67 种模式）
+      PromptInjection（43 种模式）
+      DataExfil（66 种模式）
       BaselineDrift（异常检测）
     智能告警路由
       5 分钟去重窗口
@@ -417,7 +417,7 @@ cd carapace && npm install && npm run build
 - **v0.9** — 安全绕过修复（双重编码、反斜杠续行、通配符驳回）、busybox/Python 内联检测、CLI 参数解析修复、demo SSE 广播修复
 - **v0.10** — 112 条 ExecGuard 模式、64 条 PathGuard 路径、38 条 NetworkGuard 模式、48 条 DataExfil 模式、Dashboard API 认证、SSRF 编码检测、数据外泄加固、1736 个测试
 - **v0.11** — 140 条 ExecGuard 模式（含 shell 归一化）、76 条 PathGuard 路径、44 条 NetworkGuard 模式、38 条 PromptInjection 模式、60 条 DataExfil 模式、容器逃逸与供应链检测、env -S / IPv6-mapped / file:// 绕过修复、1928 个测试
-- **v0.12**（当前）— 155 条 ExecGuard、75 条 PathGuard、45 条 NetworkGuard、44 条 PromptInjection、67 条 DataExfil 模式、git config hook 检测、alias/function 规避检测、URL 缩短服务检测、awk 变体检测（gawk/mawk/nawk）、adapter-langchain 响应扫描、MCP stdio 响应扫描、DNS 外泄循环检测、bun/deno 误报修复、2051 个测试
+- **v0.12**（当前）— 154 条 ExecGuard、74 条 PathGuard、44 条 NetworkGuard、43 条 PromptInjection、66 条 DataExfil 模式、git config hook 检测、alias/function 规避检测、URL 缩短服务检测、awk 变体检测（gawk/mawk/nawk）、adapter-langchain 响应扫描、MCP stdio 响应扫描、DNS 外泄循环检测、bun/deno 误报修复、2051 个测试
 
 ## 贡献
 

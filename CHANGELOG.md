@@ -39,11 +39,10 @@ All notable changes to this project will be documented in this file.
 - **DataExfil**: `ssh -R` severity reduced from critical to high to avoid false positives on legitimate reverse tunneling.
 
 ### Changed
-- ExecGuard pattern count: 147 → 155 (+8: git config hooks, alias/function evasion, bun/deno refinement).
-- DataExfil pattern count: 65 → 67 (+2: bare variable DNS exfil, ping DNS tunnel).
-- NetworkGuard pattern count: 42 → 45 (+3: URL shortener detection, SOCKS proxy, ipv4only.arpa).
-- PromptInjection pattern count: 43 → 44 (+1: translate verb).
-- PathGuard pattern count: 73 → 75 (+2).
+- ExecGuard pattern count: 142 → 154 (+12: git config hooks, alias/function evasion, bun/deno refinement, awk/sed execution, printf/basenc/ncat/brace expansion).
+- DataExfil pattern count: 61 → 66 (+5: bare variable DNS exfil, ping DNS tunnel, tee process substitution, ruby inline, ssh reverse tunnel).
+- NetworkGuard pattern count: 42 → 44 (+2: SOCKS proxy, invisible char stripping).
+- PromptInjection pattern count: 37 → 43 (+6: translate verb, German/French/Spanish/Russian/Portuguese/Italian overrides).
 - Adapter-langchain now scans tool responses for data exfiltration (`checkResponse` + `/check/response` endpoint).
 - Adapter-MCP stdio mode now buffers and scans child stdout responses for data exfiltration.
 - Adapter-MCP and adapter-openclaw now scan structured MCP responses (`content[].text`), not just plain strings.
