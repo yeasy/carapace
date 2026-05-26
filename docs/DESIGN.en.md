@@ -533,7 +533,7 @@ First occurrence          → Alert at detected severity
 ```json
 {
   "source": "carapace",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "event": {
     "id": "cpc_a1b2c3d4e5f6",
     "timestamp": "2026-03-09T20:30:00Z",
@@ -1009,6 +1009,6 @@ A: Carapace degrades gracefully — runs in "monitor-only" mode for that framewo
 
 ---
 
-*Document version: 0.11.0*
-*Last updated: 2026-05-08*
+*Document version: 0.12.0*
+*Last updated: 2026-05-25*
 *Author: Albert Yang*

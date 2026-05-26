@@ -532,7 +532,7 @@ customRules:
 ```json
 {
   "source": "carapace",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "event": {
     "id": "cpc_a1b2c3d4e5f6",
     "timestamp": "2026-03-09T20:30:00Z",
@@ -1011,6 +1011,6 @@ carapace/
 
 ---
 
-*文档版本：0.11.0*
-*最后更新：2026-05-08*
+*文档版本：0.12.0*
+*最后更新：2026-05-25*
 *作者：Albert Yang*
