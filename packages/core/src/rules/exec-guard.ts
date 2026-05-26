@@ -10,7 +10,7 @@ import type { SecurityRule, RuleContext, RuleResult, Severity } from "../types.j
 import { redactSensitiveValues } from "../utils/redact.js";
 import { INVISIBLE_CHARS_RE } from "../utils/normalize.js";
 
-function normalizeCommand(text: string): string {
+export function normalizeCommand(text: string): string {
   return text.normalize("NFKC")
     .replace(INVISIBLE_CHARS_RE, "")
     .replace(/\0/g, "")              // Strip null bytes (used to break regex matching)

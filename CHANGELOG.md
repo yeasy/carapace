@@ -48,7 +48,7 @@ All notable changes to this project will be documented in this file.
 - Adapter-MCP and adapter-openclaw now scan structured MCP responses (`content[].text`), not just plain strings.
 - Consolidated `INVISIBLE_CHARS_RE` from 6 rule files into shared `utils/normalize.ts`.
 - Consolidated `extractStringContent` from adapter-mcp and adapter-openclaw into `@carapace/core`.
-- 2051 tests (+40 new).
+- 2105 tests (+94 new).
 
 ## [0.12.0] - 2026-05-17
 
