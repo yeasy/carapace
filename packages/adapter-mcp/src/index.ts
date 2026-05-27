@@ -465,10 +465,12 @@ export class McpProxy {
           // Scan response for data exfiltration
           try {
             const response = JSON.parse(line) as { id?: string | number; result?: unknown; error?: unknown };
-            if (response.id !== undefined && response.result !== undefined) {
+            if (response.id !== undefined) {
               const toolName = this.pendingToolCalls.get(response.id) ?? "unknown";
               this.pendingToolCalls.delete(response.id);
-              this.interceptResponse(toolName, response.result);
+              if (response.result !== undefined) {
+                this.interceptResponse(toolName, response.result);
+              }
             }
           } catch {
             // Non-JSON or malformed — forward as-is

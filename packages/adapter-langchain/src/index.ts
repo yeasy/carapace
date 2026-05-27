@@ -256,7 +256,7 @@ export class CarapaceBridge {
           title: `[响应] ${check.event.title}`,
         };
         this.stats.totalAlerts += 1;
-        this.alertRouter.send(fullEvent).catch(() => {});
+        this.alertRouter.send(fullEvent).catch((err) => { process.stderr.write(`[carapace-bridge] alert send failed: ${err}\n`); });
         return {
           block: false,
           events: [{
