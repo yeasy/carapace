@@ -41,7 +41,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - ExecGuard pattern count: 142 → 154 (+12: git config hooks, alias/function evasion, bun/deno refinement, awk/sed execution, printf/basenc/ncat/brace expansion).
 - DataExfil pattern count: 61 → 66 (+5: bare variable DNS exfil, ping DNS tunnel, tee process substitution, ruby inline, ssh reverse tunnel).
-- NetworkGuard pattern count: 42 → 44 (+2: SOCKS proxy, invisible char stripping).
+- NetworkGuard pattern count: 42 → 43 (+1: SOCKS proxy).
+- PathGuard pattern count: 75 → 73 (-2: consolidated duplicate paths).
 - PromptInjection pattern count: 37 → 43 (+6: translate verb, German/French/Spanish/Russian/Portuguese/Italian overrides).
 - Adapter-langchain now scans tool responses for data exfiltration (`checkResponse` + `/check/response` endpoint).
 - Adapter-MCP stdio mode now buffers and scans child stdout responses for data exfiltration.

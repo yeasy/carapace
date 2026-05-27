@@ -52,7 +52,7 @@ AI agents can execute shell commands, read any file, and make network requests �
   encoded PowerShell  crypto wallets       raw IP connections
   eval / subprocess   /etc/shadow          mining pools
   heredoc injection   /proc/self/*         decimal/octal/hex IP
-  ...154 patterns      ...74 patterns       ...44 patterns
+  ...154 patterns      ...73 patterns       ...43 patterns
 
   PromptInjection     DataExfil            BaselineDrift
   ───────────────     ─────────            ─────────────
@@ -72,8 +72,8 @@ mindmap
   root((🛡️ Carapace))
     7 Built-in Rules
       ExecGuard (154 patterns)
-      PathGuard (74 patterns)
-      NetworkGuard (44 patterns)
+      PathGuard (73 patterns)
+      NetworkGuard (43 patterns)
       RateLimiter
       PromptInjection (43 patterns)
       DataExfil (66 patterns)
@@ -417,7 +417,7 @@ cd carapace && npm install && npm run build
 - **v0.9** — Security bypass fixes (double-encoding, backslash-continuation, wildcard dismissal), busybox/Python inline detection, CLI parseArgs fix, demo SSE broadcast fix
 - **v0.10** — 112 ExecGuard patterns, 64 PathGuard paths, 38 NetworkGuard patterns, 48 DataExfil patterns, dashboard API auth, SSRF encoding detection, data exfil hardening, 1736 tests
 - **v0.11** — 140 ExecGuard patterns with shell normalization, 76 PathGuard paths, 44 NetworkGuard patterns, 38 PromptInjection patterns, 60 DataExfil patterns, container escape & supply chain detection, env -S / IPv6-mapped / file:// bypass fixes, 1928 tests
-- **v0.12** (current) — 154 ExecGuard, 74 PathGuard, 44 NetworkGuard, 43 PromptInjection, 66 DataExfil patterns, git config hook detection, alias/function evasion detection, URL shortener detection, awk variant detection (gawk/mawk/nawk), adapter-langchain response scanning, MCP stdio response scanning, DNS exfil loop detection, bun/deno false-positive fix, 2105 tests
+- **v0.12** (current) — 154 ExecGuard, 73 PathGuard, 43 NetworkGuard, 43 PromptInjection, 66 DataExfil patterns, git config hook detection, alias/function evasion detection, URL shortener detection, awk variant detection (gawk/mawk/nawk), adapter-langchain response scanning, MCP stdio response scanning, DNS exfil loop detection, bun/deno false-positive fix, 2105 tests
 
 ## Contributing
 
