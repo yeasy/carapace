@@ -268,8 +268,8 @@ export class CarapaceBridge {
           }],
         };
       }
-    } catch {
-      // Don't break main flow
+    } catch (err) {
+      process.stderr.write(`[carapace-bridge] checkResponse rule error: ${err instanceof Error ? err.message : String(err)}\n`);
     }
     return { block: false, events: [] };
   }
