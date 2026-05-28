@@ -311,6 +311,9 @@ export class McpProxy {
     args: string[] = [],
     options?: { env?: Record<string, string> }
   ): Promise<void> {
+    if (this.childProcess) {
+      throw new Error("McpProxy: startStdio already running — call stop() first");
+    }
     // Validate command to prevent command injection
     if (/[\x00\n\r|;&`$(){}]/.test(command) || command.includes("..")) {
       throw new Error(`McpProxy: unsafe command rejected: contains shell metacharacters or path traversal`);
@@ -481,6 +484,18 @@ export class McpProxy {
       child.stdout.on("end", () => {
         const remaining = stdoutBuffer + stdoutDecoder.end();
         if (remaining.trim()) {
+          try {
+            const response = JSON.parse(remaining) as { id?: string | number; result?: unknown; error?: unknown };
+            if (response.id !== undefined) {
+              const toolName = this.pendingToolCalls.get(response.id) ?? "unknown";
+              this.pendingToolCalls.delete(response.id);
+              if (response.result !== undefined) {
+                this.interceptResponse(toolName, response.result);
+              }
+            }
+          } catch {
+            // Non-JSON — forward as-is
+          }
           process.stdout.write(remaining + "\n");
         }
         this.log("子进程 stdout 已关闭");
@@ -505,6 +520,7 @@ export class McpProxy {
           process.stdin.removeListener(event, handler);
         }
         this.stdinListeners = [];
+        this.pendingToolCalls.clear();
         this.log(`子进程退出, code=${code}`);
         this.log(
           `统计: 总请求=${this.stats.totalRequests}, ` +
