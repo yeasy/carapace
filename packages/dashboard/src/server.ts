@@ -360,6 +360,9 @@ export class DashboardServer {
             this.json(res, { error: "Missing required field: name" }, 400);
             return;
           }
+          if (!policy.config || typeof policy.config !== "object") {
+            policy.config = {};
+          }
           policy.createdAt = policy.createdAt ?? Date.now();
           policy.updatedAt = Date.now();
           try {
