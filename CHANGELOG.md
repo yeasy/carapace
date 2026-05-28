@@ -39,17 +39,17 @@ All notable changes to this project will be documented in this file.
 - **DataExfil**: `ssh -R` severity reduced from critical to high to avoid false positives on legitimate reverse tunneling.
 
 ### Changed
-- ExecGuard pattern count: 142 → 154 (+12: git config hooks, alias/function evasion, bun/deno refinement, awk/sed execution, printf/basenc/ncat/brace expansion).
-- DataExfil pattern count: 61 → 66 (+5: bare variable DNS exfil, ping DNS tunnel, tee process substitution, ruby inline, ssh reverse tunnel).
-- NetworkGuard pattern count: 42 → 43 (+1: SOCKS proxy).
+- ExecGuard pattern count: 143 → 154 (+11: git config hooks, alias/function evasion, bun/deno refinement, awk/sed execution, printf/basenc/ncat/brace expansion).
+- DataExfil pattern count: 62 → 66 (+4: bare variable DNS exfil, ping DNS tunnel, tee process substitution, ruby inline, ssh reverse tunnel).
+- NetworkGuard pattern count: 43 → 43 (SOCKS proxy added, one consolidated).
 - PathGuard pattern count: 75 → 73 (-2: consolidated duplicate paths).
-- PromptInjection pattern count: 37 → 43 (+6: translate verb, German/French/Spanish/Russian/Portuguese/Italian overrides).
+- PromptInjection pattern count: 38 → 43 (+5: translate verb, German/French/Spanish/Russian/Portuguese/Italian overrides).
 - Adapter-langchain now scans tool responses for data exfiltration (`checkResponse` + `/check/response` endpoint).
 - Adapter-MCP stdio mode now buffers and scans child stdout responses for data exfiltration.
 - Adapter-MCP and adapter-openclaw now scan structured MCP responses (`content[].text`), not just plain strings.
 - Consolidated `INVISIBLE_CHARS_RE` from 6 rule files into shared `utils/normalize.ts`.
 - Consolidated `extractStringContent` from adapter-mcp and adapter-openclaw into `@carapace/core`.
-- 2105 tests (+94 new).
+- 2039 tests (+57 new).
 
 ## [0.12.0] - 2026-05-17
 

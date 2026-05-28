@@ -5,11 +5,11 @@ FROM node:20-alpine AS builder
 WORKDIR /build
 
 # Copy package files for dependency installation
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY packages/ ./packages/
 
 # Install dependencies and build
-RUN npm install --ignore-scripts && npm run build
+RUN npm ci --ignore-scripts && npm run build
 
 # Stage 2: Runtime
 FROM node:20-alpine
@@ -56,4 +56,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 # Default command — override with: demo, dashboard, scan, test-rule, etc.
 ENTRYPOINT ["node", "/app/packages/cli/dist/index.js"]
-CMD ["demo", "--port", "9877"]
+CMD ["demo", "--port", "9877", "--host", "0.0.0.0"]
