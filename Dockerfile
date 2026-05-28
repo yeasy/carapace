@@ -5,11 +5,11 @@ FROM node:20-alpine AS builder
 WORKDIR /build
 
 # Copy package files for dependency installation
-COPY package.json package-lock.json ./
+COPY package.json ./
 COPY packages/ ./packages/
 
 # Install dependencies and build
-RUN npm ci --ignore-scripts && npm run build
+RUN npm install --ignore-scripts && npm run build
 
 # Stage 2: Runtime
 FROM node:20-alpine
