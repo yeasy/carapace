@@ -10,7 +10,7 @@
     <a href="https://www.npmjs.com/package/@carapace/core"><img src="https://img.shields.io/npm/v/@carapace%2Fcore?label=npm" alt="npm version"/></a>
     <a href="./docs/"><img src="https://img.shields.io/badge/docs-complete-brightgreen" alt="documentation"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/></a>
-    <a href="#"><img src="https://img.shields.io/badge/tests-2039%20passed-brightgreen" alt="tests"/></a>
+    <a href="#"><img src="https://img.shields.io/badge/tests-2105%20passed-brightgreen" alt="tests"/></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript" alt="TypeScript"/></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node >= 20"/></a>
   </p>
@@ -387,7 +387,7 @@ carapace/
 ```bash
 npm install              # 安装所有依赖
 npm run build            # 按顺序编译 core → adapter
-npm run test                     # 运行全部 2039 个测试
+npm run test                     # 运行全部 2105 个测试
 ```
 
 ## 安装
@@ -417,7 +417,7 @@ cd carapace && npm install && npm run build
 - **v0.9** — 安全绕过修复（双重编码、反斜杠续行、通配符驳回）、busybox/Python 内联检测、CLI 参数解析修复、demo SSE 广播修复
 - **v0.10** — 112 条 ExecGuard 模式、64 条 PathGuard 路径、38 条 NetworkGuard 模式、48 条 DataExfil 模式、Dashboard API 认证、SSRF 编码检测、数据外泄加固、1736 个测试
 - **v0.11** — 140 条 ExecGuard 模式（含 shell 归一化）、76 条 PathGuard 路径、44 条 NetworkGuard 模式、38 条 PromptInjection 模式、60 条 DataExfil 模式、容器逃逸与供应链检测、env -S / IPv6-mapped / file:// 绕过修复、1928 个测试
-- **v0.12**（当前）— 154 条 ExecGuard、73 条 PathGuard、43 条 NetworkGuard、43 条 PromptInjection、66 条 DataExfil 模式、git config hook 检测、alias/function 规避检测、URL 缩短服务检测、awk 变体检测（gawk/mawk/nawk）、adapter-langchain 响应扫描、MCP stdio 响应扫描、DNS 外泄循环检测、bun/deno 误报修复、2039 个测试
+- **v0.12**（当前）— 154 条 ExecGuard、73 条 PathGuard、43 条 NetworkGuard、43 条 PromptInjection、66 条 DataExfil 模式、git config hook 检测、alias/function 规避检测、URL 缩短服务检测、awk 变体检测（gawk/mawk/nawk）、adapter-langchain 响应扫描、MCP stdio 响应扫描、DNS 外泄循环检测、bun/deno 误报修复、2105 个测试
 
 ## 贡献
 
