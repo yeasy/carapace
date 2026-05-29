@@ -295,8 +295,8 @@ export class McpProxy {
         this.alertRouter.send(fullEvent).catch((err) => { process.stderr.write(`[carapace-mcp] alert send failed: ${err}\n`); });
         return [fullEvent];
       }
-    } catch {
-      // 不影响主流程
+    } catch (err) {
+      process.stderr.write(`[carapace-mcp] response scan error: ${err instanceof Error ? err.message : String(err)}\n`);
     }
     return [];
   }
