@@ -59,6 +59,7 @@ interface FirstRunReport {
   skillName: string;
   sessionId: string;
   startedAt: number;
+  lastActivity: number;
   toolsUsed: Set<string>;
   filesAccessed: Set<string>;
   domainsContacted: Set<string>;
@@ -157,7 +158,7 @@ const plugin = {
       // Clean up stale firstRunData entries to prevent unbounded growth
       const expiredKeys: string[] = [];
       for (const [key, report] of firstRunData) {
-        if (now - report.startedAt > SESSION_TTL_MS) {
+        if (now - report.lastActivity > SESSION_TTL_MS) {
           expiredKeys.push(key);
         }
       }
@@ -279,8 +280,8 @@ const plugin = {
                 };
                 alertRouter.send(fullEvent).catch((err: unknown) => { process.stderr.write(`[carapace-openclaw] alert send failed: ${err}\n`); });
               }
-            } catch {
-              // 响应检测不应影响主流程
+            } catch (err) {
+              process.stderr.write(`[carapace-openclaw] response scan error: ${err instanceof Error ? err.message : String(err)}\n`);
             }
           }
         }
@@ -392,8 +393,8 @@ const plugin = {
             let oldestKey: string | undefined;
             let oldestTime = Infinity;
             for (const [key, val] of firstRunData) {
-              if (val.startedAt < oldestTime) {
-                oldestTime = val.startedAt;
+              if (val.lastActivity < oldestTime) {
+                oldestTime = val.lastActivity;
                 oldestKey = key;
               }
             }
@@ -403,6 +404,7 @@ const plugin = {
             skillName,
             sessionId,
             startedAt: Date.now(),
+            lastActivity: Date.now(),
             toolsUsed: new Set<string>(),
             filesAccessed: new Set<string>(),
             domainsContacted: new Set<string>(),
@@ -412,6 +414,7 @@ const plugin = {
         }
 
         const report = firstRunData.get(compositeKey)!;
+        report.lastActivity = Date.now();
         if (report.toolsUsed.size < 500) report.toolsUsed.add(event.toolName);
 
         // 提取文件路径
