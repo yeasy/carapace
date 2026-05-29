@@ -117,9 +117,10 @@ export class RuleEngine {
   ): { decision: BlockDecision; events: SecurityEvent[] } {
     const result = this.evaluate(ctx);
 
+    const block = blockOnCritical && result.shouldBlock;
     const decision: BlockDecision = {
-      block: blockOnCritical && result.shouldBlock,
-      blockReason: result.blockReason,
+      block,
+      blockReason: block ? result.blockReason : undefined,
     };
 
     return { decision, events: result.events };

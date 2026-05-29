@@ -322,7 +322,7 @@ describe("RuleEngine — Extra Coverage", () => {
       expect(events[0].severity).toBe("critical");
     });
 
-    it("should still populate blockReason even when block=false", () => {
+    it("should not populate blockReason when block=false", () => {
       const rule = createMockRule("rule1", true, "critical", true);
       engine.addRule(rule);
 
@@ -335,7 +335,7 @@ describe("RuleEngine — Extra Coverage", () => {
       const { decision } = engine.evaluateForBlock(ctx, false);
 
       expect(decision.block).toBe(false);
-      expect(decision.blockReason).toBe("Alert from rule1");
+      expect(decision.blockReason).toBeUndefined();
     });
   });
 
