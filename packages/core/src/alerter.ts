@@ -346,7 +346,8 @@ export class DismissalManager {
    * 列出所有驳回模式
    */
   listDismissals(): DismissalPattern[] {
-    return [...this.patterns];
+    const now = Date.now();
+    return this.patterns.filter((p) => !p.expiresAt || p.expiresAt >= now);
   }
 
   /**

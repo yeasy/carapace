@@ -733,6 +733,22 @@ describe("DismissalManager", () => {
     expect(list1).toEqual(list2); // But same content
   });
 
+  it("should filter expired patterns from listDismissals", () => {
+    const now = Date.now();
+    manager.addDismissal(
+      createDismissalPattern({ id: "active", ruleName: "r1", expiresAt: now + 60000 })
+    );
+    manager.addDismissal(
+      createDismissalPattern({ id: "expired", ruleName: "r2", expiresAt: now - 1000 })
+    );
+    manager.addDismissal(
+      createDismissalPattern({ id: "permanent", ruleName: "r3" })
+    );
+
+    const list = manager.listDismissals();
+    expect(list.map((p) => p.id).sort()).toEqual(["active", "permanent"]);
+  });
+
   it("should lazily cleanup expired patterns when size exceeds 50", () => {
     const now = Date.now();
 

@@ -23,6 +23,14 @@ All notable changes to this project will be documented in this file.
 - **Adapter-MCP**: stdio mode now scans tool responses for data exfiltration via request/response correlation.
 
 ### Fixed
+- **Adapter-OpenClaw**: TTL eviction now uses `lastActivity` instead of `startedAt`, preventing active sessions from losing `firstRunData` mid-session.
+- **Engine**: `blockReason` no longer leaks into evaluate results when `block` is false.
+- **Adapter-MCP**: Response scan errors now logged instead of silently swallowed.
+- **Adapter-OpenClaw**: Response scan errors now logged instead of silently swallowed.
+- **Engine**: `checkResponse` rule errors now logged instead of silently swallowed.
+- **Policy**: Null dereference on missing policy config field prevented via validation.
+- **Adapter-MCP**: Fixed memory leak in MCP proxy with safety guards for stdin/stdout handling.
+- **Alerter**: `DismissalManager.listDismissals()` now filters expired patterns, consistent with store backends.
 - **ExecGuard**: `bun run dev`/`bun run build`/`bun run test` no longer trigger false positives — patterns now only flag remote URLs and `/tmp/` paths.
 - **ExecGuard**: `deno run mod.ts` (local files) no longer triggers false positives.
 - **Adapter-langchain**: `checkResponse` sessionId now parameterized instead of hardcoded `"bridge-session"`.
@@ -49,7 +57,7 @@ All notable changes to this project will be documented in this file.
 - Adapter-MCP and adapter-openclaw now scan structured MCP responses (`content[].text`), not just plain strings.
 - Consolidated `INVISIBLE_CHARS_RE` from 6 rule files into shared `utils/normalize.ts`.
 - Consolidated `extractStringContent` from adapter-mcp and adapter-openclaw into `@carapace/core`.
-- 2105 tests (+57 new).
+- 2106 tests (+58 new).
 
 ## [0.12.0] - 2026-05-17
 
